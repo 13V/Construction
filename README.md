@@ -17,3 +17,6 @@ Buildertrend, Workyard, busybusy and ClockShark, with the gaps worth attacking.
 
 **[PRICING.md](PRICING.md)** — competitor list prices modeled at 20 users, and what
 that implies for positioning.
+
+**[MAPS.md](MAPS.md)** — why the prototype can't embed a live Google Map, how to get real
+geography into it anyway, and the production Maps build with its cost exposure.
