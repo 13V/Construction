@@ -8,3 +8,6 @@ per-worker chat, and AI receipt capture that files invoices into a job site's ex
 
 **[DESIGN-PROMPT.md](DESIGN-PROMPT.md)** — a ready-to-paste prompt for generating a clickable
 visual prototype of the app, for showing the vision to a prospective owner.
+
+**[STYLE-REFERENCE.md](STYLE-REFERENCE.md)** — analysis of Fieldwire (by Hilti), the visual
+reference the design prompt's palette and chrome specs are drawn from.
