@@ -11,3 +11,6 @@ visual prototype of the app, for showing the vision to a prospective owner.
 
 **[STYLE-REFERENCE.md](STYLE-REFERENCE.md)** — analysis of Fieldwire (by Hilti), the visual
 reference the design prompt's palette and chrome specs are drawn from.
+
+**[COMPETITIVE-ANALYSIS.md](COMPETITIVE-ANALYSIS.md)** — feature parity across Jack,
+Buildertrend, Workyard, busybusy and ClockShark, with the gaps worth attacking.
