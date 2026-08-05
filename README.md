@@ -1,6 +1,7 @@
 # Construction crew tracking app
 
-Concept work for a workforce tracking app aimed at small-to-mid construction companies.
+A workforce tracking app for small-to-mid construction companies. Concept docs plus a
+working MVP slice of the owner dashboard.
 
 Core ideas: GPS crew tracking with geofenced automatic clock-in/out, timesheets built from
 that location data, a document folder per job site (photos, plans, docs), per-site and
@@ -20,3 +21,15 @@ that implies for positioning.
 
 **[MAPS.md](MAPS.md)** — why the prototype can't embed a live Google Map, how to get real
 geography into it anyway, and the production Maps build with its cost exposure.
+
+## Code
+
+**[apps/dashboard](apps/dashboard)** — the owner dashboard. React + Vite + TypeScript.
+Live Google Map with geofenced automatic clock-in, driven by a simulated crew so it runs
+with no backend. The dwell-based geofence engine (`src/geofence/dwell.ts`) rejects drive-by
+clock-ins and backdates clock-outs to the last confirmed ping on site.
+
+```bash
+cd apps/dashboard && npm install && npm run dev
+```
+

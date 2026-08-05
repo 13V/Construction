@@ -1,0 +1,22 @@
+html, body, #root { margin: 0; padding: 0; height: 100%; }
+* { box-sizing: border-box; }
+
+body {
+  background: #F5F6F7;
+  color: #1A1D21;
+  -webkit-font-smoothing: antialiased;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+button { font-family: inherit; }
+
+/* Pulse behind a worker marker while the dwell timer is confirming arrival. */
+@keyframes cl-ping {
+  0%   { transform: scale(1);   opacity: .5; }
+  70%  { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Google's default POI clutter fights the UI; hide the terms overlay padding. */
+.gm-style-cc { opacity: .6; }
