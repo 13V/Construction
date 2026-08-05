@@ -14,3 +14,6 @@ reference the design prompt's palette and chrome specs are drawn from.
 
 **[COMPETITIVE-ANALYSIS.md](COMPETITIVE-ANALYSIS.md)** — feature parity across Jack,
 Buildertrend, Workyard, busybusy and ClockShark, with the gaps worth attacking.
+
+**[PRICING.md](PRICING.md)** — competitor list prices modeled at 20 users, and what
+that implies for positioning.
