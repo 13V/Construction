@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type ExpenseRow, type WorkerRow } from '../data/supabase'
 import { BUCKET_RECEIPTS, objectPath, signedUrl, uploadFile } from '../data/storage'
+import { InvoiceDrop } from './InvoiceDrop'
 import { theme } from '../theme'
 import type { JobSite, Worker } from '../types'
 
@@ -715,6 +716,18 @@ export function Expenses({ me, sites, workers, onChanged }: {
             </tbody>
           </table>
         </div>
+
+        {me.is_office && (
+          <InvoiceDrop
+            me={me}
+            sites={sites}
+            defaultSiteId={siteFilter === 'all' ? '' : siteFilter}
+            onSaved={() => {
+              void load()
+              onChanged()
+            }}
+          />
+        )}
       </div>
     </div>
   )

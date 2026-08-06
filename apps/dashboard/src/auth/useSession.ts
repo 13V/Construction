@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, supabaseConfigured, type WorkerRow } from '../data/supabase'
+import { DEMO_EMAIL, DEMO_PASSWORD, demoMode } from '../data/demo'
 
 export interface SessionState {
   loading: boolean
@@ -32,8 +33,23 @@ export function useSession(): SessionState {
     const client = supabase()
     let cancelled = false
 
-    void client.auth.getSession().then(({ data }) => {
-      if (!cancelled) setSession(data.session)
+    void client.auth.getSession().then(async ({ data }) => {
+      if (cancelled) return
+      if (data.session || !demoMode) {
+        setSession(data.session)
+        return
+      }
+      // No session and demo mode is on — sign the demo account in silently.
+      const { error: err } = await client.auth.signInWithPassword({
+        email: DEMO_EMAIL,
+        password: DEMO_PASSWORD,
+      })
+      if (cancelled) return
+      if (err) {
+        setError(`Demo sign-in failed: ${err.message}`)
+        setLoading(false)
+      }
+      // onAuthStateChange picks the session up on success.
     })
 
     const { data: sub } = client.auth.onAuthStateChange((_event, next) => {

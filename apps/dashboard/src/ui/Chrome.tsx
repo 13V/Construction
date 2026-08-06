@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { theme } from '../theme'
 import type { JobSite } from '../types'
+import { demoMode } from '../data/demo'
 
 const NAV = [
   'Map',
@@ -54,6 +55,25 @@ export function TopBar({
 
   return (
     <div style={{ flex: 'none', background: theme.panel }}>
+      {demoMode && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '5px 14px',
+            background: '#FFF6DF',
+            borderBottom: `1px solid #F2D89A`,
+            fontSize: 11.5,
+            color: '#8A6100',
+          }}
+        >
+          <strong>Demo mode</strong>
+          <span>
+            Anyone with this link is signed in as {userName}. Don't put real crew data here.
+          </span>
+        </div>
+      )}
       <div
         style={{
           display: 'flex',

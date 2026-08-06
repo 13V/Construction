@@ -2,9 +2,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { callerWorker } from './_supabase.js'
 
 /**
- * Reads a receipt photo with Claude and hands back structured fields for the
- * client to review. This endpoint never touches the database — expenses are
- * only ever written after a human confirms what was read, on the client.
+ * Reads a receipt or supplier invoice with Claude and hands back structured
+ * fields for the client to review. Line items come back costed — quantity,
+ * unit and unit price — so they can become material rows against the job
+ * rather than just a total someone has to re-key.
+ *
+ * This endpoint never touches the database. Nothing is written until a human
+ * confirms what was read; an extractor that files wrong numbers silently is
+ * worse than manual entry.
  */
 
 interface Body {
@@ -12,6 +17,17 @@ interface Body {
   mediaType: string
   siteHint?: string
   sitesList?: string[]
+  /** Cost codes to choose from, so lines come back already coded. */
+  costCodes?: string[]
+}
+
+export interface ExtractedLine {
+  description: string
+  quantity: number
+  unit: string
+  unit_cost: number
+  amount: number
+  cost_code: string | null
 }
 
 interface ExtractedReceipt {
@@ -20,13 +36,19 @@ interface ExtractedReceipt {
   amount: number | null
   tax: number | null
   category: string
-  line_items: Array<{ description: string; amount: number }>
+  line_items: ExtractedLine[]
   confidence: number
   note: string | null
 }
 
 const CATEGORIES = ['Materials', 'Subcontractor', 'Equipment Rental', 'Permits', 'Fuel', 'Other']
-const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+// Supplier invoices arrive as PDFs far more often than photos.
+const PDF_TYPE = 'application/pdf'
+const ALLOWED_MEDIA_TYPES = [...ALLOWED_IMAGE_TYPES, PDF_TYPE]
+
+/** Units a merchant might print, normalised to what the materials table uses. */
+const UNITS = ['ea', 'lm', 'm', 'm²', 'm³', 'kg', 't', 'L', 'box', 'pack', 'sheet', 'hr']
 
 /** Claude sometimes wraps JSON in a fenced code block despite instructions not to. */
 function stripFences(text: string): string {
@@ -72,7 +94,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const instructions = [
     'You are extracting structured data from a photo of a construction expense receipt.',
     'Return ONLY a single JSON object, no markdown fences, no commentary, matching exactly this shape:',
-    '{"vendor": string, "spent_on": "YYYY-MM-DD", "amount": number, "tax": number, "category": string, "line_items": [{"description": string, "amount": number}], "confidence": number, "note": string}',
+    '{"vendor": string, "spent_on": "YYYY-MM-DD", "amount": number, "tax": number, "category": string, "line_items": [{"description": string, "quantity": number, "unit": string, "unit_cost": number, "amount": number, "cost_code": string｜null}], "confidence": number, "note": string}',
+    'Extract EVERY line item on the document, not just a summary. These become the material list costed against the job, so quantities and unit prices matter as much as the total.',
+    `"unit" must be one of: ${UNITS.join(', ')}. Map the merchant's unit onto the closest one — "LIN M" or "L/M" is lm, "EACH" or "PC" is ea, "SHT" is sheet. Use "ea" if genuinely unclear.`,
+    '"quantity" x "unit_cost" should equal "amount" for each line. If the document only prints a line total, infer quantity 1 and set unit_cost to the line total.',
+    'Ignore delivery fees, surcharges and rounding lines — those are not materials. Do not invent lines that are not printed on the document.',
     `"category" must be exactly one of: ${CATEGORIES.join(', ')}.`,
     '"amount" is the total charged and "tax" is the tax portion, both plain numbers with no currency symbols.',
     '"confidence" is your confidence in the overall reading, from 0 to 1.',
@@ -81,6 +107,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   ]
   if (siteHint) instructions.push(`This receipt was likely purchased for the job site "${siteHint}".`)
   if (sitesList.length) instructions.push(`Known job sites for this company: ${sitesList.join(', ')}.`)
+  const costCodes = Array.isArray(body.costCodes)
+    ? body.costCodes.filter((c): c is string => typeof c === 'string')
+    : []
+  if (costCodes.length) {
+    instructions.push(
+      `Assign each line the most fitting cost code from this list, or null if none fits: ${costCodes.join(' | ')}.`,
+    )
+  }
 
   let anthropicRes
   try {
@@ -93,13 +127,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 1024,
+        // Invoices can run to dozens of lines; 1024 truncated them mid-JSON.
+        max_tokens: 4096,
         messages: [
           {
             role: 'user',
             content: [
               { type: 'text', text: instructions.join('\n') },
-              { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+              mediaType === PDF_TYPE
+                ? {
+                    type: 'document',
+                    source: { type: 'base64', media_type: PDF_TYPE, data: imageBase64 },
+                  }
+                : { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
             ],
           },
         ],
@@ -150,10 +190,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     line_items: Array.isArray(parsed.line_items)
       ? parsed.line_items
           .filter((li) => li != null && typeof li === 'object')
-          .map((li) => ({
-            description: String((li as { description?: unknown }).description ?? ''),
-            amount: Number((li as { amount?: unknown }).amount) || 0,
-          }))
+          .map((raw) => {
+            const li = raw as unknown as Record<string, unknown>
+            const amount = Number(li.amount) || 0
+            const quantity = Number(li.quantity) || 0
+            // Trust the printed line total over a quantity x price that
+            // doesn't reconcile — the total is what the supplier charged.
+            const unitCost = Number(li.unit_cost) || (quantity > 0 ? amount / quantity : amount)
+            const unit = typeof li.unit === 'string' && UNITS.includes(li.unit) ? li.unit : 'ea'
+            return {
+              description: String(li.description ?? '').trim(),
+              quantity: quantity > 0 ? quantity : 1,
+              unit,
+              unit_cost: Math.round(unitCost * 100) / 100,
+              amount,
+              cost_code:
+                typeof li.cost_code === 'string' && costCodes.includes(li.cost_code)
+                  ? li.cost_code
+                  : null,
+            }
+          })
+          .filter((li) => li.description.length > 0)
       : [],
     confidence,
     note: typeof parsed.note === 'string' && parsed.note.length > 0 ? parsed.note : null,

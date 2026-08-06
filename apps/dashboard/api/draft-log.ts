@@ -100,7 +100,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .select('name, quantity, unit, total_cost')
         .eq('site_id', siteId)
         .eq('company_id', worker.company_id)
-        .eq('delivered_on', date),
+        .eq('delivered_on', date)
+        // Returned stock never went into the job, so it has no place in the log.
+        .neq('status', 'returned'),
     ])
 
   if (shiftsError || filesError || expensesError || materialsError) {

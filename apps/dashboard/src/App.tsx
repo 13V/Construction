@@ -1,6 +1,7 @@
 import { AuthScreen } from './auth/AuthScreen'
 import { useSession } from './auth/useSession'
 import { supabaseConfigured } from './data/supabase'
+import { demoMode } from './data/demo'
 import { Dashboard } from './Dashboard'
 import { SetupNotice } from './ui/SetupNotice'
 import { theme } from './theme'
@@ -30,7 +31,8 @@ export default function App() {
 
   if (!supabaseConfigured) return <SetupNotice />
   if (loading) return <Centered>Loading…</Centered>
-  if (!session) return <AuthScreen />
+  // In demo mode the sign-in is in flight; showing a login form would be a lie.
+  if (!session) return demoMode ? <Centered>Signing in…</Centered> : <AuthScreen />
 
   if (error) {
     return (
