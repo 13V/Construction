@@ -214,13 +214,13 @@ export function LiveMap({
         id: 'draft-fill',
         type: 'fill',
         source: DRAFT_SRC,
-        paint: { 'fill-color': theme.ctaTo, 'fill-opacity': 0.18 },
+        paint: { 'fill-color': theme.brandYellow, 'fill-opacity': 0.18 },
       })
       m.addLayer({
         id: 'draft-line',
         type: 'line',
         source: DRAFT_SRC,
-        paint: { 'line-color': theme.ctaTo, 'line-width': 2 },
+        paint: { 'line-color': theme.brandYellow, 'line-width': 2 },
       })
 
       m.addSource(TRAIL_SRC, { type: 'geojson', data: emptyCollection })

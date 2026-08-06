@@ -200,7 +200,7 @@ export function AuthScreen() {
             border: 'none',
             background: busy
               ? theme.border
-              : `linear-gradient(90deg, ${theme.ctaFrom}, ${theme.ctaTo})`,
+              : theme.cta,
             color: theme.ink,
             font: 'inherit',
             fontSize: 12,

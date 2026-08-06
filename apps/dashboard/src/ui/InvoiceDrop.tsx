@@ -13,6 +13,12 @@ import type { JobSite } from '../types'
  * fails, because the invoice itself is the record — losing it because an AI
  * call timed out would be the worst outcome. Extracted lines are always shown
  * for review before anything is committed to the job cost.
+ *
+ * Layout matches the "Invoice inbox" drop card in design/screens/isExpenses.html —
+ * this component renders the dashed drop target and the "THREE WAYS IN" panel that
+ * live in its left column. The review table (once a file is read) has no room in
+ * that 300px column, so it grows to the full card width — see the `flex` on the
+ * root below — while staying inside the card the caller (Expenses) lays out.
  */
 
 interface Line {
@@ -29,6 +35,14 @@ const ACCEPTED = [
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
 ]
 const MAX_BYTES = 25 * 1024 * 1024
+
+// Colours lifted verbatim from isExpenses.html that have no equivalent in theme.ts.
+const FAINT = '#8B9096'
+const SUBTLE_BG = '#FAFBFC'
+const HAIRLINE = '#F1F3F5'
+const AMBER_BG = '#FFF6DE'
+const AMBER_FG = '#8A6100'
+const DASH_BORDER = '#C3C9D0'
 
 const fileToBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -260,16 +274,25 @@ export function InvoiceDrop({
   const patch = (i: number, changes: Partial<Line>) =>
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...changes } : l)))
 
+  const reviewing = stage === 'review' || stage === 'saving'
+
   return (
-    <div style={{ marginTop: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <span style={statLabel}>DROP A SUPPLIER INVOICE</span>
-        <span style={{ fontSize: 11.5, color: theme.inkSoft }}>costed to</span>
+    // 300px in the inbox's left column while idle/working, matching isExpenses.html;
+    // once there is a line-item table to show it claims the full card width instead —
+    // the parent's flex-wrap lets it drop to its own row rather than being crushed.
+    <div style={{ flex: reviewing ? '1 1 100%' : '1 1 300px', minWidth: 280, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', color: FAINT, whiteSpace: 'nowrap' }}>
+          COSTED TO
+        </span>
         <select
           value={siteId}
           onChange={(e) => setSiteId(e.target.value)}
           disabled={stage !== 'idle'}
-          style={{ ...input, marginTop: 0, height: 26, width: 200 }}
+          style={{
+            height: 26, padding: '0 8px', borderRadius: 3, border: `1px solid ${theme.border}`,
+            background: theme.panel, font: 'inherit', fontSize: 12.5, color: theme.ink, minWidth: 170,
+          }}
         >
           <option value="">Choose a job…</option>
           {sites.map((s) => (
@@ -290,22 +313,30 @@ export function InvoiceDrop({
           }}
           onClick={() => input.current?.click()}
           style={{
-            border: `2px dashed ${over ? theme.accent : theme.border}`,
-            background: over ? theme.accentFill : theme.panel,
-            borderRadius: 8,
-            padding: '26px 20px',
-            textAlign: 'center',
-            cursor: 'pointer',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 9, height: 158, border: `1.5px dashed ${over ? theme.accent : DASH_BORDER}`,
+            borderRadius: 8, background: over ? theme.accentFill : SUBTLE_BG, textAlign: 'center',
+            padding: '0 18px', cursor: 'pointer',
           }}
         >
-          <div style={{ fontSize: 14, fontWeight: 600 }}>
-            Drop a PDF invoice or photo here
-          </div>
-          <div style={{ fontSize: 12.5, color: theme.inkSoft, marginTop: 5, lineHeight: 1.5 }}>
-            The file is filed against{' '}
-            <strong>{site?.name ?? 'the job you pick above'}</strong>, then every line is read
-            out and costed to the job. You review before anything is saved.
-          </div>
+          <svg width="26" height="26" viewBox="0 0 16 16" fill="none" stroke={FAINT} strokeWidth={1.4}>
+            <path d="M8 11.4V3.2M4.8 6.4L8 3.2l3.2 3.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M2.6 11v2.4h10.8V11" />
+          </svg>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>Drop an invoice here to keep it</span>
+          <span style={{ fontSize: 12, lineHeight: 1.45, color: FAINT }}>
+            PDF, photo or emailed bill. We read the vendor, date, total and tax, then you allocate it
+            to a job and a cost code.
+          </span>
+          <button
+            onClick={(e) => { e.stopPropagation(); input.current?.click() }}
+            style={{
+              height: 30, padding: '0 13px', background: theme.panel, border: `1px solid ${theme.border}`,
+              borderRadius: 3, fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Choose a file
+          </button>
           <input
             ref={input}
             type="file"
@@ -321,91 +352,111 @@ export function InvoiceDrop({
       )}
 
       {(stage === 'uploading' || stage === 'reading') && (
-        <div style={{ ...card, textAlign: 'center', color: theme.inkSoft, fontSize: 13 }}>
+        <div style={{ ...statusCard, textAlign: 'center' }}>
           {stage === 'uploading' ? 'Saving the invoice…' : `Reading ${fileName}…`}
         </div>
       )}
 
       {error && (
-        <div style={{ ...card, borderLeft: `3px solid ${theme.alert}`, color: theme.alert, fontSize: 12.5 }}>
+        <div style={{ ...statusCard, borderLeft: `3px solid ${theme.alert}`, color: theme.alert }}>
           {error}
         </div>
       )}
       {notice && stage === 'idle' && (
-        <div style={{ ...card, borderLeft: `3px solid ${theme.success}`, fontSize: 12.5 }}>{notice}</div>
+        <div style={{ ...statusCard, borderLeft: `3px solid ${theme.success}` }}>{notice}</div>
       )}
 
-      {(stage === 'review' || stage === 'saving') && (
-        <div style={card}>
+      {stage === 'idle' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '11px 12px', background: theme.appBg, borderRadius: 6 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', color: FAINT }}>THREE WAYS IN</span>
+          <span style={{ display: 'flex', gap: 8, fontSize: 12, lineHeight: 1.45, color: '#4A5057' }}>
+            <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>
+            Crew photographs it on site — arrives coded to where they were standing
+          </span>
+          <span style={{ display: 'flex', gap: 8, fontSize: 12, lineHeight: 1.45, color: '#4A5057' }}>
+            <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>
+            Forward the email to <b style={{ fontWeight: 600 }}>invoices@whitcombbuilders.com</b>
+          </span>
+          <span style={{ display: 'flex', gap: 8, fontSize: 12, lineHeight: 1.45, color: '#4A5057' }}>
+            <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>
+            Drop a PDF here from the office
+          </span>
+        </div>
+      )}
+
+      {reviewing && (
+        <div style={{ padding: 14, background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8 }}>
           {notice && (
-            <div style={{ fontSize: 12, color: '#8A6100', marginBottom: 10 }}>{notice}</div>
+            <div style={{ fontSize: 12, color: AMBER_FG, marginBottom: 10 }}>{notice}</div>
           )}
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <Field label="Supplier" value={vendor} onChange={setVendor} width={200} />
             <label style={fieldLabel}>
               Invoice date
-              <input type="date" value={spentOn} onChange={(e) => setSpentOn(e.target.value)} style={{ ...input, width: 150 }} />
+              <input type="date" value={spentOn} onChange={(e) => setSpentOn(e.target.value)} style={{ ...fieldInput, width: 150 }} />
             </label>
             <Field label="Invoice total" value={total} onChange={setTotal} width={120} />
             <Field label="Tax" value={tax} onChange={setTax} width={110} />
             {confidence !== null && (
-              <span style={{ fontSize: 11.5, color: theme.inkSoft, paddingBottom: 8 }}>
+              <span style={{ fontSize: 11.5, color: FAINT, paddingBottom: 8 }}>
                 Read from the invoice · {Math.round(confidence * 100)}% confident
               </span>
             )}
           </div>
 
           {aiNote && (
-            <div style={{ fontSize: 11.5, color: theme.inkSoft, marginTop: 8, fontStyle: 'italic' }}>
+            <div style={{ fontSize: 11.5, color: FAINT, marginTop: 8, fontStyle: 'italic' }}>
               {aiNote}
             </div>
           )}
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 14 }}>
-            <thead>
-              <tr>
-                {['', 'Material', 'Qty', 'Unit', 'Unit cost', 'Cost code', 'Line total'].map((h, i) => (
-                  <th key={h + i} style={{ ...th, textAlign: i >= 2 && i !== 5 ? 'right' : 'left' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((l, i) => (
-                <tr key={i} style={{ opacity: l.include ? 1 : 0.45 }}>
-                  <td style={{ ...td, width: 28 }}>
-                    <input type="checkbox" checked={l.include} onChange={(e) => patch(i, { include: e.target.checked })} />
-                  </td>
-                  <td style={td}>
-                    <input value={l.description} onChange={(e) => patch(i, { description: e.target.value })} style={{ ...input, marginTop: 0, width: '100%' }} />
-                  </td>
-                  <td style={{ ...td, textAlign: 'right' }}>
-                    <input value={l.quantity} onChange={(e) => patch(i, { quantity: e.target.value })} style={{ ...input, marginTop: 0, width: 70, textAlign: 'right' }} />
-                  </td>
-                  <td style={td}>
-                    <select value={l.unit} onChange={(e) => patch(i, { unit: e.target.value })} style={{ ...input, marginTop: 0, width: 78 }}>
-                      {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </td>
-                  <td style={{ ...td, textAlign: 'right' }}>
-                    <input value={l.unit_cost} onChange={(e) => patch(i, { unit_cost: e.target.value })} style={{ ...input, marginTop: 0, width: 90, textAlign: 'right' }} />
-                  </td>
-                  <td style={td}>
-                    <select value={l.cost_code} onChange={(e) => patch(i, { cost_code: e.target.value })} style={{ ...input, marginTop: 0, width: 130 }}>
-                      <option value="">Uncoded</option>
-                      {costCodes.map((c) => <option key={c.code} value={c.code}>{c.code}</option>)}
-                    </select>
-                  </td>
-                  <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                    {money((Number(l.quantity) || 0) * (Number(l.unit_cost) || 0))}
-                  </td>
+          <div style={{ overflowX: 'auto', marginTop: 14 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
+              <thead>
+                <tr>
+                  {['', 'Material', 'Qty', 'Unit', 'Unit cost', 'Cost code', 'Line total'].map((h, i) => (
+                    <th key={h + i} style={{ ...reviewTh, textAlign: i >= 2 && i !== 5 ? 'right' : 'left' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lines.map((l, i) => (
+                  <tr key={i} style={{ opacity: l.include ? 1 : 0.45 }}>
+                    <td style={{ ...reviewTd, width: 28 }}>
+                      <input type="checkbox" checked={l.include} onChange={(e) => patch(i, { include: e.target.checked })} />
+                    </td>
+                    <td style={reviewTd}>
+                      <input value={l.description} onChange={(e) => patch(i, { description: e.target.value })} style={{ ...fieldInput, width: '100%' }} />
+                    </td>
+                    <td style={{ ...reviewTd, textAlign: 'right' }}>
+                      <input value={l.quantity} onChange={(e) => patch(i, { quantity: e.target.value })} style={{ ...fieldInput, width: 70, textAlign: 'right' }} />
+                    </td>
+                    <td style={reviewTd}>
+                      <select value={l.unit} onChange={(e) => patch(i, { unit: e.target.value })} style={{ ...fieldInput, width: 78 }}>
+                        {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </td>
+                    <td style={{ ...reviewTd, textAlign: 'right' }}>
+                      <input value={l.unit_cost} onChange={(e) => patch(i, { unit_cost: e.target.value })} style={{ ...fieldInput, width: 90, textAlign: 'right' }} />
+                    </td>
+                    <td style={reviewTd}>
+                      <select value={l.cost_code} onChange={(e) => patch(i, { cost_code: e.target.value })} style={{ ...fieldInput, width: 130 }}>
+                        <option value="">Uncoded</option>
+                        {costCodes.map((c) => <option key={c.code} value={c.code}>{c.code}</option>)}
+                      </select>
+                    </td>
+                    <td style={{ ...reviewTd, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                      {money((Number(l.quantity) || 0) * (Number(l.unit_cost) || 0))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 10, fontSize: 12.5 }}>
-            <button onClick={() => setLines([...lines, blankLine()])} style={ghost}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 10, fontSize: 12.5, flexWrap: 'wrap' }}>
+            <button onClick={() => setLines([...lines, blankLine()])} style={ghostBtn}>
               Add a line
             </button>
             <span>
@@ -413,19 +464,18 @@ export function InvoiceDrop({
               <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{money(linesTotal)}</strong>
             </span>
             {Math.abs(gap) > 0.02 && (
-              <span style={{ color: theme.warning }}>
-                {money(Math.abs(gap))} {gap > 0 ? 'unaccounted for' : 'over'} vs the invoice total —
-                check for a missed line or a delivery fee.
+              <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 11, background: AMBER_BG, color: AMBER_FG, fontWeight: 600 }}>
+                {money(Math.abs(gap))} {gap > 0 ? 'unaccounted for' : 'over'} vs the invoice total — check for a missed line or a delivery fee.
               </span>
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
             <button onClick={() => void save()} disabled={stage === 'saving' || !included.length} style={cta}>
               {stage === 'saving' ? 'SAVING…' : `ADD ${included.length} LINE${included.length === 1 ? '' : 'S'} TO THE JOB`}
             </button>
-            <button onClick={reset} style={ghost}>Discard</button>
-            <span style={{ marginLeft: 'auto', fontSize: 11.5, color: theme.inkSoft, alignSelf: 'center' }}>
+            <button onClick={reset} style={ghostBtn}>Discard</button>
+            <span style={{ marginLeft: 'auto', fontSize: 11.5, color: FAINT }}>
               {fileName}
             </span>
           </div>
@@ -445,41 +495,43 @@ function Field({
   return (
     <label style={fieldLabel}>
       {label}
-      <input value={value} onChange={(e) => onChange(e.target.value)} style={{ ...input, width }} />
+      <input value={value} onChange={(e) => onChange(e.target.value)} style={{ ...fieldInput, width }} />
     </label>
   )
 }
 
-const statLabel = {
-  fontSize: 9.5, fontWeight: 700, letterSpacing: '.1em',
-  textTransform: 'uppercase' as const, color: theme.inkFaint,
-}
 const fieldLabel = {
-  fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em',
-  textTransform: 'uppercase' as const, color: theme.inkFaint,
-}
-const input = {
+  fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em',
+  color: FAINT,
+} as const
+
+const fieldInput = {
   display: 'block', height: 32, marginTop: 4, padding: '0 9px', borderRadius: 3,
   border: `1px solid ${theme.border}`, background: theme.panel, font: 'inherit',
-  fontSize: 13, fontWeight: 400, letterSpacing: 0, textTransform: 'none' as const, color: theme.ink,
-}
-const card = {
-  marginTop: 10, padding: 14, background: theme.panel,
-  border: `1px solid ${theme.border}`, borderRadius: 8,
-}
-const th = {
-  padding: '6px 8px', borderBottom: `1px solid ${theme.border}`, background: theme.appBg,
-  fontSize: 9.5, fontWeight: 700, letterSpacing: '.1em',
-  textTransform: 'uppercase' as const, color: theme.inkFaint,
-}
-const td = { padding: '5px 8px', borderBottom: `1px solid ${theme.border}`, fontSize: 13 }
-const ghost = {
+  fontSize: 13, fontWeight: 400, color: theme.ink,
+} as const
+
+const statusCard = {
+  padding: '14px', background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8,
+  fontSize: 13, color: theme.inkSoft,
+} as const
+
+const reviewTh = {
+  padding: '6px 8px', borderBottom: `1px solid ${theme.border}`, background: SUBTLE_BG,
+  fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', color: '#696D74',
+} as const
+
+const reviewTd = { padding: '5px 8px', borderBottom: `1px solid ${HAIRLINE}`, fontSize: 13 } as const
+
+const ghostBtn = {
   padding: '5px 11px', borderRadius: 3, border: `1px solid ${theme.border}`,
   background: theme.panel, color: theme.ink, font: 'inherit', fontSize: 11.5, cursor: 'pointer',
-}
+} as const
+
 const cta = {
-  padding: '7px 13px', borderRadius: 3, border: 'none',
-  background: `linear-gradient(90deg, ${theme.ctaFrom}, ${theme.ctaTo})`,
-  color: theme.ink, font: 'inherit', fontSize: 11, fontWeight: 700,
-  letterSpacing: '.04em', cursor: 'pointer',
-}
+  height: 32, padding: '0 15px', borderRadius: 3,
+  border: `1px solid ${theme.ctaBorder}`,
+  background: theme.cta,
+  color: '#1A1D21', font: 'inherit', fontSize: 11.5, fontWeight: 700,
+  letterSpacing: '.04em', cursor: 'pointer', whiteSpace: 'nowrap',
+} as const

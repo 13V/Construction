@@ -11,11 +11,14 @@ import type { JobSite, Worker } from '../types'
  * an open hazard.
  */
 
-const KIND_META: Record<SafetyRow['kind'], string> = {
-  jha: 'JHA',
-  incident: 'Incident',
-  toolbox: 'Toolbox talk',
-  hazard: 'Hazard',
+/** Kind tag — a classification, not a lifecycle state, so it renders as the
+ *  small square tag used for classifiers (e.g. a certification abbreviation)
+ *  rather than the pill used for statuses. */
+const KIND_META: Record<SafetyRow['kind'], { label: string; fg: string; bg: string }> = {
+  jha: { label: 'JHA', fg: theme.accent, bg: theme.accentFill },
+  incident: { label: 'Incident', fg: theme.alert, bg: '#FCE8EA' },
+  toolbox: { label: 'Toolbox talk', fg: '#1B7A32', bg: '#EAF7EE' },
+  hazard: { label: 'Hazard', fg: '#8A6100', bg: '#FFF6DF' },
 }
 
 const SEVERITY_META: Record<'low' | 'medium' | 'high', { label: string; color: string; bg: string }> = {
@@ -57,7 +60,7 @@ interface CertForm {
 const blankCertForm = (): CertForm => ({ workerId: '', name: '', expiresOn: '' })
 
 function certStatus(expiresOn: string | null) {
-  if (!expiresOn) return { label: 'No expiry set', color: theme.inkFaint, bg: theme.appBg, rank: 3 }
+  if (!expiresOn) return { label: 'No expiry set', color: theme.inkSoft, bg: theme.appBg, rank: 3 }
   const days = Math.floor((new Date(expiresOn).getTime() - Date.now()) / DAY_MS)
   if (days < 0) return { label: 'Lapsed', color: theme.alert, bg: '#FCE8EA', rank: 0 }
   if (days <= 30) return { label: 'Expiring soon', color: '#8A6100', bg: '#FFF6DF', rank: 1 }
@@ -174,8 +177,11 @@ export function Safety({ me, sites, workers, onChanged }: {
       const days = Math.floor((new Date(c.expires_on).getTime() - Date.now()) / DAY_MS)
       return days >= 0 && days <= 30
     }).length
+    // Same classification the certifications table sorts by — surfaced here
+    // too, since a lapsed cert is worse than one merely expiring soon.
+    const certsLapsed = certs.filter((c) => certStatus(c.expires_on).rank === 0).length
 
-    return { openHazards, incidentsThisMonth, jhaThisWeek, certsExpiring }
+    return { openHazards, incidentsThisMonth, jhaThisWeek, certsExpiring, certsLapsed }
   }, [records, certs])
 
   async function onPhotoSelected(file: File) {
@@ -295,7 +301,7 @@ export function Safety({ me, sites, workers, onChanged }: {
       <div style={{ padding: 16, maxWidth: 1100 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
           <h1 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Safety</h1>
-          <span style={{ fontSize: 13, color: theme.inkSoft }}>
+          <span style={{ fontSize: 12.5, color: theme.inkSoft }}>
             {records.length} records, {certs.length} certifications
           </span>
         </div>
@@ -319,11 +325,23 @@ export function Safety({ me, sites, workers, onChanged }: {
             <div style={statLabel}>JHAs this week</div>
             <div style={statValue}>{dashboard.jhaThisWeek}</div>
           </div>
-          <div style={statCard}>
-            <div style={statLabel}>Certs expiring in 30 days</div>
-            <div style={{ ...statValue, color: dashboard.certsExpiring > 0 ? '#8A6100' : theme.ink }}>
+          <div style={dashboard.certsExpiring > 0 || dashboard.certsLapsed > 0 ? statCardWarn : statCard}>
+            <div
+              style={{
+                ...statLabel,
+                ...(dashboard.certsExpiring > 0 || dashboard.certsLapsed > 0 ? { color: warnFg } : {}),
+              }}
+            >
+              Certs expiring in 30 days
+            </div>
+            <div style={{ ...statValue, color: dashboard.certsExpiring > 0 ? warnFg : theme.ink }}>
               {dashboard.certsExpiring}
             </div>
+            {dashboard.certsLapsed > 0 && (
+              <div style={{ fontSize: 11.5, color: warnFg, marginTop: 2 }}>
+                {dashboard.certsLapsed} already lapsed
+              </div>
+            )}
           </div>
         </div>
 
@@ -333,14 +351,15 @@ export function Safety({ me, sites, workers, onChanged }: {
               key={t}
               onClick={() => setTab(t)}
               style={{
-                padding: '8px 2px',
+                height: 35,
+                padding: '0 2px',
                 marginBottom: -1,
                 background: 'transparent',
                 border: 'none',
                 borderBottom: tab === t ? `2px solid ${theme.accent}` : '2px solid transparent',
                 font: 'inherit',
                 fontSize: 13,
-                fontWeight: 600,
+                fontWeight: tab === t ? 600 : 500,
                 color: tab === t ? theme.ink : theme.inkSoft,
                 cursor: 'pointer',
               }}
@@ -507,27 +526,28 @@ export function Safety({ me, sites, workers, onChanged }: {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={7} style={{ ...td, padding: 24, color: theme.inkSoft }}>
+                      <td colSpan={7} style={emptyTd}>
                         Loading…
                       </td>
                     </tr>
                   )}
                   {!loading && filteredRecords.length === 0 && (
                     <tr>
-                      <td colSpan={7} style={{ ...td, padding: 24, color: theme.inkSoft }}>
+                      <td colSpan={7} style={emptyTd}>
                         No records match this filter.
                       </td>
                     </tr>
                   )}
                   {filteredRecords.map((row) => {
                     const expanded = expandedId === row.id
+                    const kind = KIND_META[row.kind]
                     const sev = row.severity ? SEVERITY_META[row.severity] : null
                     const alreadySigned = row.signatures.some((s) => s.worker_id === me.id)
                     return (
                       <Fragment key={row.id}>
                         <tr onClick={() => setExpandedId(expanded ? null : row.id)} style={{ cursor: 'pointer' }}>
                           <td style={td}>
-                            <span style={kindChip}>{KIND_META[row.kind]}</span>
+                            <span style={{ ...tag, color: kind.fg, background: kind.bg }}>{kind.label}</span>
                           </td>
                           <td style={{ ...td, fontWeight: 500 }}>{row.title}</td>
                           <td style={{ ...td, color: theme.inkSoft }}>{siteName(row.site_id)}</td>
@@ -535,26 +555,30 @@ export function Safety({ me, sites, workers, onChanged }: {
                           <td style={td}>{new Date(row.occurred_at).toLocaleDateString()}</td>
                           <td style={td}>
                             {sev ? (
-                              <span style={{ ...chip, color: sev.color, background: sev.bg }}>{sev.label}</span>
+                              <span style={{ ...pill, color: sev.color, background: sev.bg }}>
+                                <Dot color={sev.color} />
+                                {sev.label}
+                              </span>
                             ) : (
-                              <span style={{ color: theme.inkFaint }}>—</span>
+                              <span style={{ color: labelGray }}>—</span>
                             )}
                           </td>
                           <td style={td}>
                             <span
                               style={{
-                                ...chip,
-                                color: row.status === 'open' ? theme.accent : theme.inkFaint,
+                                ...pill,
+                                color: row.status === 'open' ? theme.accent : theme.inkSoft,
                                 background: row.status === 'open' ? theme.accentFill : theme.appBg,
                               }}
                             >
+                              <Dot color={row.status === 'open' ? theme.accent : theme.inkSoft} />
                               {row.status === 'open' ? 'Open' : 'Closed'}
                             </span>
                           </td>
                         </tr>
                         {expanded && (
                           <tr>
-                            <td colSpan={7} style={{ ...td, background: theme.appBg }}>
+                            <td colSpan={7} style={{ ...td, background: theadBg }}>
                               <div style={{ display: 'flex', gap: 16, padding: '8px 4px', flexWrap: 'wrap' }}>
                                 <div style={{ flex: 'none' }}>
                                   {row.photo_path ? (
@@ -575,7 +599,7 @@ export function Safety({ me, sites, workers, onChanged }: {
                                       </div>
                                     )
                                   ) : (
-                                    <div style={{ width: 220, fontSize: 12, color: theme.inkFaint }}>
+                                    <div style={{ width: 220, fontSize: 12, color: labelGray }}>
                                       No photo attached.
                                     </div>
                                   )}
@@ -589,7 +613,7 @@ export function Safety({ me, sites, workers, onChanged }: {
                                     <div style={{ marginTop: 12 }}>
                                       <div style={{ ...statLabel, marginBottom: 6 }}>Signatures</div>
                                       {row.signatures.length === 0 ? (
-                                        <div style={{ fontSize: 12, color: theme.inkFaint }}>No one has signed yet.</div>
+                                        <div style={{ fontSize: 12, color: labelGray }}>No one has signed yet.</div>
                                       ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                           {row.signatures.map((s, i) => (
@@ -640,6 +664,32 @@ export function Safety({ me, sites, workers, onChanged }: {
                   })}
                 </tbody>
               </table>
+
+              {!loading && records.length > 0 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 20,
+                    padding: '10px 14px',
+                    background: theadBg,
+                    fontSize: 12.5,
+                    color: theme.inkSoft,
+                  }}
+                >
+                  <span>
+                    <strong style={{ color: theme.ink, fontVariantNumeric: 'tabular-nums' }}>
+                      {filteredRecords.length}
+                    </strong>{' '}
+                    of{' '}
+                    <strong style={{ color: theme.ink, fontVariantNumeric: 'tabular-nums' }}>
+                      {records.length}
+                    </strong>{' '}
+                    record{records.length === 1 ? '' : 's'}
+                  </span>
+                  {kindFilter !== 'all' && <span>Filtered to {KIND_META[kindFilter].label.toLowerCase()}</span>}
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -720,14 +770,14 @@ export function Safety({ me, sites, workers, onChanged }: {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={5} style={{ ...td, padding: 24, color: theme.inkSoft }}>
+                      <td colSpan={5} style={emptyTd}>
                         Loading…
                       </td>
                     </tr>
                   )}
                   {!loading && sortedCerts.length === 0 && (
                     <tr>
-                      <td colSpan={5} style={{ ...td, padding: 24, color: theme.inkSoft }}>
+                      <td colSpan={5} style={emptyTd}>
                         No certifications on file yet.
                       </td>
                     </tr>
@@ -742,7 +792,10 @@ export function Safety({ me, sites, workers, onChanged }: {
                           {c.expires_on ? new Date(c.expires_on).toLocaleDateString() : '—'}
                         </td>
                         <td style={td}>
-                          <span style={{ ...chip, color: status.color, background: status.bg }}>{status.label}</span>
+                          <span style={{ ...pill, color: status.color, background: status.bg }}>
+                            <Dot color={status.color} />
+                            {status.label}
+                          </span>
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
                           {me.is_office && (
@@ -760,6 +813,32 @@ export function Safety({ me, sites, workers, onChanged }: {
                   })}
                 </tbody>
               </table>
+
+              {!loading && certs.length > 0 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 20,
+                    padding: '10px 14px',
+                    background: theadBg,
+                    fontSize: 12.5,
+                    color: theme.inkSoft,
+                  }}
+                >
+                  <span>
+                    <strong style={{ color: theme.ink, fontVariantNumeric: 'tabular-nums' }}>
+                      {sortedCerts.length}
+                    </strong>{' '}
+                    certification{sortedCerts.length === 1 ? '' : 's'}
+                  </span>
+                  {dashboard.certsExpiring + dashboard.certsLapsed > 0 && (
+                    <span style={{ marginLeft: 'auto', color: warnFg }}>
+                      {dashboard.certsExpiring + dashboard.certsLapsed} need attention
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -767,6 +846,24 @@ export function Safety({ me, sites, workers, onChanged }: {
     </div>
   )
 }
+
+/** The small dot every status pill in the design carries ahead of its label. */
+function Dot({ color }: { color: string }) {
+  return <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flex: 'none' }} />
+}
+
+/* ---------------------------------------------------------------------
+ * Design tokens below mirror the Crewline design system's other screens
+ * verbatim — design/screens/isCrew.html, isExpenses.html and isBudget.html
+ * all share this exact palette, type scale and CTA treatment. A few of
+ * these greys and tints never made it into theme.ts, so they're pinned
+ * here rather than approximated from the nearest theme colour.
+ * ------------------------------------------------------------------- */
+
+const labelGray = '#8B9096' // uppercase mini-labels, stat-card labels, muted meta text
+const theadBg = '#FAFBFC' // table header / footer strip / expanded-row background
+const hairline = '#F1F3F5' // hairline between table body rows
+const warnFg = '#8A6100'
 
 const card = {
   marginTop: 14,
@@ -777,80 +874,112 @@ const card = {
 } as const
 
 const statCard = {
-  padding: '10px 14px',
+  padding: '13px 15px',
   minWidth: 170,
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: 2,
   background: theme.panel,
   border: `1px solid ${theme.border}`,
   borderRadius: 8,
 } as const
 
+/** "Needs attention" variant — same treatment as the CERTS EXPIRING /
+ *  WATCH cards in the design system. */
+const statCardWarn = {
+  ...statCard,
+  background: '#FFF9E8',
+  border: '1px solid #F0DCA8',
+} as const
+
 const statLabel = {
   fontSize: 10.5,
   fontWeight: 700,
-  letterSpacing: '.08em',
+  letterSpacing: '.06em',
   textTransform: 'uppercase' as const,
-  color: theme.inkFaint,
+  color: labelGray,
 }
 
 const statValue = {
-  fontSize: 17,
+  fontSize: 24,
   fontWeight: 600,
-  marginTop: 4,
+  letterSpacing: '-.02em',
+  lineHeight: 1,
   fontVariantNumeric: 'tabular-nums' as const,
 }
 
 const th = {
-  padding: '8px 12px',
+  padding: '7px 14px',
   borderBottom: `1px solid ${theme.border}`,
-  background: theme.appBg,
-  fontSize: 9.5,
+  background: theadBg,
+  fontSize: 10.5,
   fontWeight: 700,
-  letterSpacing: '.1em',
+  letterSpacing: '.05em',
   textTransform: 'uppercase' as const,
-  color: theme.inkFaint,
+  color: theme.inkSoft,
   textAlign: 'left' as const,
 }
 
 const td = {
-  padding: '8px 12px',
-  borderBottom: `1px solid ${theme.border}`,
+  padding: '9px 14px',
+  borderBottom: `1px solid ${hairline}`,
   fontSize: 13,
 }
 
-const chip = {
-  padding: '2px 8px',
-  borderRadius: 3,
-  fontSize: 11,
-  fontWeight: 600,
-  display: 'inline-block',
-} as const
-
-const kindChip = {
-  ...chip,
+const emptyTd = {
+  ...td,
+  padding: '28px 14px',
   color: theme.inkSoft,
-  background: theme.appBg,
-  border: `1px solid ${theme.border}`,
+  textAlign: 'center' as const,
 }
 
+/** Rounded status pill with a leading dot — severity, open/closed, cert status. */
+const pill = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '3px 8px',
+  borderRadius: 11,
+  fontSize: 11,
+  fontWeight: 700,
+} as const
+
+/** Small square tag for classifiers (kind of record) rather than states. */
+const tag = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '2px 7px',
+  borderRadius: 3,
+  fontSize: 10.5,
+  fontWeight: 600,
+  whiteSpace: 'nowrap' as const,
+} as const
+
 const ghost = {
-  padding: '4px 10px',
+  padding: '5px 11px',
   borderRadius: 3,
   border: `1px solid ${theme.border}`,
   background: theme.panel,
   color: theme.ink,
   font: 'inherit',
-  fontSize: 11.5,
+  fontSize: 12.5,
+  fontWeight: 500,
   cursor: 'pointer',
 }
 
 const cta = {
-  padding: '7px 13px',
+  height: 30,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '0 14px',
   borderRadius: 3,
-  border: 'none',
-  background: `linear-gradient(90deg, ${theme.ctaFrom}, ${theme.ctaTo})`,
+  border: `1px solid ${theme.ctaBorder}`,
+  background: theme.cta,
   color: theme.ink,
   font: 'inherit',
-  fontSize: 11,
+  fontSize: 11.5,
   fontWeight: 700,
   letterSpacing: '.04em',
   cursor: 'pointer',
@@ -858,7 +987,7 @@ const cta = {
 
 const selectStyle = {
   height: 30,
-  padding: '0 8px',
+  padding: '0 10px',
   borderRadius: 3,
   border: `1px solid ${theme.border}`,
   background: theme.panel,
@@ -883,9 +1012,9 @@ const field = {
 const label = {
   fontSize: 10.5,
   fontWeight: 700,
-  letterSpacing: '.08em',
+  letterSpacing: '.05em',
   textTransform: 'uppercase' as const,
-  color: theme.inkFaint,
+  color: labelGray,
   display: 'block',
   marginTop: 8,
 } as const

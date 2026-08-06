@@ -78,7 +78,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     status: row.status === 'starting_soon' ? 'starting_soon' : 'active',
     center: { lat: row.lat, lng: row.lng },
     radiusM: row.radius_m,
+    // The geofence engine only needs geometry; the commercial columns are
+    // not selected above and must not be invented here.
     budget: null,
+    clientName: null,
+    progressPct: null,
+    scheduleNote: null,
   }))
 
   const { data: stateRow } = await db

@@ -208,7 +208,7 @@ export function Materials({
           <select
             value={siteId}
             onChange={(e) => setSiteId(e.target.value)}
-            style={{ ...input, width: 220, marginTop: 0 }}
+            style={{ ...selectStyle, width: 220 }}
           >
             {sites.length === 0 && <option value="">No job sites yet</option>}
             {sites.map((s) => (
@@ -217,9 +217,7 @@ export function Materials({
               </option>
             ))}
           </select>
-          <span style={{ fontSize: 11.5, color: theme.inkSoft }}>
-            Costed against this job.
-          </span>
+          <span style={{ fontSize: 12, color: labelGray }}>Costed against this job.</span>
           {canEdit && siteId && !draft && (
             <button onClick={() => setDraft({ ...blank })} style={{ ...cta, marginLeft: 'auto' }}>
               ADD MATERIAL
@@ -227,106 +225,103 @@ export function Materials({
           )}
         </div>
 
-        {/* Job cost roll-up */}
-        <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: 0, padding: 0 }}>
-          {(
-            [
-              ['Labour', cost.labour, theme.ink],
-              ['Materials', cost.materials, theme.ink],
-              ['Other spend', cost.other, theme.ink],
-              ['Job cost to date', cost.total, theme.ink],
-            ] as Array<[string, number, string]>
-          ).map(([label, value, colour], i) => (
-            <div
-              key={label}
-              style={{
-                flex: '1 1 150px',
-                padding: '11px 16px',
-                borderLeft: i === 0 ? 'none' : `1px solid ${theme.border}`,
-              }}
-            >
-              <div style={statLabel}>{label}</div>
-              <div
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  marginTop: 3,
-                  fontVariantNumeric: 'tabular-nums',
-                  color: colour,
-                }}
-              >
-                {money(value)}
-              </div>
-            </div>
-          ))}
-          <div style={{ flex: '1 1 200px', padding: '11px 16px', borderLeft: `1px solid ${theme.border}` }}>
-            <div style={statLabel}>Budget</div>
-            {canEdit ? (
-              <input
-                key={siteId + String(site?.budget)}
-                defaultValue={site?.budget ?? ''}
-                onBlur={(e) => void setBudget(e.target.value)}
-                placeholder="Set a budget"
-                style={{ ...input, marginTop: 3, height: 24, fontSize: 14, fontWeight: 600 }}
-              />
-            ) : (
-              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>
-                {site?.budget ? money(site.budget) : '—'}
-              </div>
-            )}
-            {cost.remaining !== null && (
-              <div
-                style={{
-                  fontSize: 11.5,
-                  marginTop: 4,
-                  color: cost.remaining < 0 ? theme.alert : theme.inkSoft,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {cost.remaining < 0
-                  ? `${money(Math.abs(cost.remaining))} over`
-                  : `${money(cost.remaining)} remaining`}
-              </div>
-            )}
+        {/* Job cost roll-up, styled after the "Spend against budget" card —
+            a title/meta header, the figures side by side, then the budget
+            bar underneath so the percentage reads at a glance. */}
+        <div style={rollupCard}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>Job cost against budget</span>
+            <span style={{ fontSize: 12, color: labelGray }}>Labour + materials + other spend</span>
           </div>
-        </div>
 
-        {cost.pct !== null && (
-          <div style={{ height: 6, background: theme.border, borderRadius: 3, overflow: 'hidden' }}>
-            <div
-              style={{
-                width: `${Math.min(100, cost.pct)}%`,
-                height: '100%',
-                background: cost.pct > 100 ? theme.alert : cost.pct > 85 ? theme.warning : theme.success,
-              }}
-            />
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 22, rowGap: 12, flexWrap: 'wrap' }}>
+            {(
+              [
+                ['Labour', cost.labour],
+                ['Materials', cost.materials],
+                ['Other spend', cost.other],
+                ['Job cost to date', cost.total],
+              ] as Array<[string, number]>
+            ).map(([label, value]) => (
+              <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={statLabel}>{label}</span>
+                <span style={statValue}>{money(value)}</span>
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={statLabel}>Budget</span>
+              {canEdit ? (
+                <input
+                  key={siteId + String(site?.budget)}
+                  defaultValue={site?.budget ?? ''}
+                  onBlur={(e) => void setBudget(e.target.value)}
+                  placeholder="Set a budget"
+                  style={budgetInput}
+                />
+              ) : (
+                <span style={statValue}>{site?.budget ? money(site.budget) : '—'}</span>
+              )}
+              {cost.remaining !== null && (
+                <span
+                  style={{
+                    fontSize: 11.5,
+                    color: cost.remaining < 0 ? theme.alert : theme.inkSoft,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {cost.remaining < 0
+                    ? `${money(Math.abs(cost.remaining))} over`
+                    : `${money(cost.remaining)} remaining`}
+                </span>
+              )}
+            </div>
           </div>
-        )}
+
+          {cost.pct !== null && (
+            <>
+              <span style={{ display: 'block', width: '100%', height: 7, borderRadius: 4, background: trackBg, overflow: 'hidden' }}>
+                <span
+                  style={{
+                    display: 'block',
+                    height: '100%',
+                    borderRadius: 4,
+                    width: `${Math.min(100, cost.pct)}%`,
+                    background: cost.pct > 100 ? theme.alert : cost.pct > 85 ? theme.warning : theme.success,
+                  }}
+                />
+              </span>
+              <span style={{ fontSize: 11.5, color: labelGray }}>
+                {Math.round(cost.pct)}% of budget spent
+              </span>
+            </>
+          )}
+        </div>
 
         {byCode.length > 0 && (
           <div style={card}>
-            <div style={{ ...statLabel, marginBottom: 8 }}>MATERIALS BY COST CODE</div>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 10 }}>Materials by cost code</div>
             {byCode.map(([code, amount]) => {
               const label = costCodes.find((c) => c.code === code)?.name
               const share = cost.materials > 0 ? (amount / cost.materials) * 100 : 0
               return (
-                <div key={code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '3px 0' }}>
-                  <span style={{ width: 190, fontSize: 12.5 }}>
+                <div key={code} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '4px 0' }}>
+                  <span style={{ flex: 'none', width: 190, fontSize: 12.5, color: textGray, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {code}
-                    {label && <span style={{ color: theme.inkFaint }}> · {label}</span>}
+                    {label && <span style={{ color: labelGray }}> · {label}</span>}
                   </span>
-                  <span style={{ flex: 1, height: 8, background: theme.appBg, borderRadius: 4 }}>
+                  <span style={{ flex: 1, display: 'block', height: 9, background: hairline, borderRadius: 2, overflow: 'hidden' }}>
                     <span
                       style={{
                         display: 'block',
                         width: `${share}%`,
                         height: '100%',
                         background: theme.accent,
-                        borderRadius: 4,
+                        borderRadius: 2,
                       }}
                     />
                   </span>
-                  <span style={{ fontSize: 12.5, fontVariantNumeric: 'tabular-nums', width: 90, textAlign: 'right' }}>
+                  <span style={{ flex: 'none', width: 90, textAlign: 'right', fontSize: 12.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                     {money2(amount)}
                   </span>
                 </div>
@@ -383,7 +378,7 @@ export function Materials({
             </div>
 
             <div style={{ marginTop: 12, fontSize: 13 }}>
-              Line total{' '}
+              <span style={{ color: theme.inkSoft }}>Line total</span>{' '}
               <strong style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {money2((Number(draft.quantity) || 0) * (Number(draft.unitCost) || 0))}
               </strong>
@@ -422,87 +417,81 @@ export function Materials({
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={9} style={{ ...td, color: theme.inkSoft, padding: 20 }}>
+                  <td colSpan={9} style={emptyTd}>
                     Loading…
                   </td>
                 </tr>
               )}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ ...td, color: theme.inkSoft, padding: 20 }}>
+                  <td colSpan={9} style={emptyTd}>
                     {siteId
                       ? 'Nothing logged against this job yet. Add what has been delivered and it lands in the cost above.'
                       : 'Add a job site first.'}
                   </td>
                 </tr>
               )}
-              {rows.map((r) => (
-                <tr key={r.id} style={{ opacity: r.status === 'returned' ? 0.55 : 1 }}>
-                  <td style={{ ...td, fontWeight: 500 }}>
-                    {r.name}
-                    {r.note && (
-                      <span style={{ display: 'block', fontSize: 11, color: theme.inkFaint }}>{r.note}</span>
-                    )}
-                  </td>
-                  <td style={{ ...td, color: theme.inkSoft }}>{r.supplier ?? '—'}</td>
-                  <td style={{ ...td, color: theme.inkSoft, fontSize: 12 }}>{r.cost_code ?? '—'}</td>
-                  <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {Number(r.quantity)} {r.unit}
-                  </td>
-                  <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {money2(Number(r.unit_cost))}
-                  </td>
-                  <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                    {money2(Number(r.total_cost))}
-                  </td>
-                  <td style={td}>
-                    <span
-                      style={{
-                        padding: '2px 7px',
-                        borderRadius: 3,
-                        fontSize: 11,
-                        background:
-                          r.status === 'delivered' || r.status === 'used' ? '#EAF7EE' : theme.appBg,
-                        color:
-                          r.status === 'delivered' || r.status === 'used' ? '#1B7A32' : theme.inkSoft,
-                      }}
-                    >
-                      {r.status}
-                    </span>
-                  </td>
-                  <td style={{ ...td, color: theme.inkSoft }}>
-                    {r.delivered_on ? new Date(r.delivered_on).toLocaleDateString() : '—'}
-                  </td>
-                  <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    {canEdit && (
-                      <>
-                        <button
-                          onClick={() =>
-                            setDraft({
-                              id: r.id,
-                              name: r.name,
-                              quantity: String(r.quantity),
-                              unit: r.unit,
-                              unitCost: String(r.unit_cost),
-                              supplier: r.supplier ?? '',
-                              costCode: r.cost_code ?? '',
-                              status: r.status,
-                              deliveredOn: r.delivered_on ?? '',
-                              note: r.note ?? '',
-                            })
-                          }
-                          style={ghost}
-                        >
-                          Edit
-                        </button>{' '}
-                        <button onClick={() => void remove(r.id)} style={{ ...ghost, color: theme.alert }}>
-                          Delete
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {rows.map((r) => {
+                const meta = STATUS_META[r.status]
+                return (
+                  <tr key={r.id} style={{ opacity: r.status === 'returned' ? 0.55 : 1 }}>
+                    <td style={{ ...td, fontWeight: 500 }}>
+                      {r.name}
+                      {r.note && (
+                        <span style={{ display: 'block', fontSize: 11, color: labelGray }}>{r.note}</span>
+                      )}
+                    </td>
+                    <td style={{ ...td, color: theme.inkSoft }}>{r.supplier ?? '—'}</td>
+                    <td style={{ ...td, color: theme.inkSoft }}>{r.cost_code ?? '—'}</td>
+                    <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {Number(r.quantity)} {r.unit}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {money2(Number(r.unit_cost))}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                      {money2(Number(r.total_cost))}
+                    </td>
+                    <td style={td}>
+                      <span style={{ ...pill, color: meta.fg, background: meta.bg }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: meta.fg }} />
+                        {meta.label}
+                      </span>
+                    </td>
+                    <td style={{ ...td, color: theme.inkSoft }}>
+                      {r.delivered_on ? new Date(r.delivered_on).toLocaleDateString() : '—'}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {canEdit && (
+                        <span style={{ display: 'inline-flex', gap: 6 }}>
+                          <button
+                            onClick={() =>
+                              setDraft({
+                                id: r.id,
+                                name: r.name,
+                                quantity: String(r.quantity),
+                                unit: r.unit,
+                                unitCost: String(r.unit_cost),
+                                supplier: r.supplier ?? '',
+                                costCode: r.cost_code ?? '',
+                                status: r.status,
+                                deliveredOn: r.delivered_on ?? '',
+                                note: r.note ?? '',
+                              })
+                            }
+                            style={ghost}
+                          >
+                            Edit
+                          </button>
+                          <button onClick={() => void remove(r.id)} style={{ ...ghost, color: theme.alert }}>
+                            Delete
+                          </button>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
 
@@ -510,21 +499,23 @@ export function Materials({
             <div
               style={{
                 display: 'flex',
+                alignItems: 'center',
                 gap: 20,
                 padding: '10px 14px',
-                background: theme.appBg,
+                background: theadBg,
                 fontSize: 12.5,
+                color: theme.inkSoft,
               }}
             >
               <span>
-                <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{rows.length}</strong> line
+                <strong style={{ color: theme.ink, fontVariantNumeric: 'tabular-nums' }}>{rows.length}</strong> line
                 {rows.length === 1 ? '' : 's'}
               </span>
               <span>
                 Materials{' '}
-                <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{money2(cost.materials)}</strong>
+                <strong style={{ color: theme.ink, fontVariantNumeric: 'tabular-nums' }}>{money2(cost.materials)}</strong>
               </span>
-              <span style={{ marginLeft: 'auto', color: theme.inkSoft }}>
+              <span style={{ marginLeft: 'auto' }}>
                 Returned stock is excluded from the job cost.
               </span>
             </div>
@@ -561,20 +552,55 @@ function Field({
   )
 }
 
+/* ---------------------------------------------------------------------
+ * Design tokens below mirror the Crewline design system's other screens
+ * verbatim — design/screens/isCrew.html, isExpenses.html and isBudget.html
+ * all share this exact palette, type scale and CTA treatment. A few of
+ * these greys and tints never made it into theme.ts, so they're pinned
+ * here rather than approximated from the nearest theme colour.
+ * ------------------------------------------------------------------- */
+
+const labelGray = '#8B9096' // uppercase mini-labels, stat-card labels, muted meta text
+const textGray = '#4A5057' // secondary body text, a touch stronger than theme.inkSoft
+const theadBg = '#FAFBFC' // table header / footer strip background
+const hairline = '#F1F3F5' // hairline between table body rows, and bar-chart tracks
+const trackBg = '#EDEFF1' // budget progress-bar track
+const successFg = '#1B7A32'
+const successBg = '#EAF7EE'
+const warnFg = '#8A6100'
+const warnBg = '#FFF6DF'
+
+/** Status pill colours — ordered/awaiting reads as pending amber, delivered
+ *  and used both read as settled green, returned reads as neutral/muted. */
+const STATUS_META: Record<MaterialRow['status'], { label: string; fg: string; bg: string }> = {
+  ordered: { label: 'Ordered', fg: warnFg, bg: warnBg },
+  delivered: { label: 'Delivered', fg: successFg, bg: successBg },
+  used: { label: 'Used', fg: successFg, bg: successBg },
+  returned: { label: 'Returned', fg: theme.inkSoft, bg: theme.appBg },
+}
+
 const statLabel = {
-  fontSize: 9.5,
+  fontSize: 10.5,
   fontWeight: 700,
-  letterSpacing: '.1em',
+  letterSpacing: '.06em',
   textTransform: 'uppercase' as const,
-  color: theme.inkFaint,
+  color: labelGray,
+}
+
+const statValue = {
+  fontSize: 24,
+  fontWeight: 600,
+  letterSpacing: '-.02em',
+  lineHeight: 1,
+  fontVariantNumeric: 'tabular-nums' as const,
 }
 
 const fieldLabel = {
   fontSize: 10.5,
   fontWeight: 700,
-  letterSpacing: '.08em',
+  letterSpacing: '.05em',
   textTransform: 'uppercase' as const,
-  color: theme.inkFaint,
+  color: labelGray,
 }
 
 const input = {
@@ -593,6 +619,31 @@ const input = {
   color: theme.ink,
 }
 
+/** For the inline-editable budget figure — same weight/tabular-nums as its
+ *  read-only siblings, just boxed so it still reads as an input. */
+const budgetInput = {
+  ...statValue,
+  fontSize: 20,
+  height: 30,
+  width: 130,
+  padding: '0 7px',
+  border: `1px solid ${theme.border}`,
+  borderRadius: 3,
+  font: 'inherit',
+  color: theme.ink,
+}
+
+const selectStyle = {
+  height: 30,
+  padding: '0 10px',
+  borderRadius: 3,
+  border: `1px solid ${theme.border}`,
+  background: theme.panel,
+  font: 'inherit',
+  fontSize: 12.5,
+  color: theme.ink,
+} as const
+
 const card = {
   marginTop: 14,
   padding: 14,
@@ -601,42 +652,76 @@ const card = {
   borderRadius: 8,
 }
 
+const rollupCard = {
+  marginTop: 14,
+  padding: '14px 15px',
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: 9,
+  background: theme.panel,
+  border: `1px solid ${theme.border}`,
+  borderRadius: 8,
+}
+
 const th = {
-  padding: '8px 12px',
+  padding: '7px 14px',
   borderBottom: `1px solid ${theme.border}`,
-  background: theme.appBg,
-  fontSize: 9.5,
+  background: theadBg,
+  fontSize: 10.5,
   fontWeight: 700,
-  letterSpacing: '.1em',
+  letterSpacing: '.05em',
   textTransform: 'uppercase' as const,
-  color: theme.inkFaint,
+  color: theme.inkSoft,
 }
 
 const td = {
-  padding: '8px 12px',
-  borderBottom: `1px solid ${theme.border}`,
+  padding: '9px 14px',
+  borderBottom: `1px solid ${hairline}`,
   fontSize: 13,
 }
 
+const emptyTd = {
+  ...td,
+  padding: '28px 14px',
+  color: theme.inkSoft,
+  textAlign: 'center' as const,
+}
+
+/** Rounded status pill with a leading dot — ordered/delivered/used/returned. */
+const pill = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '3px 8px',
+  borderRadius: 11,
+  fontSize: 11,
+  fontWeight: 700,
+} as const
+
 const ghost = {
-  padding: '4px 10px',
+  padding: '5px 11px',
   borderRadius: 3,
   border: `1px solid ${theme.border}`,
   background: theme.panel,
   color: theme.ink,
   font: 'inherit',
-  fontSize: 11.5,
+  fontSize: 12.5,
+  fontWeight: 500,
   cursor: 'pointer',
 }
 
 const cta = {
-  padding: '7px 13px',
+  height: 30,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '0 14px',
   borderRadius: 3,
-  border: 'none',
-  background: `linear-gradient(90deg, ${theme.ctaFrom}, ${theme.ctaTo})`,
+  border: `1px solid ${theme.ctaBorder}`,
+  background: theme.cta,
   color: theme.ink,
   font: 'inherit',
-  fontSize: 11,
+  fontSize: 11.5,
   fontWeight: 700,
   letterSpacing: '.04em',
   cursor: 'pointer',

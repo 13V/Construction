@@ -15,6 +15,9 @@ const site = (id: string, center: LatLng, radiusM: number): JobSite => ({
   center,
   radiusM,
   budget: null,
+  clientName: null,
+  progressPct: null,
+  scheduleNote: null,
 })
 
 const MAPLE = site('maple', { lat: -27.4055, lng: 153.049 }, 150)

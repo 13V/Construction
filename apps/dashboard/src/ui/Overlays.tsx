@@ -1,5 +1,7 @@
-import { statusColor, statusLabel, theme } from '../theme'
-import type { CrewSnapshot, JobSite, WorkerState } from '../types'
+import type { ReactNode } from 'react'
+import { money } from '../format'
+import { statusColor, theme } from '../theme'
+import type { CrewSnapshot, ExceptionKind, JobSite, WorkerState } from '../types'
 
 /** Milliseconds on the clock today, including any shift still running. */
 function liveMsFor(state: WorkerState, now: number): number {
@@ -25,57 +27,81 @@ const hoursLabel = (ms: number) => {
 }
 
 export function StatStrip({ snapshot }: { snapshot: CrewSnapshot }) {
-  const cells: Array<[string, string, string?]> = [
-    ['On the clock', String(snapshot.onClock), theme.success],
-    ['Active sites', String(snapshot.activeSites)],
-    ['Hours today', snapshot.hoursToday.toFixed(1)],
-    ['Labour cost today', `$${Math.round(snapshot.labourCostToday).toLocaleString()}`],
+  const needsReview = snapshot.crew.filter((w) => w.exception !== null).length
+
+  const cells: Array<{ label: string; value: string; dot?: string; alert?: boolean }> = [
+    { label: 'ON THE CLOCK', value: String(snapshot.onClock), dot: theme.success },
+    { label: 'HOURS TODAY', value: snapshot.hoursToday.toFixed(1) },
+    { label: 'LABOR COST TODAY', value: money(snapshot.labourCostToday) },
+    { label: 'NEEDS REVIEW', value: String(needsReview), dot: theme.alert, alert: true },
   ]
 
   return (
-    <div style={{ ...panel, display: 'flex', overflow: 'hidden' }}>
-      {cells.map(([label, value, dot], i) => (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'stretch',
+        background: theme.panel,
+        border: `1px solid ${theme.border}`,
+        borderRadius: 8,
+        boxShadow: '0 2px 10px rgba(26,29,33,.1)',
+        overflow: 'hidden',
+      }}
+    >
+      {cells.map((cell, i) => (
         <div
-          key={label}
+          key={cell.label}
           style={{
-            padding: '8px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            padding: '8px 12px',
             borderLeft: i === 0 ? 'none' : `1px solid ${theme.border}`,
-            minWidth: 104,
+            flex: cell.alert ? 1 : 'none',
+            background: cell.alert ? '#FFF9E8' : 'transparent',
           }}
         >
-          <div
+          <span
             style={{
               fontSize: 9.5,
               fontWeight: 700,
-              letterSpacing: '.1em',
-              color: theme.inkFaint,
-              textTransform: 'uppercase',
+              letterSpacing: '.08em',
+              color: '#8B9096',
+              whiteSpace: 'nowrap',
             }}
           >
-            {label}
-          </div>
-          <div
+            {cell.label}
+          </span>
+          <span
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              marginTop: 3,
-              fontSize: 14,
+              fontSize: 18,
               fontWeight: 600,
               lineHeight: 1,
+              fontVariantNumeric: 'tabular-nums',
+              color: cell.alert ? theme.alert : theme.ink,
             }}
           >
-            {dot && (
+            {cell.dot && (
               <span
-                style={{ width: 7, height: 7, borderRadius: '50%', background: dot }}
+                style={{ width: 7, height: 7, borderRadius: '50%', background: cell.dot }}
               />
             )}
-            {value}
-          </div>
+            {cell.value}
+          </span>
         </div>
       ))}
     </div>
   )
+}
+
+/** Short, human labels for the roster's red exception pill. */
+const exceptionLabel: Record<ExceptionKind, string> = {
+  outside_geofence: 'Outside geofence',
+  signal_lost: 'Signal lost',
+  no_clock_out: 'No clock-out',
 }
 
 function RosterRow({
@@ -91,17 +117,20 @@ function RosterRow({
 }) {
   const dot = statusColor[state.status] ?? theme.inkFaint
   const ms = liveMsFor(state, now)
+  const flag = state.exception ? (state.note ?? exceptionLabel[state.exception]) : null
 
   return (
     <button
+      type="button"
       onClick={() => onSelect(state.worker.id)}
       style={{
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 9,
         width: '100%',
-        padding: '7px 12px',
+        padding: '9px 13px',
         border: 'none',
+        borderBottom: '1px solid #F1F3F5',
         borderLeft: `2px solid ${selected ? theme.accent : 'transparent'}`,
         background: selected ? theme.accentFill : 'transparent',
         font: 'inherit',
@@ -116,12 +145,12 @@ function RosterRow({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: 28,
-          height: 28,
+          width: 30,
+          height: 30,
           borderRadius: '50%',
           background: theme.railSoft,
           color: '#fff',
-          fontSize: 10,
+          fontSize: 10.5,
           fontWeight: 700,
         }}
       >
@@ -140,45 +169,63 @@ function RosterRow({
         />
       </span>
 
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span
-          style={{
-            display: 'block',
-            fontSize: 12.5,
-            fontWeight: 500,
-            color: theme.ink,
-          }}
-        >
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2, color: theme.ink }}>
           {state.worker.name}
         </span>
-        <span
-          style={{
-            display: 'block',
-            fontSize: 11,
-            color: state.exception ? theme.alert : theme.inkSoft,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {state.note ??
-            (state.clockedInAt
-              ? `${state.worker.trade} · in ${hhmm(state.clockedInAt)}`
-              : `${state.worker.trade} · ${statusLabel[state.status]}`)}
-        </span>
-      </span>
+        <span style={{ fontSize: 11.5, color: theme.inkSoft }}>{state.worker.trade}</span>
+        {flag && (
+          <span
+            style={{
+              marginTop: 3,
+              display: 'inline-flex',
+              alignSelf: 'flex-start',
+              alignItems: 'center',
+              gap: 4,
+              padding: '2px 6px',
+              borderRadius: 9,
+              background: '#FDECEE',
+              color: theme.alert,
+              fontSize: 10.5,
+              fontWeight: 600,
+            }}
+          >
+            {flag}
+          </span>
+        )}
+      </div>
 
       <span
         style={{
           flex: 'none',
           fontSize: 12,
+          color: '#4A5057',
+          textAlign: 'right',
+          whiteSpace: 'nowrap',
           fontVariantNumeric: 'tabular-nums',
-          color: ms > 0 ? theme.ink : theme.inkFaint,
         }}
       >
         {ms > 0 ? hoursLabel(ms) : '—'}
       </span>
     </button>
+  )
+}
+
+function LegendItem({ swatch, label }: { swatch: ReactNode; label: string }) {
+  return (
+    <span
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 11.5,
+        color: '#4A5057',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {swatch}
+      {label}
+    </span>
   )
 }
 
@@ -215,44 +262,69 @@ export function RosterPanel({
   return (
     <div
       style={{
-        ...panel,
-        width: 300,
-        maxHeight: '100%',
+        width: 302,
+        flex: '1 1 auto',
+        minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        background: theme.panel,
+        border: `1px solid ${theme.border}`,
+        borderRadius: 8,
+        boxShadow: '0 3px 14px rgba(26,29,33,.13)',
       }}
     >
       <div
         style={{
           flex: 'none',
-          padding: '10px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '11px 13px',
           borderBottom: `1px solid ${theme.border}`,
-          fontSize: 13,
-          fontWeight: 600,
         }}
       >
-        Crew
-        <span style={{ marginLeft: 6, color: theme.inkFaint, fontWeight: 400 }}>
-          {snapshot.crew.length}
+        <span style={{ fontSize: 14, fontWeight: 600, color: theme.ink }}>Crew right now</span>
+        <span
+          style={{ fontSize: 11.5, color: '#8B9096', fontVariantNumeric: 'tabular-nums' }}
+        >
+          {snapshot.crew.length} total
         </span>
       </div>
 
-      <div style={{ overflowY: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         {ordered.map(([label, members]) => (
           <div key={label}>
             <div
               style={{
-                padding: '7px 12px 4px',
-                fontSize: 9.5,
-                fontWeight: 700,
-                letterSpacing: '.1em',
-                textTransform: 'uppercase',
-                color: label === 'Needs review' ? theme.alert : theme.inkFaint,
-                background: theme.appBg,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 13px 6px',
+                background: '#FAFBFC',
+                borderBottom: '1px solid #EDEFF1',
               }}
             >
-              {label}
+              <span
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  letterSpacing: '.03em',
+                  color: label === 'Needs review' ? theme.alert : '#4A5057',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {label}
+              </span>
+              <span
+                style={{ fontSize: 11, color: '#8B9096', fontVariantNumeric: 'tabular-nums' }}
+              >
+                {members.length} {members.length === 1 ? 'person' : 'people'}
+              </span>
             </div>
             {members.map((state) => (
               <RosterRow
@@ -270,14 +342,141 @@ export function RosterPanel({
       <div
         style={{
           flex: 'none',
-          padding: '8px 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          padding: '10px 13px',
           borderTop: `1px solid ${theme.border}`,
-          fontSize: 10.5,
-          color: theme.inkSoft,
-          lineHeight: 1.4,
+          background: '#FAFBFC',
         }}
       >
-        Location tracked 6:00 AM – 4:00 PM on scheduled shifts only.
+        <div
+          style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 11, rowGap: 6 }}
+        >
+          <LegendItem
+            swatch={
+              <span
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  background: theme.railSoft,
+                  border: `2px solid ${theme.success}`,
+                }}
+              />
+            }
+            label="On clock"
+          />
+          <LegendItem
+            swatch={
+              <span
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  background: theme.railSoft,
+                  border: `2px solid ${theme.warning}`,
+                }}
+              />
+            }
+            label="Traveling"
+          />
+          <LegendItem
+            swatch={
+              <span
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  background: theme.railSoft,
+                  border: `2px solid ${theme.alert}`,
+                }}
+              />
+            }
+            label="Exception"
+          />
+          <LegendItem
+            swatch={
+              <span
+                style={{ width: 12, height: 12, borderRadius: 3, background: theme.rail }}
+              />
+            }
+            label="Equipment"
+          />
+          <LegendItem
+            swatch={
+              <span
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  background: 'rgba(0,123,255,.16)',
+                  border: `1px solid ${theme.accent}`,
+                }}
+              />
+            }
+            label="Geofence"
+          />
+        </div>
+        <div
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
+        >
+          <a
+            href="#"
+            onClick={(e) => e.preventDefault()}
+            style={{ fontSize: 12.5, fontWeight: 500, color: theme.accent }}
+          >
+            Open full crew list →
+          </a>
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+              color: '#8B9096',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <span style={{ display: 'block', width: 40, height: 5, border: '1px solid #9AA0A6', borderTop: 0 }} />
+            500 ft
+          </span>
+        </div>
+      </div>
+
+      <div style={{ flex: 'none', padding: '10px 13px 12px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+            padding: '7px 11px',
+            background: theme.panel,
+            border: `1px solid ${theme.border}`,
+            borderRadius: 6,
+            boxShadow: '0 2px 8px rgba(26,29,33,.08)',
+          }}
+        >
+          <svg
+            width={13}
+            height={13}
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke={theme.success}
+            strokeWidth={1.5}
+            style={{ flex: 'none' }}
+          >
+            <rect x={3.4} y={7} width={9.2} height={6.4} rx={1.2} />
+            <path d="M5.6 7V5.2a2.4 2.4 0 014.8 0V7" strokeLinecap="round" />
+          </svg>
+          <span style={{ fontSize: 12, color: '#4A5057' }}>
+            Location tracked{' '}
+            <b style={{ fontWeight: 600, color: theme.ink }}>
+              6:00 AM – 4:00 PM on scheduled shifts only.
+            </b>{' '}
+            Never off the clock.
+          </span>
+        </div>
       </div>
     </div>
   )
@@ -338,37 +537,82 @@ export function EventLog({ snapshot }: { snapshot: CrewSnapshot }) {
   )
 }
 
+function RailButton({
+  title,
+  active,
+  children,
+}: {
+  title: string
+  active?: boolean
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 30,
+        height: 30,
+        background: active ? '#3D434A' : 'transparent',
+        border: 0,
+        borderRadius: 4,
+        cursor: 'pointer',
+        color: '#fff',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
 export function ToolRail() {
-  const icons = ['⤢', '＋', '−', '◎', '⛭']
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
+        padding: 4,
         background: theme.rail,
         borderRadius: 6,
-        overflow: 'hidden',
         boxShadow: '0 2px 8px rgba(0,0,0,.28)',
       }}
     >
-      {icons.map((icon, i) => (
-        <span
-          key={icon}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 32,
-            height: 32,
-            color: '#fff',
-            fontSize: 13,
-            borderTop: i === 0 ? 'none' : '1px solid rgba(255,255,255,.10)',
-            cursor: 'pointer',
-          }}
-        >
-          {icon}
-        </span>
-      ))}
+      <RailButton title="Fullscreen">
+        <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+          <path d="M2.5 5.8V2.5h3.3M10.2 2.5h3.3v3.3M13.5 10.2v3.3h-3.3M5.8 13.5H2.5v-3.3" />
+        </svg>
+      </RailButton>
+      <RailButton title="Zoom in">
+        <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+          <path d="M8 3.2v9.6M3.2 8h9.6" />
+        </svg>
+      </RailButton>
+      <RailButton title="Zoom out">
+        <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+          <path d="M3.2 8h9.6" />
+        </svg>
+      </RailButton>
+      <div style={{ height: 1, background: '#454A50', margin: '4px 5px' }} />
+      <RailButton title="Filter by site">
+        <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+          <path d="M2 4h12M4.2 8h7.6M6.4 12h3.2" />
+        </svg>
+      </RailButton>
+      <RailButton title="Layers" active>
+        <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round">
+          <path d="M8 2.2l5.6 3.1L8 8.4 2.4 5.3z" />
+          <path d="M2.4 9.2L8 12.3l5.6-3.1" />
+        </svg>
+      </RailButton>
+      <RailButton title="Recenter">
+        <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round">
+          <circle cx={8} cy={8} r={4.4} />
+          <path d="M8 1.4v2.2M8 12.4v2.2M1.4 8h2.2M12.4 8h2.2" />
+        </svg>
+      </RailButton>
     </div>
   )
 }

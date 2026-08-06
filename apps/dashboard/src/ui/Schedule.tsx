@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type AssignmentRow, type WorkerRow } from '../data/supabase'
 import { theme } from '../theme'
+import { money } from '../format'
 import type { JobSite, Worker } from '../types'
 
 /**
@@ -42,6 +43,14 @@ function isoToTime(iso: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+/** "7" for an on-the-hour time, "3:30" otherwise — the design's compact chip label. */
+function compactTime(d: Date): string {
+  const h24 = d.getHours()
+  const m = d.getMinutes()
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12
+  return m === 0 ? String(h12) : `${h12}:${String(m).padStart(2, '0')}`
+}
+
 /** Deterministic muted colour per site so the same site always reads the same. */
 function siteHue(siteId: string): number {
   let h = 0
@@ -58,6 +67,13 @@ function siteTint(siteId: string) {
   }
 }
 
+/** Past 40h every hour is paid at 1.5×; past 38h it's close enough to flag before it happens. */
+function hoursColor(hrs: number): string {
+  if (hrs > 40) return theme.alert
+  if (hrs > 38) return theme.warning
+  return theme.ink
+}
+
 interface EditState {
   workerId: string
   day: Date
@@ -66,6 +82,21 @@ interface EditState {
   start: string
   end: string
   note: string
+}
+
+/**
+ * A shift with a site and time but nobody assigned yet — the design's dispatch
+ * board leads with these. `assignments.worker_id` is required by the schema,
+ * so there is currently no way to persist one; this stays real (and empty)
+ * rather than faking rows, ready to fill in once the data model can hold one.
+ */
+interface UnassignedShift {
+  id: string
+  site: string
+  day: string
+  time: string
+  trade: string
+  costCode: string
 }
 
 export function Schedule({
@@ -87,37 +118,15 @@ export function Schedule({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [edit, setEdit] = useState<EditState | null>(null)
+  const [siteFilter, setSiteFilter] = useState('')
+  const [tradeFilter, setTradeFilter] = useState('')
 
   const weekStart = useMemo(() => addDays(startOfWeek(new Date()), weekOffset * 7), [weekOffset])
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      setError(null)
-      const from = weekStart.toISOString()
-      const to = addDays(weekStart, 7).toISOString()
-      const { data, error: err } = await supabase()
-        .from('assignments')
-        .select('*')
-        .eq('company_id', me.company_id)
-        .gte('starts_at', from)
-        .lt('starts_at', to)
-        .order('starts_at')
-      if (cancelled) return
-      if (err) setError(err.message)
-      else setAssignments((data ?? []) as AssignmentRow[])
-      setLoading(false)
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me.company_id, weekOffset])
-
-  async function reload() {
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
     const from = weekStart.toISOString()
     const to = addDays(weekStart, 7).toISOString()
     const { data, error: err } = await supabase()
@@ -129,7 +138,13 @@ export function Schedule({
       .order('starts_at')
     if (err) setError(err.message)
     else setAssignments((data ?? []) as AssignmentRow[])
-  }
+    setLoading(false)
+  }, [me.company_id, weekStart])
+
+  useEffect(() => {
+    setEdit(null) // the open editor would otherwise point at a day from the week we just left
+    void load()
+  }, [load])
 
   function openNew(workerId: string, day: Date) {
     if (!canEdit) return
@@ -138,7 +153,7 @@ export function Schedule({
       workerId,
       day,
       assignmentId: null,
-      siteId: sites[0]?.id ?? '',
+      siteId: siteFilter || sites[0]?.id || '',
       start: '07:00',
       end: '15:00',
       note: '',
@@ -194,7 +209,7 @@ export function Schedule({
       return
     }
     setEdit(null)
-    await reload()
+    await load()
     onChanged()
   }
 
@@ -208,7 +223,7 @@ export function Schedule({
       return
     }
     setEdit(null)
-    await reload()
+    await load()
     onChanged()
   }
 
@@ -229,15 +244,14 @@ export function Schedule({
       setError(err.message)
       return
     }
-    await reload()
+    await load()
     onChanged()
   }
 
   const siteName = (id: string) => sites.find((s) => s.id === id)?.name ?? 'Unknown site'
 
-  const unpublished = assignments.filter((a) => !a.published)
-  const notifyCount = new Set(unpublished.map((a) => a.worker_id)).size
-
+  // Hours and overtime always reflect the full week regardless of the site/trade
+  // filters below — those only narrow what's drawn, never what counts toward 1.5×.
   const hoursByWorker = useMemo(() => {
     const map = new Map<string, number>()
     for (const a of assignments) {
@@ -247,69 +261,170 @@ export function Schedule({
     return map
   }, [assignments])
 
+  const unpublished = assignments.filter((a) => !a.published)
+  const notifyCount = new Set(unpublished.map((a) => a.worker_id)).size
+
+  const trades = useMemo(
+    () => Array.from(new Set(workers.map((w) => w.trade).filter(Boolean))).sort(),
+    [workers],
+  )
+  const visibleWorkers = useMemo(
+    () => (tradeFilter ? workers.filter((w) => w.trade === tradeFilter) : workers),
+    [workers, tradeFilter],
+  )
+  const visibleAssignments = useMemo(() => {
+    const workerIds = new Set(visibleWorkers.map((w) => w.id))
+    return assignments.filter((a) => workerIds.has(a.worker_id) && (!siteFilter || a.site_id === siteFilter))
+  }, [assignments, visibleWorkers, siteFilter])
+
+  const laborCost = visibleAssignments.reduce((sum, a) => {
+    const worker = workers.find((w) => w.id === a.worker_id)
+    const hrs = (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime()) / 3_600_000
+    return sum + hrs * (worker?.rate ?? 0)
+  }, 0)
+
+  // No row in `assignments` can exist without a worker (schema requires worker_id),
+  // so this stays empty until the product grows a real open-shift concept.
+  const unassignedShifts: UnassignedShift[] = []
+
+  const atRisk = useMemo(
+    () =>
+      workers
+        .map((w) => ({ id: w.id, name: w.name, hrs: hoursByWorker.get(w.id) ?? 0 }))
+        .filter((w) => w.hrs > 38)
+        .sort((a, b) => b.hrs - a.hrs),
+    [workers, hoursByWorker],
+  )
+  const allOverAtRisk = atRisk.length > 0 && atRisk.every((w) => w.hrs > 40)
+
+  const availList = useMemo(
+    () =>
+      workers
+        .map((w) => ({ worker: w, hrs: hoursByWorker.get(w.id) ?? 0 }))
+        .sort((a, b) => b.hrs - a.hrs),
+    [workers, hoursByWorker],
+  )
+
   const rangeLabel = `${weekStart.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${addDays(weekStart, 6).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`
 
+  const today = new Date()
+
+  // `assignments` has no published_at/published_by column, so the exact "who and
+  // when" the design shows can't be told truthfully — this reports the same fact honestly instead.
+  const publishStatus =
+    unpublished.length === 0
+      ? assignments.length === 0
+        ? 'Nothing scheduled this week yet.'
+        : 'This week is fully published.'
+      : `${unpublished.length} shift${unpublished.length === 1 ? '' : 's'} not yet published this week.`
+
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: theme.appBg }}>
-      <div style={{ padding: 16, maxWidth: 1100 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Schedule</h1>
-          <span style={{ fontSize: 13, color: theme.inkSoft }}>{rangeLabel}</span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button style={ghost} onClick={() => setWeekOffset((w) => w - 1)}>
-              ‹ Prev
-            </button>
-            <button style={ghost} onClick={() => setWeekOffset(0)} disabled={weekOffset === 0}>
-              This week
-            </button>
-            <button style={ghost} onClick={() => setWeekOffset((w) => w + 1)}>
-              Next ›
-            </button>
-          </div>
-
-          {canEdit && (
-            <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-              <button onClick={() => void publish()} disabled={busy || unpublished.length === 0} style={cta}>
-                PUBLISH SCHEDULE
-              </button>
-              <div style={{ fontSize: 10.5, color: theme.inkSoft, marginTop: 3 }}>
-                {unpublished.length === 0
-                  ? 'Everything visible is already published.'
-                  : `Notifies ${notifyCount} crew`}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <div
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: theme.appBg }}>
+      <div
+        style={{
+          flex: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          height: 40,
+          padding: '0 12px',
+          background: theme.panel,
+          borderBottom: `1px solid ${theme.border}`,
+          overflowX: 'auto',
+        }}
+      >
+        <div style={{ flex: 'none', display: 'flex', height: 27, border: `1px solid ${theme.border}`, borderRadius: 3, overflow: 'hidden' }}>
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label="Previous week"
+            onClick={() => setWeekOffset((w) => w - 1)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') setWeekOffset((w) => w - 1)
+            }}
+            style={{ display: 'flex', alignItems: 'center', padding: '0 9px', background: theme.panel, color: '#4A5057', fontSize: 13, cursor: 'pointer' }}
+          >
+            ‹
+          </span>
+          <span
             style={{
-              marginTop: 12,
-              padding: '8px 12px',
-              borderRadius: 4,
-              background: '#FCE9EB',
-              color: theme.alert,
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 11px',
+              background: theme.panel,
+              borderLeft: `1px solid ${theme.border}`,
+              borderRight: `1px solid ${theme.border}`,
               fontSize: 12.5,
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              fontVariantNumeric: 'tabular-nums',
             }}
           >
+            {rangeLabel}
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label="Next week"
+            onClick={() => setWeekOffset((w) => w + 1)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') setWeekOffset((w) => w + 1)
+            }}
+            style={{ display: 'flex', alignItems: 'center', padding: '0 9px', background: theme.panel, color: '#4A5057', fontSize: 13, cursor: 'pointer' }}
+          >
+            ›
+          </span>
+        </div>
+
+        <button onClick={() => setWeekOffset(0)} style={weekBtnStyle}>
+          This week
+        </button>
+
+        <div style={{ flex: 'none', width: 1, height: 20, background: theme.border, margin: '0 4px' }} />
+
+        <FilterButton
+          label={(siteFilter && siteName(siteFilter)) || 'All sites'}
+          ariaLabel="Filter by job site"
+          value={siteFilter}
+          onChange={setSiteFilter}
+          options={[{ value: '', label: 'All sites' }, ...sites.map((s) => ({ value: s.id, label: s.name }))]}
+        />
+        <FilterButton
+          label={tradeFilter || 'All trades'}
+          ariaLabel="Filter by trade"
+          value={tradeFilter}
+          onChange={setTradeFilter}
+          options={[{ value: '', label: 'All trades' }, ...trades.map((t) => ({ value: t, label: t }))]}
+        />
+
+        <div style={{ flex: 1 }} />
+
+        {canEdit && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+            <button onClick={() => void publish()} disabled={busy || unpublished.length === 0} style={publishBtnStyle}>
+              PUBLISH SCHEDULE
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px 18px 40px' }}>
+        {error && (
+          <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 4, background: '#FCE9EB', color: theme.alert, fontSize: 12.5 }}>
             {error}
           </div>
         )}
 
         {edit && (
-          <div style={card}>
-            <div style={{ fontSize: 11.5, color: theme.inkSoft, marginBottom: 8 }}>
+          <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8, padding: 14, marginBottom: 12 }}>
+            <div style={{ fontSize: 11.5, color: '#8B9096', marginBottom: 8 }}>
               {workers.find((w) => w.id === edit.workerId)?.name ?? 'Worker'} ·{' '}
               {edit.day.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <label style={fieldLabel}>
+              <label style={fieldLabelStyle}>
                 Job site
-                <select
-                  style={field}
-                  value={edit.siteId}
-                  onChange={(e) => setEdit({ ...edit, siteId: e.target.value })}
-                >
+                <select style={fieldStyle} value={edit.siteId} onChange={(e) => setEdit({ ...edit, siteId: e.target.value })}>
                   {sites.length === 0 && <option value="">No job sites yet</option>}
                   {sites.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -318,43 +433,28 @@ export function Schedule({
                   ))}
                 </select>
               </label>
-              <label style={fieldLabel}>
+              <label style={fieldLabelStyle}>
                 Start
-                <input
-                  type="time"
-                  style={field}
-                  value={edit.start}
-                  onChange={(e) => setEdit({ ...edit, start: e.target.value })}
-                />
+                <input type="time" style={fieldStyle} value={edit.start} onChange={(e) => setEdit({ ...edit, start: e.target.value })} />
               </label>
-              <label style={fieldLabel}>
+              <label style={fieldLabelStyle}>
                 End
-                <input
-                  type="time"
-                  style={field}
-                  value={edit.end}
-                  onChange={(e) => setEdit({ ...edit, end: e.target.value })}
-                />
+                <input type="time" style={fieldStyle} value={edit.end} onChange={(e) => setEdit({ ...edit, end: e.target.value })} />
               </label>
-              <label style={{ ...fieldLabel, flex: 1, minWidth: 180 }}>
+              <label style={{ ...fieldLabelStyle, flex: 1, minWidth: 180 }}>
                 Note
-                <input
-                  style={field}
-                  value={edit.note}
-                  onChange={(e) => setEdit({ ...edit, note: e.target.value })}
-                  placeholder="Optional"
-                />
+                <input style={fieldStyle} value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} placeholder="Optional" />
               </label>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <button onClick={() => void save()} disabled={busy} style={cta}>
+              <button onClick={() => void save()} disabled={busy} style={ctaStyle}>
                 {busy ? 'SAVING…' : 'SAVE'}
               </button>
-              <button onClick={() => setEdit(null)} style={ghost}>
+              <button onClick={() => setEdit(null)} style={ghostStyle}>
                 Cancel
               </button>
               {edit.assignmentId && (
-                <button onClick={() => void remove()} disabled={busy} style={{ ...ghost, marginLeft: 'auto', color: theme.alert }}>
+                <button onClick={() => void remove()} disabled={busy} style={{ ...ghostStyle, marginLeft: 'auto', color: theme.alert }}>
                   Delete
                 </button>
               )}
@@ -362,128 +462,342 @@ export function Schedule({
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 14, marginTop: 14, alignItems: 'flex-start' }}>
-          <div style={{ ...card, margin: 0, flex: 1, padding: 0, overflow: 'hidden' }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...th, textAlign: 'left', minWidth: 130 }}>Crew</th>
-                    {days.map((day) => (
-                      <th key={day.toISOString()} style={{ ...th, minWidth: 90 }}>
-                        {day.toLocaleDateString([], { weekday: 'short' })}
-                        <div style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: theme.inkSoft }}>
-                          {day.toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {workers.length === 0 && (
-                    <tr>
-                      <td colSpan={8} style={{ ...td, color: theme.inkSoft, padding: 24 }}>
-                        No crew yet — add someone on the Crew screen first.
-                      </td>
-                    </tr>
-                  )}
-                  {workers.map((worker) => (
-                    <tr key={worker.id}>
-                      <td style={{ ...td, fontWeight: 500, verticalAlign: 'top' }}>{worker.name}</td>
-                      {days.map((day) => {
-                        const dayAssignments = assignments.filter(
-                          (a) => a.worker_id === worker.id && sameDay(new Date(a.starts_at), day),
-                        )
-                        return (
-                          <td
-                            key={day.toISOString()}
-                            onClick={() => openNew(worker.id, day)}
-                            style={{
-                              ...td,
-                              verticalAlign: 'top',
-                              cursor: canEdit ? 'pointer' : 'default',
-                            }}
-                          >
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              {dayAssignments.map((a) => {
-                                const tint = siteTint(a.site_id)
-                                return (
-                                  <div
-                                    key={a.id}
-                                    title={a.note ?? undefined}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      openEdit(worker.id, day, a)
-                                    }}
-                                    style={{
-                                      padding: '4px 6px',
-                                      borderRadius: 3,
-                                      background: tint.bg,
-                                      border: `1px ${a.published ? 'solid' : 'dashed'} ${tint.border}`,
-                                      color: tint.text,
-                                      fontSize: 11,
-                                      cursor: canEdit ? 'pointer' : 'default',
-                                    }}
-                                  >
-                                    <div style={{ fontWeight: 700 }}>{siteName(a.site_id)}</div>
-                                    <div style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                      {new Date(a.starts_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                                      {'–'}
-                                      {new Date(a.ends_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                              {canEdit && dayAssignments.length === 0 && (
-                                <span style={{ fontSize: 14, color: theme.inkFaint }}>+</span>
-                              )}
-                            </div>
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {loading && (
-              <div style={{ padding: 14, fontSize: 12.5, color: theme.inkSoft }}>Loading schedule…</div>
-            )}
-          </div>
-
-          <div style={{ ...card, margin: 0, width: 240, flex: 'none' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: theme.inkFaint, marginBottom: 8 }}>
-              Hours this week
-            </div>
-            {workers.length === 0 && <div style={{ fontSize: 12, color: theme.inkSoft }}>No crew yet.</div>}
-            {workers.map((worker) => {
-              const hrs = hoursByWorker.get(worker.id) ?? 0
-              const overtime = hrs > 40
-              const nearing = hrs > 38 && !overtime
-              const color = overtime ? theme.alert : nearing ? theme.warning : theme.ink
-              return (
-                <div key={worker.id} style={{ padding: '6px 0', borderBottom: `1px solid ${theme.border}` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
-                    <span>{worker.name}</span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color }}>
-                      {hrs.toFixed(1)} h
-                    </span>
-                  </div>
-                  {(overtime || nearing) && (
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {unassignedShifts.length > 0 && (
+              <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8, overflow: 'hidden' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 14,
+                    flexWrap: 'wrap',
+                    padding: '10px 13px',
+                    borderBottom: `1px solid ${theme.border}`,
+                    background: '#FFF9E8',
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: theme.warning }} />
+                    Unassigned shifts — {unassignedShifts.length} open
+                  </span>
+                  <span style={{ fontSize: 12, color: '#8B9096' }}>Drag onto a crew row to assign. Geofence arms itself once assigned.</span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, padding: '11px 13px' }}>
+                  {unassignedShifts.map((u) => (
                     <div
+                      key={u.id}
                       style={{
-                        marginTop: 3,
-                        fontSize: 11,
-                        fontWeight: overtime ? 700 : 500,
-                        color,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 9,
+                        padding: '8px 11px',
+                        border: '1px dashed #C9A227',
+                        borderRadius: 4,
+                        background: '#FFFDF5',
+                        cursor: 'grab',
                       }}
                     >
-                      {overtime ? 'Over 40 h — would hit overtime' : 'Approaching 38 h — would hit overtime'}
+                      <svg width="9" height="14" viewBox="0 0 9 14" fill="#B08A1E">
+                        <circle cx="2" cy="2" r="1.3" />
+                        <circle cx="7" cy="2" r="1.3" />
+                        <circle cx="2" cy="7" r="1.3" />
+                        <circle cx="7" cy="7" r="1.3" />
+                        <circle cx="2" cy="12" r="1.3" />
+                        <circle cx="7" cy="12" r="1.3" />
+                      </svg>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 600 }}>
+                          {u.site} · {u.time}
+                        </span>
+                        <span style={{ fontSize: 11.5, color: '#8B9096' }}>
+                          {u.day} · {u.trade} · {u.costCode}
+                        </span>
+                      </div>
                     </div>
-                  )}
+                  ))}
                 </div>
-              )
-            })}
+              </div>
+            )}
+
+            <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8, overflowX: 'auto' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  minWidth: 900,
+                  gridTemplateColumns: '186px repeat(7,minmax(0,1fr))',
+                  borderBottom: `1px solid ${theme.border}`,
+                  background: '#FAFBFC',
+                }}
+              >
+                <div style={{ padding: '8px 12px', fontSize: 11, fontWeight: 700, letterSpacing: '.05em', color: theme.inkSoft }}>CREW</div>
+                {days.map((day) => {
+                  const fg = sameDay(day, today) ? theme.accent : theme.inkSoft
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      style={{ padding: '8px 10px', borderLeft: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', gap: 1 }}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em', color: fg }}>
+                        {day.toLocaleDateString([], { weekday: 'short' }).toUpperCase()}
+                      </span>
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: fg, fontVariantNumeric: 'tabular-nums' }}>
+                        {day.toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {loading && <div style={{ padding: '14px 12px', fontSize: 12.5, color: '#8B9096' }}>Loading schedule…</div>}
+
+              {!loading && visibleWorkers.length === 0 && (
+                <div style={{ padding: 24, fontSize: 12.5, color: '#8B9096' }}>
+                  {workers.length === 0 ? 'No crew yet — add someone on the Crew screen first.' : 'No crew matches this filter.'}
+                </div>
+              )}
+
+              {!loading &&
+                visibleWorkers.map((worker) => {
+                  const hrs = hoursByWorker.get(worker.id) ?? 0
+                  return (
+                    <div
+                      key={worker.id}
+                      style={{
+                        display: 'grid',
+                        minWidth: 900,
+                        gridTemplateColumns: '186px repeat(7,minmax(0,1fr))',
+                        borderBottom: '1px solid #EDEFF1',
+                        minHeight: 52,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 12px' }}>
+                        <span
+                          style={{
+                            flex: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 27,
+                            height: 27,
+                            borderRadius: '50%',
+                            background: theme.railSoft,
+                            color: '#fff',
+                            fontSize: 10,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {worker.initials}
+                        </span>
+                        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {worker.name}
+                          </span>
+                          <span style={{ fontSize: 11.5, color: '#8B9096', fontVariantNumeric: 'tabular-nums' }}>
+                            {worker.trade} · {hrs.toFixed(1)} hrs
+                          </span>
+                        </div>
+                      </div>
+                      {days.map((day) => {
+                        const dayAssignments = visibleAssignments.filter(
+                          (a) => a.worker_id === worker.id && sameDay(new Date(a.starts_at), day),
+                        )
+                        const single = dayAssignments.length === 1
+                        return (
+                          <div
+                            key={day.toISOString()}
+                            onClick={canEdit ? () => openNew(worker.id, day) : undefined}
+                            style={{ borderLeft: '1px solid #EDEFF1', padding: '5px 5px', cursor: canEdit ? 'pointer' : 'default' }}
+                          >
+                            {dayAssignments.length === 0
+                              ? canEdit && (
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 40 }}>
+                                    <span style={{ fontSize: 13, color: theme.inkFaint }}>+</span>
+                                  </div>
+                                )
+                              : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, height: '100%' }}>
+                                  {dayAssignments.map((a) => {
+                                    const tint = siteTint(a.site_id)
+                                    return (
+                                      <div
+                                        key={a.id}
+                                        title={a.note ?? undefined}
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          openEdit(worker.id, day, a)
+                                        }}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: 6,
+                                          height: single ? '100%' : undefined,
+                                          minHeight: 40,
+                                          padding: '6px 7px',
+                                          borderRadius: 4,
+                                          borderLeft: `3px ${a.published ? 'solid' : 'dashed'} ${tint.border}`,
+                                          background: tint.bg,
+                                          cursor: canEdit ? 'grab' : 'default',
+                                        }}
+                                      >
+                                        <svg width="7" height="12" viewBox="0 0 9 14" fill={tint.border} style={{ flex: 'none', opacity: 0.65 }}>
+                                          <circle cx="2" cy="2" r="1.3" />
+                                          <circle cx="7" cy="2" r="1.3" />
+                                          <circle cx="2" cy="7" r="1.3" />
+                                          <circle cx="7" cy="7" r="1.3" />
+                                          <circle cx="2" cy="12" r="1.3" />
+                                          <circle cx="7" cy="12" r="1.3" />
+                                        </svg>
+                                        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                          <span
+                                            style={{
+                                              fontSize: 11.5,
+                                              fontWeight: 600,
+                                              lineHeight: 1.2,
+                                              color: tint.text,
+                                              whiteSpace: 'nowrap',
+                                              overflow: 'hidden',
+                                              textOverflow: 'ellipsis',
+                                            }}
+                                          >
+                                            {siteName(a.site_id)}
+                                          </span>
+                                          <span style={{ fontSize: 11, lineHeight: 1.2, color: tint.text, opacity: 0.75, fontVariantNumeric: 'tabular-nums' }}>
+                                            {compactTime(new Date(a.starts_at))}–{compactTime(new Date(a.ends_at))}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 13px', background: '#FAFBFC' }}>
+                <span style={{ fontSize: 12.5, color: theme.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
+                  {visibleAssignments.length} shift{visibleAssignments.length === 1 ? '' : 's'} scheduled · {unassignedShifts.length} unassigned
+                </span>
+                <span style={{ fontSize: 12.5, color: theme.inkSoft }}>
+                  Projected labor{' '}
+                  <b style={{ fontWeight: 600, color: theme.ink, fontVariantNumeric: 'tabular-nums' }}>{money(laborCost)}</b> this week
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ flex: 'none', width: 290, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ padding: '10px 13px', borderBottom: `1px solid ${theme.border}`, fontSize: 14, fontWeight: 600 }}>Crew availability</div>
+
+              {atRisk.length > 0 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    padding: '12px 13px',
+                    borderBottom: `1px solid ${theme.border}`,
+                    background: '#FFF6F7',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={theme.alert} strokeWidth={1.5} style={{ flex: 'none', marginTop: 1 }}>
+                      <path d="M8 2.6L14.4 13H1.6z" strokeLinejoin="round" />
+                      <path d="M8 6.4v3.1" strokeLinecap="round" />
+                      <path d="M8 11.4h.01" strokeWidth={1.8} strokeLinecap="round" />
+                    </svg>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#A00417' }}>
+                        Overtime risk — {atRisk.length} worker{atRisk.length === 1 ? '' : 's'}
+                      </span>
+                      <span style={{ fontSize: 12, lineHeight: 1.45, color: '#6E3B41' }}>
+                        {atRisk.map((w, i) => {
+                          const sep = i === 0 ? '' : i === atRisk.length - 1 ? (atRisk.length > 2 ? ', and ' : ' and ') : ', '
+                          return (
+                            <span key={w.id} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              {sep}
+                              {w.name} {i === 0 ? 'is at' : 'at'} <b style={{ fontWeight: 700 }}>{w.hrs.toFixed(1)} hrs</b>
+                            </span>
+                          )
+                        })}
+                        {'. '}
+                        {allOverAtRisk
+                          ? 'Already over — every extra hour is paid at 1.5×.'
+                          : `One more shift tips ${atRisk.length === 2 ? 'both' : 'them'} into overtime at 1.5×.`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {availList.length === 0 && <div style={{ padding: '9px 13px', fontSize: 12, color: '#8B9096' }}>No crew yet.</div>}
+              {availList.map(({ worker, hrs }) => {
+                const color = hoursColor(hrs)
+                const over = hrs > 40
+                const nearing = hrs > 38 && !over
+                const note = over ? 'Over 40 hrs — hits overtime' : nearing ? 'Approaching 38 hrs' : worker.trade
+                const noteFg = over ? theme.alert : nearing ? theme.warning : '#8B9096'
+                const bar = `${Math.max(0, Math.min(100, (hrs / 40) * 100))}%`
+                return (
+                  <div key={worker.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 13px', borderBottom: '1px solid #F1F3F5' }}>
+                    <span
+                      style={{
+                        flex: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        background: theme.railSoft,
+                        color: '#fff',
+                        fontSize: 9.5,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {worker.initials}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {worker.name}
+                      </span>
+                      <span style={{ fontSize: 11.5, color: noteFg }}>{note}</span>
+                    </div>
+                    <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color, fontVariantNumeric: 'tabular-nums' }}>{hrs.toFixed(1)} h</span>
+                      <span style={{ display: 'block', width: 46, height: 4, borderRadius: 2, background: '#EDEFF1', overflow: 'hidden' }}>
+                        <span style={{ display: 'block', height: 4, borderRadius: 2, width: bar, background: color }} />
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {canEdit && (
+              <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8, padding: 13, display: 'flex', flexDirection: 'column', gap: 9 }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>When you publish</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <span style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.45, color: '#4A5057', fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>Notifies {notifyCount} crew by push + SMS
+                  </span>
+                  <span style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.45, color: '#4A5057' }}>
+                    <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>Arms each site geofence for the assigned hours only
+                  </span>
+                  <span style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.45, color: '#4A5057' }}>
+                    <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>Locks cost codes so hours land on the right job
+                  </span>
+                </div>
+                <div style={{ height: 1, background: '#EDEFF1', margin: '2px 0' }} />
+                <span style={{ fontSize: 11.5, lineHeight: 1.45, color: '#8B9096' }}>{publishStatus}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -491,57 +805,101 @@ export function Schedule({
   )
 }
 
-const card = {
-  marginTop: 14,
-  padding: 14,
+function FilterButton({
+  label,
+  ariaLabel,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  ariaLabel: string
+  value: string
+  onChange: (v: string) => void
+  options: Array<{ value: string; label: string }>
+}) {
+  const [hover, setHover] = useState(false)
+  return (
+    <label
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        position: 'relative',
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        height: 27,
+        padding: '0 10px',
+        background: hover ? theme.appBg : theme.panel,
+        border: `1px solid ${hover ? '#C3C9D0' : theme.border}`,
+        borderRadius: 3,
+        fontSize: 12.5,
+        fontWeight: 500,
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+      <span style={{ opacity: 0.5, fontSize: 9 }}>▾</span>
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+const weekBtnStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  height: 27,
+  padding: '0 10px',
   background: theme.panel,
   border: `1px solid ${theme.border}`,
-  borderRadius: 8,
-} as const
-
-const th = {
-  padding: '8px 10px',
-  borderBottom: `1px solid ${theme.border}`,
-  background: theme.appBg,
-  fontSize: 9.5,
-  fontWeight: 700,
-  letterSpacing: '.1em',
-  textTransform: 'uppercase' as const,
-  color: theme.inkFaint,
-  textAlign: 'left' as const,
-}
-
-const td = {
-  padding: '8px 10px',
-  borderBottom: `1px solid ${theme.border}`,
-  fontSize: 13,
-}
-
-const ghost = {
-  padding: '4px 10px',
   borderRadius: 3,
-  border: `1px solid ${theme.border}`,
-  background: theme.panel,
-  color: theme.ink,
-  font: 'inherit',
-  fontSize: 11.5,
+  fontFamily: 'inherit',
+  fontSize: 12.5,
+  fontWeight: 500,
   cursor: 'pointer',
+  whiteSpace: 'nowrap',
 } as const
 
-const cta = {
-  padding: '7px 13px',
+const publishBtnStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  height: 29,
+  padding: '0 14px',
+  background: theme.cta,
+  border: `1px solid ${theme.ctaBorder}`,
   borderRadius: 3,
-  border: 'none',
-  background: `linear-gradient(90deg, ${theme.ctaFrom}, ${theme.ctaTo})`,
-  color: theme.ink,
-  font: 'inherit',
-  fontSize: 11,
+  fontFamily: 'inherit',
+  fontSize: 12,
   fontWeight: 700,
   letterSpacing: '.04em',
+  color: theme.ink,
   cursor: 'pointer',
+  whiteSpace: 'nowrap',
 } as const
 
-const field = {
+const fieldLabelStyle = {
+  fontSize: 10.5,
+  fontWeight: 700,
+  letterSpacing: '.08em',
+  textTransform: 'uppercase',
+  color: theme.inkFaint,
+  minWidth: 130,
+} as const
+
+const fieldStyle = {
   display: 'block',
   width: '100%',
   height: 32,
@@ -555,11 +913,26 @@ const field = {
   color: theme.ink,
 } as const
 
-const fieldLabel = {
-  fontSize: 10.5,
+const ghostStyle = {
+  padding: '4px 10px',
+  borderRadius: 3,
+  border: `1px solid ${theme.border}`,
+  background: theme.panel,
+  color: theme.ink,
+  font: 'inherit',
+  fontSize: 11.5,
+  cursor: 'pointer',
+} as const
+
+const ctaStyle = {
+  padding: '7px 13px',
+  borderRadius: 3,
+  border: `1px solid ${theme.ctaBorder}`,
+  background: theme.cta,
+  color: theme.ink,
+  font: 'inherit',
+  fontSize: 11,
   fontWeight: 700,
-  letterSpacing: '.08em',
-  textTransform: 'uppercase' as const,
-  color: theme.inkFaint,
-  minWidth: 130,
+  letterSpacing: '.04em',
+  cursor: 'pointer',
 } as const

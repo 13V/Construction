@@ -5,14 +5,19 @@ import { Sidebar, ToolbarButton, TopBar, type NavItem } from './ui/Chrome'
 import { EventLog, RosterPanel, StatStrip, ToolRail } from './ui/Overlays'
 import { Timesheets } from './ui/Timesheets'
 import { JobSites, type JobSiteDraft } from './ui/JobSites'
+import { JobSiteFolder } from './ui/JobSiteFolder'
 import { Crew } from './ui/Crew'
 import { Schedule } from './ui/Schedule'
-import { SiteFiles } from './ui/SiteFiles'
 import { Expenses } from './ui/Expenses'
 import { DailyLogs } from './ui/DailyLogs'
 import { Chat } from './ui/Chat'
 import { Materials } from './ui/Materials'
 import { Safety } from './ui/Safety'
+import { Estimates } from './ui/Estimates'
+import { PurchaseOrders } from './ui/PurchaseOrders'
+import { Invoices } from './ui/Invoices'
+import { ChangeOrders } from './ui/ChangeOrders'
+import { Portals } from './ui/Portals'
 import { useLive } from './data/useLive'
 import { supabase, type WorkerRow } from './data/supabase'
 import { theme } from './theme'
@@ -24,8 +29,12 @@ export function Dashboard({ me }: { me: WorkerRow }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showFences, setShowFences] = useState(true)
   const [draft, setDraft] = useState<JobSiteDraft | null>(null)
+  // Drawing a geofence needs the map underneath, so site setup replaces the
+  // folder rather than sitting beside it.
+  const [siteSetup, setSiteSetup] = useState(false)
 
-  const editingSites = nav === 'Job Sites' && draft !== null
+  const inSiteSetup = nav === 'Job Sites' && siteSetup
+  const pickingOnMap = inSiteSetup && draft !== null
 
   const today = new Date(live.now).toLocaleDateString([], {
     weekday: 'long',
@@ -44,24 +53,27 @@ export function Dashboard({ me }: { me: WorkerRow }) {
   const SCREENS: Partial<Record<NavItem, ReactNode>> = {
     Schedule: <Schedule {...featureProps} />,
     Timesheets: <Timesheets {...featureProps} />,
-    'Photos & Docs': <SiteFiles {...featureProps} />,
+    'Job Sites': <JobSiteFolder {...featureProps} />,
     Expenses: <Expenses {...featureProps} />,
+    Materials: <Materials {...featureProps} />,
     'Daily Logs': <DailyLogs {...featureProps} />,
     Chat: <Chat {...featureProps} />,
-    Materials: <Materials {...featureProps} />,
+    Crew: <Crew {...featureProps} />,
+    Estimates: <Estimates {...featureProps} />,
+    'Purchase Orders': <PurchaseOrders {...featureProps} />,
+    Invoices: <Invoices {...featureProps} />,
+    'Change Orders': <ChangeOrders {...featureProps} />,
     Safety: <Safety {...featureProps} />,
-    Crew: (
-      <Crew
-        snapshot={live}
-        roster={live.roster}
-        companyId={me.company_id}
-        canEdit={me.is_office}
-        onSaved={live.refresh}
-      />
-    ),
+    Portals: <Portals {...featureProps} />,
   }
 
-  const screen = SCREENS[nav]
+  // Site setup hands the main area back to the map so a fence can be drawn.
+  const screen = inSiteSetup ? null : SCREENS[nav]
+
+  const openSiteSetup = () => {
+    setNav('Job Sites')
+    setSiteSetup(true)
+  }
 
   return (
     <div
@@ -91,6 +103,17 @@ export function Dashboard({ me }: { me: WorkerRow }) {
                 </ToolbarButton>
               </>
             )}
+            {nav === 'Job Sites' && (
+              <ToolbarButton
+                active={siteSetup}
+                onClick={() => {
+                  setSiteSetup((v) => !v)
+                  setDraft(null)
+                }}
+              >
+                Geofence setup
+              </ToolbarButton>
+            )}
             <span style={{ marginLeft: 'auto' }} />
             {live.error ? (
               <span style={{ fontSize: 12, color: theme.alert }}>{live.error}</span>
@@ -107,7 +130,7 @@ export function Dashboard({ me }: { me: WorkerRow }) {
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <Sidebar active={nav} sites={live.sites} onNavigate={setNav} />
 
-        {nav === 'Job Sites' && (
+        {inSiteSetup && (
           <JobSites
             sites={live.sites}
             draft={draft}
@@ -131,12 +154,12 @@ export function Dashboard({ me }: { me: WorkerRow }) {
               onSelect={setSelectedId}
               showFences={showFences}
               draft={
-                editingSites && draft?.center
+                pickingOnMap && draft?.center
                   ? { center: draft.center, radiusM: draft.radiusM }
                   : null
               }
               onPick={
-                editingSites
+                pickingOnMap
                   ? (at) => setDraft((d) => (d ? { ...d, center: at } : d))
                   : undefined
               }
@@ -180,9 +203,7 @@ export function Dashboard({ me }: { me: WorkerRow }) {
                 <EventLog snapshot={live} />
               </div>
 
-              {!live.loading && live.sites.length === 0 && (
-                <NoSites onGo={() => setNav('Job Sites')} />
-              )}
+              {!live.loading && live.sites.length === 0 && <NoSites onGo={openSiteSetup} />}
             </>
           )}
 
@@ -224,8 +245,8 @@ function NoSites({ onGo }: { onGo: () => void }) {
             marginTop: 14,
             padding: '8px 15px',
             borderRadius: 3,
-            border: 'none',
-            background: `linear-gradient(90deg, ${theme.ctaFrom}, ${theme.ctaTo})`,
+            border: `1px solid ${theme.ctaBorder}`,
+            background: theme.cta,
             color: theme.ink,
             font: 'inherit',
             fontSize: 11.5,

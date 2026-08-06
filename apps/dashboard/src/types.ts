@@ -12,8 +12,18 @@ export interface JobSite {
   center: LatLng
   /** Geofence radius in metres. */
   radiusM: number
-  /** Contract value to cost the job against. Null when not set. */
+  /**
+   * Internal cost budget — what the job is allowed to cost in labour,
+   * materials and expenses. Not the contract price, and never shown to a
+   * client. Null when not set.
+   */
   budget: number | null
+  /** Who the job is for. Shown in the client portal. */
+  clientName: string | null
+  /** Headline progress the client sees, 0–100. Null when not tracked. */
+  progressPct: number | null
+  /** One line on where the schedule stands, shown in the client portal. */
+  scheduleNote: string | null
 }
 
 export interface Worker {
