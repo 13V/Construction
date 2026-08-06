@@ -33,3 +33,8 @@ clock-ins and backdates clock-outs to the last confirmed ping on site.
 cd apps/dashboard && npm install && npm run dev
 ```
 
+**[DEPLOY.md](DEPLOY.md)** — Supabase schema, Google Maps setup, and Vercel
+configuration. The dashboard and the worker app ship as one project.
+
+**[supabase/](supabase)** — `schema.sql` (tables, RLS, realtime) and `seed.sql`.
+

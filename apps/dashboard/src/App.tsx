@@ -4,6 +4,7 @@ import { LiveMap } from './map/LiveMap'
 import { Sidebar, ToolbarButton, TopBar, type NavItem } from './ui/Chrome'
 import { EventLog, Playback, RosterPanel, StatStrip, ToolRail } from './ui/Overlays'
 import { SetupNotice } from './ui/SetupNotice'
+import { Timesheets } from './ui/Timesheets'
 import { createSimulatedFeed } from './data/simulatedFeed'
 import { jobSites } from './data/seed'
 import { useCrew } from './state/useCrew'
@@ -127,7 +128,13 @@ export default function App() {
               <Playback now={snapshot.now} speed={speed} onSpeed={changeSpeed} />
             </div>
 
-            {nav !== 'Map' && (
+            {nav === 'Timesheets' && (
+              <div style={{ position: 'absolute', inset: 0, background: theme.appBg }}>
+                <Timesheets snapshot={snapshot} />
+              </div>
+            )}
+
+            {nav !== 'Map' && nav !== 'Timesheets' && (
               <div
                 style={{
                   position: 'absolute',
@@ -145,8 +152,9 @@ export default function App() {
                     {nav}
                   </div>
                   <p style={{ fontSize: 13, color: theme.inkSoft, lineHeight: 1.55 }}>
-                    Not built yet — this MVP slice covers the live map and the
-                    geofence engine behind it. The map stays mounted underneath
+                    Not built yet. This MVP covers the live map, the geofence
+                    engine behind it, the timesheet it produces, and the worker's
+                    phone at <code>/worker</code>. The map stays mounted underneath
                     this panel rather than unmounting, because every remount is a
                     billable Google Maps load.
                   </p>

@@ -3,6 +3,7 @@ import type {
   ExceptionKind,
   JobSite,
   LatLng,
+  Shift,
   TimelineEvent,
   WorkerState,
 } from '../types'
@@ -65,6 +66,7 @@ export interface CrewSnapshot {
   now: number
   crew: WorkerState[]
   events: TimelineEvent[]
+  shifts: Shift[]
   onClock: number
   activeSites: number
   hoursToday: number
@@ -79,10 +81,12 @@ export interface CrewSnapshot {
 export function useCrew(feed: PositionFeed, sites: JobSite[] = jobSites): CrewSnapshot {
   const [states, setStates] = useState<Map<string, WorkerState>>(blank)
   const [events, setEvents] = useState<TimelineEvent[]>([])
+  const [shifts, setShifts] = useState<Shift[]>([])
   const [now, setNow] = useState<number>(() => Date.now())
 
   /** Authoritative engine state. React state is a render snapshot of this. */
   const statesRef = useRef<Map<string, WorkerState>>(states)
+  const shiftsRef = useRef<Shift[]>([])
   const internals = useRef<Map<string, Internals>>(
     new Map(workers.map((w) => [w.id, { phase: initialPhase, loiterSince: null }])),
   )
@@ -96,6 +100,7 @@ export function useCrew(feed: PositionFeed, sites: JobSite[] = jobSites): CrewSn
       // pings twice and drop the clock-in events they produced.
       const fresh: TimelineEvent[] = []
       let changed = false
+      let shiftsChanged = false
 
       {
         const next = statesRef.current
@@ -119,6 +124,21 @@ export function useCrew(feed: PositionFeed, sites: JobSite[] = jobSites): CrewSn
             if (event.kind === 'clock_in') {
               clockedInAt = event.at
               siteId = event.siteId
+              shiftsRef.current = [
+                ...shiftsRef.current,
+                {
+                  id: `s${eventSeq.current}`,
+                  workerId: ping.workerId,
+                  siteId: event.siteId,
+                  startedAt: event.at,
+                  endedAt: null,
+                  source: 'auto',
+                  edited: false,
+                  approved: false,
+                  costCode: null,
+                },
+              ]
+              shiftsChanged = true
               fresh.push({
                 id: `e${eventSeq.current++}`,
                 at: event.at,
@@ -133,6 +153,12 @@ export function useCrew(feed: PositionFeed, sites: JobSite[] = jobSites): CrewSn
               if (clockedInAt !== null) bankedMs += Math.max(0, event.at - clockedInAt)
               clockedInAt = null
               siteId = null
+              shiftsRef.current = shiftsRef.current.map((shift) =>
+                shift.workerId === ping.workerId && shift.endedAt === null
+                  ? { ...shift, endedAt: event.at }
+                  : shift,
+              )
+              shiftsChanged = true
               fresh.push({
                 id: `e${eventSeq.current++}`,
                 at: event.at,
@@ -207,6 +233,7 @@ export function useCrew(feed: PositionFeed, sites: JobSite[] = jobSites): CrewSn
 
       setNow(feedNow)
       if (changed) setStates(new Map(statesRef.current))
+      if (shiftsChanged) setShifts(shiftsRef.current)
       if (fresh.length) setEvents((prev) => [...fresh, ...prev].slice(0, 60))
     })
 
@@ -229,12 +256,13 @@ export function useCrew(feed: PositionFeed, sites: JobSite[] = jobSites): CrewSn
       now,
       crew,
       events,
+      shifts,
       onClock: crew.filter((w) => w.status === 'on_clock').length,
       activeSites: new Set(crew.filter((w) => w.siteId).map((w) => w.siteId)).size,
       hoursToday,
       labourCostToday,
     }
-  }, [states, events, now])
+  }, [states, events, shifts, now])
 }
 
 function nearestSite(at: LatLng, sites: JobSite[]) {

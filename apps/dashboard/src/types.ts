@@ -61,6 +61,20 @@ export interface WorkerState {
   note: string | null
 }
 
+/** A block of time on the clock. Timesheets are just these, grouped. */
+export interface Shift {
+  id: string
+  workerId: string
+  siteId: string
+  startedAt: number
+  endedAt: number | null
+  /** 'auto' came from the geofence, 'manual' from a human. Shown on every cell. */
+  source: 'auto' | 'manual'
+  edited: boolean
+  approved: boolean
+  costCode: string | null
+}
+
 export type TimelineEventKind =
   | 'clock_in'
   | 'clock_out'
