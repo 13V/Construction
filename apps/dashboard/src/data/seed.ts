@@ -14,8 +14,8 @@ export const costCodes: CostCode[] = [
   { code: '16-100', name: 'Electrical' },
 ]
 
-/** Fallback map centre before any job site exists (Brisbane CBD). */
-export const DEFAULT_CENTER = { lat: -27.4698, lng: 153.0251 }
+/** Where the map opens before any job site exists. */
+export const DEFAULT_CENTER = { lat: -34.9282, lng: 138.5999 } // Adelaide CBD
 
 /**
  * OpenFreeMap tiles: no API key, no request cap, commercial use allowed.
