@@ -6,7 +6,7 @@ import type { JobSite, Worker } from '../types'
 
 /**
  * Daily logs draft themselves from shifts, site photos, expenses and
- * equipment we already have — the foreman reviews and confirms rather than
+ * materials we already have — the foreman reviews and confirms rather than
  * filling out a form from scratch. Only weather and "anything else" are
  * ever typed by hand; everything else carries a "from your data" marker so
  * it's obvious what to double-check versus what to add.
@@ -18,7 +18,6 @@ interface Edits {
   weather: string
   workCompleted: string
   materials: string
-  equipmentNote: string
   issues: string
   extraNotes: string
 }
@@ -27,7 +26,6 @@ const blankEdits: Edits = {
   weather: '',
   workCompleted: '',
   materials: '',
-  equipmentNote: '',
   issues: '',
   extraNotes: '',
 }
@@ -36,7 +34,6 @@ const editsFrom = (row: DailyLogRow): Edits => ({
   weather: row.weather ?? '',
   workCompleted: row.work_completed ?? '',
   materials: row.materials ?? '',
-  equipmentNote: row.equipment_note ?? '',
   issues: row.issues ?? '',
   extraNotes: row.extra_notes ?? '',
 })
@@ -168,7 +165,6 @@ export function DailyLogs({ me, sites, workers, onChanged }: {
         weather: edits.weather.trim() || null,
         work_completed: edits.workCompleted.trim() || null,
         materials: edits.materials.trim() || null,
-        equipment_note: edits.equipmentNote.trim() || null,
         issues: edits.issues.trim() || null,
         extra_notes: edits.extraNotes.trim() || null,
       })
@@ -193,7 +189,6 @@ export function DailyLogs({ me, sites, workers, onChanged }: {
         weather: edits.weather.trim() || null,
         work_completed: edits.workCompleted.trim() || null,
         materials: edits.materials.trim() || null,
-        equipment_note: edits.equipmentNote.trim() || null,
         issues: edits.issues.trim() || null,
         extra_notes: edits.extraNotes.trim() || null,
         status: 'confirmed',
@@ -261,7 +256,7 @@ export function DailyLogs({ me, sites, workers, onChanged }: {
               <div style={card}>
                 <p style={{ margin: 0, fontSize: 13, color: theme.inkSoft, lineHeight: 1.5 }}>
                   No log yet for {siteName(siteId)} on {new Date(`${date}T00:00:00`).toLocaleDateString()}.
-                  Generate a draft from the shifts, photos, purchases and equipment on record for that day.
+                  Generate a draft from the shifts, photos, purchases and materials on record for that day.
                 </p>
                 <button onClick={() => void generate()} disabled={generating} style={{ ...cta, marginTop: 12 }}>
                   {generating ? 'GENERATING…' : 'GENERATE DRAFT'}
@@ -345,18 +340,6 @@ export function DailyLogs({ me, sites, workers, onChanged }: {
                     <textarea
                       value={edits.materials}
                       onChange={(e) => setEdits({ ...edits, materials: e.target.value })}
-                      style={textarea}
-                    />
-                  )}
-                </Section>
-
-                <Section label="Equipment" fromData>
-                  {readOnly ? (
-                    <Readonly value={edits.equipmentNote} />
-                  ) : (
-                    <textarea
-                      value={edits.equipmentNote}
-                      onChange={(e) => setEdits({ ...edits, equipmentNote: e.target.value })}
                       style={textarea}
                     />
                   )}

@@ -50,6 +50,7 @@ const toSite = (row: JobSiteRow): JobSite => ({
   status: row.status === 'starting_soon' ? 'starting_soon' : 'active',
   center: { lat: row.lat, lng: row.lng },
   radiusM: row.radius_m,
+  budget: row.budget === null ? null : Number(row.budget),
 })
 
 const toShift = (row: ShiftRow): Shift => ({

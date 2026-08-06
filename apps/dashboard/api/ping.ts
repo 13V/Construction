@@ -78,6 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     status: row.status === 'starting_soon' ? 'starting_soon' : 'active',
     center: { lat: row.lat, lng: row.lng },
     radiusM: row.radius_m,
+    budget: null,
   }))
 
   const { data: stateRow } = await db

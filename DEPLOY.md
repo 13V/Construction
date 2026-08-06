@@ -9,8 +9,9 @@ data or it shows you what's missing.
 Create a project, then run these in the SQL editor, in order:
 
 1. `supabase/schema.sql` — core tables, RLS, realtime
-2. `supabase/schema_v2.sql` — scheduling, files, expenses, daily logs, chat, equipment, safety
-3. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+2. `supabase/schema_v2.sql` — scheduling, files, expenses, daily logs, chat, safety
+3. `supabase/schema_v3.sql` — materials and per-site budgets (replaces equipment)
+4. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
 
 Grab three values from Settings → API: the project URL, the `anon` key, and the
 `service_role` key.

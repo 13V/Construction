@@ -11,7 +11,7 @@ import { SiteFiles } from './ui/SiteFiles'
 import { Expenses } from './ui/Expenses'
 import { DailyLogs } from './ui/DailyLogs'
 import { Chat } from './ui/Chat'
-import { Equipment } from './ui/Equipment'
+import { Materials } from './ui/Materials'
 import { Safety } from './ui/Safety'
 import { useLive } from './data/useLive'
 import { supabase, type WorkerRow } from './data/supabase'
@@ -48,7 +48,7 @@ export function Dashboard({ me }: { me: WorkerRow }) {
     Expenses: <Expenses {...featureProps} />,
     'Daily Logs': <DailyLogs {...featureProps} />,
     Chat: <Chat {...featureProps} />,
-    Equipment: <Equipment {...featureProps} />,
+    Materials: <Materials {...featureProps} />,
     Safety: <Safety {...featureProps} />,
     Crew: (
       <Crew

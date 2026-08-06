@@ -12,6 +12,8 @@ export interface JobSite {
   center: LatLng
   /** Geofence radius in metres. */
   radiusM: number
+  /** Contract value to cost the job against. Null when not set. */
+  budget: number | null
 }
 
 export interface Worker {

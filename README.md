@@ -4,7 +4,7 @@ A workforce tracking app for small-to-mid construction companies.
 
 GPS crew tracking with geofenced automatic clock-in, timesheets built from that location
 data rather than typed in, weekly scheduling, per-site photo and document folders, per-site
-and direct chat, equipment and safety tracking, AI receipt capture, and daily logs that
+and direct chat, materials costed per job, safety tracking, AI receipt capture, and daily logs that
 draft themselves from the day's activity.
 
 It runs on real data or tells you what's missing — there is no demo mode.
@@ -20,7 +20,7 @@ Vercel serverless functions for location ingest and the AI endpoints. Office das
 cd apps/dashboard && npm install && npm run dev
 ```
 
-**[supabase/](supabase)** — `schema.sql`, `schema_v2.sql` and `storage.sql`: 17 tables,
+**[supabase/](supabase)** — `schema.sql`, `schema_v2.sql`, `schema_v3.sql` and `storage.sql`: 17 tables,
 row-level security throughout, realtime publication, and two private storage buckets.
 
 **[DEPLOY.md](DEPLOY.md)** — Supabase setup, Vercel configuration, environment variables,

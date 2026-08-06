@@ -17,6 +17,7 @@ interface Draft {
   jobType: string
   status: 'active' | 'starting_soon'
   radiusM: number
+  budget: string
   center: LatLng | null
 }
 
@@ -27,6 +28,7 @@ const empty: Draft = {
   jobType: '',
   status: 'active',
   radiusM: 150,
+  budget: '',
   center: null,
 }
 
@@ -134,6 +136,7 @@ export function JobSites({ sites, draft, onDraftChange, onSaved, canEdit }: JobS
       lat: draft.center.lat,
       lng: draft.center.lng,
       radius_m: draft.radiusM,
+      budget: draft.budget.trim() === '' ? null : Number(draft.budget),
     }
 
     const client = supabase()
@@ -257,6 +260,17 @@ export function JobSites({ sites, draft, onDraftChange, onSaved, canEdit }: JobS
             </label>
 
             <label style={label}>
+              Budget — what the job is costed against
+              <input
+                style={field}
+                value={draft.budget}
+                onChange={(e) => patch({ budget: e.target.value })}
+                placeholder="65000"
+                inputMode="decimal"
+              />
+            </label>
+
+            <label style={label}>
               Job type
               <input
                 style={field}
@@ -336,6 +350,7 @@ export function JobSites({ sites, draft, onDraftChange, onSaved, canEdit }: JobS
                     jobType: site.jobType,
                     status: site.status === 'starting_soon' ? 'starting_soon' : 'active',
                     radiusM: site.radiusM,
+                    budget: site.budget === null ? '' : String(site.budget),
                     center: site.center,
                   })
                 }

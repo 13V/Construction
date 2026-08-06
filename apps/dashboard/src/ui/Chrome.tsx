@@ -12,7 +12,7 @@ const NAV = [
   'Daily Logs',
   'Chat',
   'Crew',
-  'Equipment',
+  'Materials',
   'Safety',
 ] as const
 

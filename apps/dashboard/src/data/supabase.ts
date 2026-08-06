@@ -42,6 +42,7 @@ export interface JobSiteRow {
   lat: number
   lng: number
   radius_m: number
+  budget: number | null
 }
 
 export interface PositionRow {
@@ -134,7 +135,6 @@ export interface DailyLogRow {
   weather: string | null
   work_completed: string | null
   materials: string | null
-  equipment_note: string | null
   issues: string | null
   extra_notes: string | null
   crew_summary: Array<{ name: string; hours: number }>
@@ -162,19 +162,25 @@ export interface MessageRow {
   created_at: string
 }
 
-export interface EquipmentRow {
+export interface MaterialRow {
   id: string
   company_id: string
-  code: string
+  site_id: string
   name: string
-  type: string | null
-  site_id: string | null
-  operator_id: string | null
-  status: 'in_use' | 'idle' | 'maintenance'
-  hours_total: number
-  last_used_at: string | null
-  service_due: string | null
-  notes: string | null
+  quantity: number
+  unit: string
+  unit_cost: number
+  /** Generated in Postgres as round(quantity * unit_cost, 2) — never write it. */
+  total_cost: number
+  supplier: string | null
+  cost_code: string | null
+  status: 'ordered' | 'delivered' | 'used' | 'returned'
+  ordered_on: string | null
+  delivered_on: string | null
+  expense_id: string | null
+  note: string | null
+  created_by: string | null
+  created_at: string
 }
 
 export interface SafetyRow {

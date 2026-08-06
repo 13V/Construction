@@ -15,7 +15,6 @@ interface Body {
 interface Draft {
   work_completed: string
   materials: string
-  equipment_note: string
   issues: string
 }
 
@@ -72,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const now = new Date()
 
   const [{ data: shiftRows, error: shiftsError }, { data: fileRows, error: filesError },
-    { data: expenseRows, error: expensesError }, { data: equipmentRows, error: equipmentError }] =
+    { data: expenseRows, error: expensesError }, { data: materialRows, error: materialsError }] =
     await Promise.all([
       db
         // shifts has two foreign keys to workers (worker_id and approved_by), so
@@ -97,14 +96,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('company_id', worker.company_id)
         .eq('spent_on', date),
       db
-        .from('equipment')
-        .select('name, code, status')
+        .from('materials')
+        .select('name, quantity, unit, total_cost')
         .eq('site_id', siteId)
-        .eq('company_id', worker.company_id),
+        .eq('company_id', worker.company_id)
+        .eq('delivered_on', date),
     ])
 
-  if (shiftsError || filesError || expensesError || equipmentError) {
-    console.error('[draft-log] data query failed', { shiftsError, filesError, expensesError, equipmentError })
+  if (shiftsError || filesError || expensesError || materialsError) {
+    console.error('[draft-log] data query failed', { shiftsError, filesError, expensesError, materialsError })
     return res.status(500).json({ error: 'Could not load site activity' })
   }
 
@@ -129,25 +129,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .map((f) => f.caption as string)
 
   const expenses = (expenseRows ?? []).map((e) => ({ vendor: e.vendor, amount: Number(e.amount) }))
-  const equipmentList = (equipmentRows ?? []) as Array<{ name: string; code: string; status: string }>
+  const materialList = (materialRows ?? []) as Array<{ name: string; quantity: number; unit: string; total_cost: number }>
 
   // Factual fallback — always computed, used verbatim when there's no API
   // key and as the basis of the prompt when there is one.
   const factualWorkCompleted = crewSummary.length
     ? `${crewSummary.length} crew on site, ${totalHours} hours total.`
     : 'No shifts logged on site for this date.'
-  const factualMaterials = expenses.length
-    ? expenses.map((e) => `${e.vendor || 'Unspecified vendor'} — $${e.amount.toFixed(2)}`).join('; ')
-    : 'No purchases logged for this date.'
-  const factualEquipment = equipmentList.length
-    ? equipmentList.map((e) => `${e.name} (${e.code}) — ${e.status.replace('_', ' ')}`).join('; ')
-    : 'No equipment assigned to this site.'
+  // Materials delivered and money spent are the same story to a foreman, so
+  // the one section carries both.
+  const deliveries = materialList.map((m) => `${m.name} — ${m.quantity} ${m.unit}`)
+  const purchases = expenses.map(
+    (e) => `${e.vendor || 'Unspecified vendor'} $${e.amount.toFixed(2)}`,
+  )
+  const factualMaterials = [...deliveries, ...purchases].length
+    ? [...deliveries, ...purchases].join('; ')
+    : 'No materials or purchases logged for this date.'
   const factualIssues = issuePhotoCaptions.length ? issuePhotoCaptions.join('; ') : 'None flagged.'
 
   let draft: Draft = {
     work_completed: factualWorkCompleted,
     materials: factualMaterials,
-    equipment_note: factualEquipment,
     issues: factualIssues,
   }
   let aiGenerated = false
@@ -160,17 +162,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `Photos taken: ${photoCount}.`,
       `Photo captions flagged as issues: ${issuePhotoCaptions.length ? issuePhotoCaptions.join('; ') : 'none'}.`,
       `Purchases: ${expenses.length ? expenses.map((e) => `${e.vendor || 'unspecified'} $${e.amount.toFixed(2)}`).join(', ') : 'none'}.`,
-      `Equipment on site: ${equipmentList.length ? equipmentList.map((e) => `${e.name} (${e.status})`).join(', ') : 'none'}.`,
+      `Materials delivered today: ${
+        materialList.length
+          ? materialList
+              .map((m) => `${m.name} ${m.quantity}${m.unit} ($${Number(m.total_cost).toFixed(2)})`)
+              .join(', ')
+          : 'none'
+      }.`,
     ].join('\n')
 
     const instructions = [
       'You are drafting a construction daily log from the data below, written the way a foreman would jot it down at the end of the day — plain, factual, brief. No marketing language, no invented detail, no speculation beyond what the data supports.',
       'If a section has nothing to report, say so plainly (e.g. "Nothing to report.").',
       'Return ONLY a single JSON object, no markdown fences, no commentary, matching exactly this shape:',
-      '{"work_completed": string, "materials": string, "equipment_note": string, "issues": string}',
+      '{"work_completed": string, "materials": string, "issues": string}',
       'work_completed: 1-2 short sentences summarizing who was on site and general activity level, based only on the crew/hours given.',
-      'materials: 1 short sentence on purchases, or "Nothing to report." if none.',
-      'equipment_note: 1 short sentence on equipment on site and its status, or "Nothing to report." if none.',
+      'materials: 1 short sentence on what was delivered and bought, or "Nothing to report." if none.',
       'issues: 1 short sentence summarizing any flagged issue photos, or "None flagged." if none.',
       '',
       'Data:',
@@ -205,7 +212,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           draft = {
             work_completed: typeof parsed.work_completed === 'string' ? parsed.work_completed : factualWorkCompleted,
             materials: typeof parsed.materials === 'string' ? parsed.materials : factualMaterials,
-            equipment_note: typeof parsed.equipment_note === 'string' ? parsed.equipment_note : factualEquipment,
             issues: typeof parsed.issues === 'string' ? parsed.issues : factualIssues,
           }
           aiGenerated = true
@@ -237,7 +243,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     weather: existing?.weather ?? null,
     work_completed: draft.work_completed,
     materials: draft.materials,
-    equipment_note: draft.equipment_note,
     issues: draft.issues,
     extra_notes: existing?.extra_notes ?? null,
     crew_summary: crewSummary,
