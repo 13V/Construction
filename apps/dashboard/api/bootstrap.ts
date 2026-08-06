@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { serviceClient } from './_supabase'
+import { serviceClient } from './_supabase.js'
 
 /**
  * First-run setup. Creates a company and links the signed-up user to an office

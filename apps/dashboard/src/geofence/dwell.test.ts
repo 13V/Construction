@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { JobSite, LatLng, Ping } from '../types'
-import { advance, DWELL_IN_MS, DWELL_OUT_MS, initialPhase, type DwellEvent } from './dwell'
-import { lerp, offset } from './geo'
+import type { JobSite, LatLng, Ping } from '../types.js'
+import { advance, DWELL_IN_MS, DWELL_OUT_MS, initialPhase, type DwellEvent } from './dwell.js'
+import { lerp, offset } from './geo.js'
 
 const MIN = 60_000
 const T0 = new Date('2026-08-05T06:00:00').getTime()

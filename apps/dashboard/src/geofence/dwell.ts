@@ -1,5 +1,5 @@
-import type { JobSite, LatLng, Ping } from '../types'
-import { distanceM } from './geo'
+import type { JobSite, LatLng, Ping } from '../types.js'
+import { distanceM } from './geo.js'
 
 /**
  * Dwell-based geofence engine.

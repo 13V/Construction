@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { advance, initialPhase, type DwellPhase } from '../src/geofence/dwell'
-import type { JobSite, Ping } from '../src/types'
-import { callerWorker, serviceClient } from './_supabase'
+import { advance, initialPhase, type DwellPhase } from '../src/geofence/dwell.js'
+import type { JobSite, Ping } from '../src/types.js'
+import { callerWorker, serviceClient } from './_supabase.js'
 
 /**
  * Location ingest. A worker's phone POSTs here; the geofence engine runs on the
