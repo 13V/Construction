@@ -1,10 +1,18 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { LiveMap } from './map/LiveMap'
 import { Sidebar, ToolbarButton, TopBar, type NavItem } from './ui/Chrome'
 import { EventLog, RosterPanel, StatStrip, ToolRail } from './ui/Overlays'
 import { Timesheets } from './ui/Timesheets'
 import { JobSites, type JobSiteDraft } from './ui/JobSites'
 import { Crew } from './ui/Crew'
+import { Schedule } from './ui/Schedule'
+import { SiteFiles } from './ui/SiteFiles'
+import { Expenses } from './ui/Expenses'
+import { DailyLogs } from './ui/DailyLogs'
+import { Chat } from './ui/Chat'
+import { Equipment } from './ui/Equipment'
+import { Safety } from './ui/Safety'
 import { useLive } from './data/useLive'
 import { supabase, type WorkerRow } from './data/supabase'
 import { theme } from './theme'
@@ -25,6 +33,36 @@ export function Dashboard({ me }: { me: WorkerRow }) {
     day: 'numeric',
   })
 
+  // Every feature screen takes the same props, so adding one is a single entry.
+  const featureProps = {
+    me,
+    sites: live.sites,
+    workers: live.workers,
+    onChanged: live.refresh,
+  }
+
+  const SCREENS: Partial<Record<NavItem, ReactNode>> = {
+    Schedule: <Schedule {...featureProps} />,
+    Timesheets: <Timesheets {...featureProps} />,
+    'Photos & Docs': <SiteFiles {...featureProps} />,
+    Expenses: <Expenses {...featureProps} />,
+    'Daily Logs': <DailyLogs {...featureProps} />,
+    Chat: <Chat {...featureProps} />,
+    Equipment: <Equipment {...featureProps} />,
+    Safety: <Safety {...featureProps} />,
+    Crew: (
+      <Crew
+        snapshot={live}
+        roster={live.roster}
+        companyId={me.company_id}
+        canEdit={me.is_office}
+        onSaved={live.refresh}
+      />
+    ),
+  }
+
+  const screen = SCREENS[nav]
+
   return (
     <div
       style={{
@@ -43,12 +81,16 @@ export function Dashboard({ me }: { me: WorkerRow }) {
         toolbar={
           <>
             <ToolbarButton>{today}</ToolbarButton>
-            <ToolbarButton active={showFences} onClick={() => setShowFences((v) => !v)}>
-              Geofences
-            </ToolbarButton>
-            <ToolbarButton onClick={() => setSelectedId(null)}>
-              Clear selection
-            </ToolbarButton>
+            {nav === 'Map' && (
+              <>
+                <ToolbarButton active={showFences} onClick={() => setShowFences((v) => !v)}>
+                  Geofences
+                </ToolbarButton>
+                <ToolbarButton onClick={() => setSelectedId(null)}>
+                  Clear selection
+                </ToolbarButton>
+              </>
+            )}
             <span style={{ marginLeft: 'auto' }} />
             {live.error ? (
               <span style={{ fontSize: 12, color: theme.alert }}>{live.error}</span>
@@ -77,8 +119,9 @@ export function Dashboard({ me }: { me: WorkerRow }) {
 
         <main style={{ flex: 1, position: 'relative', minWidth: 0 }}>
           {/*
-            Mounted once and never unmounted — each mount is a billable Dynamic
-            Maps load. Other sections render over or beside it.
+            The map is mounted once and never unmounted. Other screens render
+            over it, so switching sections never re-initialises the map or
+            refetches tiles.
           */}
           <div style={{ position: 'absolute', inset: 0 }}>
             <LiveMap
@@ -137,46 +180,17 @@ export function Dashboard({ me }: { me: WorkerRow }) {
                 <EventLog snapshot={live} />
               </div>
 
-              {!live.loading && live.sites.length === 0 && <NoSites onGo={() => setNav('Job Sites')} />}
+              {!live.loading && live.sites.length === 0 && (
+                <NoSites onGo={() => setNav('Job Sites')} />
+              )}
             </>
           )}
 
-          {nav === 'Timesheets' && (
+          {screen && (
             <div style={{ position: 'absolute', inset: 0, background: theme.appBg }}>
-              <Timesheets snapshot={live} sites={live.sites} />
+              {screen}
             </div>
           )}
-
-          {nav === 'Crew' && (
-            <div style={{ position: 'absolute', inset: 0, background: theme.appBg }}>
-              <Crew
-                snapshot={live}
-                roster={live.roster}
-                companyId={me.company_id}
-                canEdit={me.is_office}
-                onSaved={live.refresh}
-              />
-            </div>
-          )}
-
-          {nav !== 'Map' &&
-            nav !== 'Timesheets' &&
-            nav !== 'Job Sites' &&
-            nav !== 'Crew' && (
-              <div style={panelOverlay}>
-                <div style={{ maxWidth: 420, textAlign: 'center' }}>
-                  <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>{nav}</div>
-                  <p style={{ fontSize: 13, color: theme.inkSoft, lineHeight: 1.55 }}>
-                    Not built yet. This release covers the live map, job sites and
-                    geofences, crew, the timesheets they produce, and the worker app
-                    at <code>/worker</code>.
-                  </p>
-                  <button onClick={() => setNav('Map')} style={cta}>
-                    BACK TO MAP
-                  </button>
-                </div>
-              </div>
-            )}
         </main>
       </div>
     </div>
@@ -185,7 +199,17 @@ export function Dashboard({ me }: { me: WorkerRow }) {
 
 function NoSites({ onGo }: { onGo: () => void }) {
   return (
-    <div style={panelOverlay}>
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(245,246,247,.97)',
+        padding: 24,
+      }}
+    >
       <div style={{ maxWidth: 420, textAlign: 'center' }}>
         <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>
           No job sites yet
@@ -194,34 +218,25 @@ function NoSites({ onGo }: { onGo: () => void }) {
           Add your first site and drop a geofence on the map. Crew start clocking
           in automatically as soon as a site exists and their phone reports in.
         </p>
-        <button onClick={onGo} style={cta}>
+        <button
+          onClick={onGo}
+          style={{
+            marginTop: 14,
+            padding: '8px 15px',
+            borderRadius: 3,
+            border: 'none',
+            background: `linear-gradient(90deg, ${theme.ctaFrom}, ${theme.ctaTo})`,
+            color: theme.ink,
+            font: 'inherit',
+            fontSize: 11.5,
+            fontWeight: 700,
+            letterSpacing: '.04em',
+            cursor: 'pointer',
+          }}
+        >
           ADD A JOB SITE
         </button>
       </div>
     </div>
   )
-}
-
-const panelOverlay = {
-  position: 'absolute' as const,
-  inset: 0,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: 'rgba(245,246,247,.97)',
-  padding: 24,
-}
-
-const cta = {
-  marginTop: 14,
-  padding: '8px 15px',
-  borderRadius: 3,
-  border: 'none',
-  background: `linear-gradient(90deg, ${theme.ctaFrom}, ${theme.ctaTo})`,
-  color: theme.ink,
-  font: 'inherit',
-  fontSize: 11.5,
-  fontWeight: 700,
-  letterSpacing: '.04em',
-  cursor: 'pointer',
 }
