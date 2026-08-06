@@ -2,11 +2,10 @@ import { APIProvider } from '@vis.gl/react-google-maps'
 import { AuthScreen } from './auth/AuthScreen'
 import { useSession } from './auth/useSession'
 import { supabaseConfigured } from './data/supabase'
+import { MAPS_API_KEY } from './config'
 import { Dashboard } from './Dashboard'
 import { SetupNotice } from './ui/SetupNotice'
 import { theme } from './theme'
-
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
@@ -31,7 +30,7 @@ function Centered({ children }: { children: React.ReactNode }) {
 export default function App() {
   const { loading, session, me, error } = useSession()
 
-  if (!supabaseConfigured || !API_KEY) return <SetupNotice />
+  if (!supabaseConfigured) return <SetupNotice />
   if (loading) return <Centered>Loading…</Centered>
   if (!session) return <AuthScreen />
 
@@ -74,7 +73,7 @@ export default function App() {
   }
 
   return (
-    <APIProvider apiKey={API_KEY}>
+    <APIProvider apiKey={MAPS_API_KEY}>
       <Dashboard me={me} />
     </APIProvider>
   )

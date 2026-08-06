@@ -5,13 +5,7 @@ import { DEFAULT_CENTER } from '../data/seed'
 import { theme } from '../theme'
 import { SiteMarker, WorkerMarker } from './markers'
 
-/**
- * Advanced Markers require a map ID. `DEMO_MAP_ID` works for development;
- * create a real one in the Cloud Console and apply the style from
- * `mapStyle.json` there — when a mapId is set, the JS `styles` option is
- * ignored, so basemap styling has to live in the console.
- */
-const MAP_ID = (import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as string) || 'DEMO_MAP_ID'
+import { MAPS_MAP_ID } from '../config'
 
 export interface DraftFence {
   center: LatLng
@@ -65,7 +59,7 @@ export function LiveMap({
 
   return (
     <Map
-      mapId={MAP_ID}
+      mapId={MAPS_MAP_ID}
       defaultCenter={initialCenter}
       defaultZoom={13}
       gestureHandling="greedy"
