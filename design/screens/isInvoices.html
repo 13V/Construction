@@ -1,0 +1,165 @@
+<sc-if value="{{ isInvoices }}">
+  <div style="flex:none;display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;background:#fff;border-bottom:1px solid #DCE0E6;overflow-x:auto">
+    <div style="flex:none;display:flex;height:27px;border:1px solid #DCE0E6;border-radius:3px;overflow:hidden">
+      <span style="flex:none;display:flex;align-items:center;padding:0 11px;background:#E7F1FF;color:#007BFF;font-size:12.5px;font-weight:600;white-space:nowrap">All 14</span>
+        <span style="flex:none;display:flex;align-items:center;padding:0 11px;background:#fff;border-left:1px solid #DCE0E6;font-size:12.5px;white-space:nowrap">Draft 1</span>
+          <span style="flex:none;display:flex;align-items:center;padding:0 11px;background:#fff;border-left:1px solid #DCE0E6;font-size:12.5px;white-space:nowrap">Sent 4</span>
+            <span style="flex:none;display:flex;align-items:center;gap:5px;padding:0 11px;background:#fff;border-left:1px solid #DCE0E6;font-size:12.5px;font-weight:600;color:#A00417;white-space:nowrap">
+              <span style="width:6px;height:6px;border-radius:50%;background:#D2051E">
+              </span>Overdue 2</span>
+            </div>
+            <div style="flex:none;display:flex;height:27px;border:1px solid #DCE0E6;border-radius:3px;overflow:hidden">
+              <button onClick="{{ groupBySite }}" style="flex:none;display:flex;align-items:center;padding:0 11px;border:0;border-right:1px solid #DCE0E6;font-family:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap;background:{{ grp.site.bg }};color:{{ grp.site.fg }};font-weight:{{ grp.site.w }}">By job site</button>
+                <button onClick="{{ groupByDate }}" style="flex:none;display:flex;align-items:center;padding:0 11px;border:0;font-family:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap;background:{{ grp.date.bg }};color:{{ grp.date.fg }};font-weight:{{ grp.date.w }}">Newest first</button>
+                </div>
+                <div style="flex:none;width:1px;height:20px;background:#DCE0E6;margin:0 4px">
+                </div>
+                <span style="flex:none;font-size:12.5px;color:#696D74;white-space:nowrap">Outstanding $38,412 · 2 overdue $9,180</span>
+                  <div style="flex:1">
+                  </div>
+                  <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">Send reminders</button>
+                    <button style="flex:none;display:flex;align-items:center;height:29px;padding:0 14px;background:linear-gradient(180deg,#FFCD11,#F7B244);border:1px solid #E0A032;border-radius:3px;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;color:#1A1D21;cursor:pointer;white-space:nowrap">NEW PROGRESS CLAIM</button>
+                    </div>
+                    <div data-scrollarea="1" style="flex:1;overflow:auto;padding:16px 18px 40px">
+                      <div style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin-bottom:14px">
+                        <div style="flex:1 1 300px;min-width:280px;display:flex;flex-direction:column;gap:9px;padding:14px 15px;background:#fff;border:1px solid #DCE0E6;border-radius:8px">
+                          <span style="font-size:15px;font-weight:600">Aging</span>
+                            <div style="display:flex;align-items:flex-end;gap:8px">
+                              <sc-for list="{{ aging }}" as="a" hint-placeholder-count="4">
+                                <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+                                  <span style="font-size:13.5px;font-weight:700;color:{{ a.fg }}">{{ a.amt }}</span>
+                                    <span style="display:block;height:6px;border-radius:3px;background:{{ a.fg }};width:{{ a.bar }}">
+                                    </span>
+                                    <span style="font-size:11px;color:#8B9096;white-space:nowrap">{{ a.label }}</span>
+                                    </div>
+                                  </sc-for>
+                                </div>
+                                <span style="font-size:11.5px;line-height:1.45;color:#8B9096">The Northgate retention has been sitting past 60 days. That is the call to make this week.</span>
+                                </div>
+                                <div style="flex:1 1 460px;min-width:400px;display:flex;flex-direction:column;gap:10px;padding:14px 15px;background:#fff;border:1px solid #DCE0E6;border-radius:8px">
+                                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+                                    <span style="font-size:15px;font-weight:600">Cash in vs out — next 8 weeks</span>
+                                      <span style="display:flex;align-items:center;gap:12px">
+                                        <span style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:#4A5057">
+                                          <span style="width:9px;height:9px;border-radius:2px;background:#28A745">
+                                          </span>In</span>
+                                          <span style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:#4A5057">
+                                            <span style="width:9px;height:9px;border-radius:2px;background:#C9CED4">
+                                            </span>Out</span>
+                                          </span>
+                                        </div>
+                                        <div style="display:flex;align-items:flex-end;gap:10px;height:110px">
+                                          <sc-for list="{{ cashflow }}" as="c" hint-placeholder-count="8">
+                                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end">
+                                              <div style="display:flex;align-items:flex-end;gap:2px;width:100%;height:86px;justify-content:center">
+                                                <span style="display:block;width:42%;border-radius:2px 2px 0 0;background:#28A745;height:{{ c.inH }}">
+                                                </span>
+                                                <span style="display:block;width:42%;border-radius:2px 2px 0 0;background:#C9CED4;height:{{ c.outH }}">
+                                                </span>
+                                              </div>
+                                              <span style="font-size:10.5px;color:{{ c.labelFg }};font-weight:{{ c.labelW }};white-space:nowrap">{{ c.week }}</span>
+                                              </div>
+                                            </sc-for>
+                                          </div>
+                                          <span style="font-size:11.5px;line-height:1.45;color:#8B9096">Week of Aug 24 goes negative — the truss balance and payroll land before the Harbor View claim clears.</span>
+                                          </div>
+                                        </div>
+                                        <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow-x:auto;margin-bottom:14px">
+                                          <div style="min-width:920px;display:grid;column-gap:10px;grid-template-columns:104px 1fr 148px 100px 104px 112px 140px;padding:7px 14px;background:#FAFBFC;border-bottom:1px solid #DCE0E6">
+                                            <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">INVOICE</span>
+                                              <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">CLIENT</span>
+                                                <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">JOB SITE</span>
+                                                  <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">ISSUED</span>
+                                                    <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">DUE</span>
+                                                      <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">AMOUNT</span>
+                                                        <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">STATUS</span>
+                                                        </div>
+                                                        <sc-for list="{{ invoiceGroups }}" as="g" hint-placeholder-count="3">
+                                                          <div style="min-width:920px;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#F7F9FB;border-bottom:1px solid #EDEFF1">
+                                                            <span style="flex:none;width:9px;height:9px;border-radius:2px;background:{{ g.color }}">
+                                                            </span>
+                                                            <span style="font-size:12.5px;font-weight:700;white-space:nowrap">{{ g.site }}</span>
+                                                              <span style="font-size:11.5px;color:#8B9096;white-space:nowrap">{{ g.count }}</span>
+                                                                <span style="flex:1">
+                                                                </span>
+                                                                <span style="font-size:11px;color:#8B9096;white-space:nowrap">{{ g.totalLabel }}</span>
+                                                                  <span style="font-size:12.5px;font-weight:700;white-space:nowrap">{{ g.total }}</span>
+                                                                  </div>
+                                                                  <sc-for list="{{ g.rows }}" as="v" hint-placeholder-count="2">
+                                                                    <div style-hover="background:#FAFCFF" style="min-width:920px;display:grid;column-gap:10px;grid-template-columns:104px 1fr 148px 100px 104px 112px 140px;align-items:center;padding:9px 14px;border-bottom:1px solid #F1F3F5;background:{{ v.rowBg }};cursor:pointer">
+                                                                      <span style="font-size:12.5px;font-weight:700;color:#007BFF">{{ v.no }}</span>
+                                                                        <span style="min-width:0;display:flex;flex-direction:column;gap:1px">
+                                                                          <span style="font-size:13px;font-weight:600">{{ v.client }}</span>
+                                                                            <span style="font-size:11.5px;color:{{ v.noteFg }}">{{ v.note }}</span>
+                                                                            </span>
+                                                                            <span style="font-size:12.5px;color:#4A5057">{{ v.site }}</span>
+                                                                              <span style="font-size:12.5px;color:#4A5057">{{ v.issued }}</span>
+                                                                                <span style="font-size:12.5px;color:{{ v.dueFg }};font-weight:{{ v.dueW }}">{{ v.due }}</span>
+                                                                                  <span style="font-size:13px;font-weight:600;text-align:right">{{ v.amt }}</span>
+                                                                                    <span style="display:flex;justify-content:flex-end">
+                                                                                      <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:11px;font-size:11px;font-weight:700;white-space:nowrap;background:{{ v.stBg }};color:{{ v.stFg }}">
+                                                                                        <span style="width:6px;height:6px;border-radius:50%;background:{{ v.stFg }}">
+                                                                                        </span>{{ v.status }}</span>
+                                                                                      </span>
+                                                                                    </div>
+                                                                                  </sc-for>
+                                                                                </sc-for>
+                                                                              </div>
+                                                                              <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow:hidden">
+                                                                                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:13px 15px;border-bottom:1px solid #DCE0E6;flex-wrap:wrap">
+                                                                                  <div style="display:flex;flex-direction:column;gap:4px">
+                                                                                    <span style="display:flex;align-items:center;gap:10px">
+                                                                                      <span style="font-size:16px;font-weight:600">Progress claim #4 · Maple Ridge</span>
+                                                                                        <span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;background:#F5F6F7;color:#696D74;font-size:11px;font-weight:700">Draft</span>
+                                                                                        </span>
+                                                                                        <span style="font-size:12.5px;color:#696D74">Period Jul 1 – Jul 31 · % complete drawn from approved hours and confirmed expenses</span>
+                                                                                        </div>
+                                                                                        <button style="flex:none;display:flex;align-items:center;height:29px;padding:0 13px;background:linear-gradient(180deg,#FFCD11,#F7B244);border:1px solid #E0A032;border-radius:3px;font-family:inherit;font-size:11.5px;font-weight:700;letter-spacing:.04em;color:#1A1D21;cursor:pointer;white-space:nowrap">ISSUE CLAIM · $18,940</button>
+                                                                                        </div>
+                                                                                        <div style="overflow-x:auto">
+                                                                                          <div style="min-width:820px;display:grid;column-gap:10px;grid-template-columns:1fr 116px 104px 130px 118px 118px;padding:7px 15px;background:#FAFBFC;border-bottom:1px solid #DCE0E6">
+                                                                                            <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">COST CODE</span>
+                                                                                              <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">CONTRACT</span>
+                                                                                                <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">% COMPLETE</span>
+                                                                                                  <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">PROGRESS</span>
+                                                                                                    <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">CLAIMED TO DATE</span>
+                                                                                                      <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">THIS CLAIM</span>
+                                                                                                      </div>
+                                                                                                      <sc-for list="{{ claim }}" as="c" hint-placeholder-count="6">
+                                                                                                        <div style="min-width:820px;display:grid;column-gap:10px;grid-template-columns:1fr 116px 104px 130px 118px 118px;align-items:center;padding:9px 15px;border-bottom:1px solid #F1F3F5">
+                                                                                                          <span style="display:flex;align-items:center;gap:9px;min-width:0">
+                                                                                                            <span style="font-size:11.5px;font-weight:700;color:#8B9096">{{ c.code }}</span>
+                                                                                                              <span style="font-size:13px">{{ c.name }}</span>
+                                                                                                              </span>
+                                                                                                              <span style="font-size:13px;text-align:right;color:#4A5057">{{ c.contract }}</span>
+                                                                                                                <span style="font-size:13px;text-align:right;font-weight:600">{{ c.pct }}</span>
+                                                                                                                  <span>
+                                                                                                                    <span style="display:block;height:6px;border-radius:3px;background:#EDEFF1;overflow:hidden">
+                                                                                                                      <span style="display:block;height:6px;border-radius:3px;background:#007BFF;width:{{ c.pct }}">
+                                                                                                                      </span>
+                                                                                                                    </span>
+                                                                                                                  </span>
+                                                                                                                  <span style="font-size:13px;text-align:right;color:#4A5057">{{ c.toDate }}</span>
+                                                                                                                    <span style="font-size:13px;text-align:right;font-weight:600">{{ c.now }}</span>
+                                                                                                                    </div>
+                                                                                                                  </sc-for>
+                                                                                                                  <div style="min-width:820px;display:grid;column-gap:10px;grid-template-columns:1fr 116px 104px 130px 118px 118px;align-items:center;padding:11px 15px;background:#FAFBFC">
+                                                                                                                    <span style="font-size:13px;font-weight:700">Total</span>
+                                                                                                                      <span style="font-size:13px;text-align:right;font-weight:700">$65,000</span>
+                                                                                                                        <span style="font-size:13px;text-align:right;font-weight:700">78%</span>
+                                                                                                                          <span>
+                                                                                                                          </span>
+                                                                                                                          <span style="font-size:13px;text-align:right;font-weight:700">$31,760</span>
+                                                                                                                            <span style="font-size:13.5px;text-align:right;font-weight:700">$18,940</span>
+                                                                                                                            </div>
+                                                                                                                          </div>
+                                                                                                                          <div style="display:flex;align-items:center;gap:11px;padding:11px 15px;border-top:1px solid #DCE0E6">
+                                                                                                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#8B9096" stroke-width="1.4" style="flex:none">
+                                                                                                                              <circle cx="8" cy="8" r="6"/>
+                                                                                                                              <path d="M8 5.1v.01M8 7.3v3.5" stroke-linecap="round" stroke-width="1.7"/>
+                                                                                                                            </svg>
+                                                                                                                            <span style="flex:1;font-size:12.5px;line-height:1.45;color:#696D74">Retention held at 5% ($997) until dry-in sign-off. Rough carpentry shows 86% complete against 78% of the hours — the crew is ahead of the money on that line.</span>
+                                                                                                                            </div>
+                                                                                                                          </div>
+                                                                                                                        </div>
+                                                                                                                      </sc-if>

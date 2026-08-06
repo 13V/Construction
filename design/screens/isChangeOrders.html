@@ -1,0 +1,130 @@
+<sc-if value="{{ isChangeOrders }}">
+  <div style="flex:none;display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;background:#fff;border-bottom:1px solid #DCE0E6;overflow-x:auto">
+    <div style="flex:none;display:flex;height:27px;border:1px solid #DCE0E6;border-radius:3px;overflow:hidden">
+      <button onClick="{{ groupBySite }}" style="flex:none;display:flex;align-items:center;padding:0 11px;border:0;border-right:1px solid #DCE0E6;font-family:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap;background:{{ grp.site.bg }};color:{{ grp.site.fg }};font-weight:{{ grp.site.w }}">By job site</button>
+        <button onClick="{{ groupByDate }}" style="flex:none;display:flex;align-items:center;padding:0 11px;border:0;font-family:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap;background:{{ grp.date.bg }};color:{{ grp.date.fg }};font-weight:{{ grp.date.w }}">Newest first</button>
+        </div>
+        <div style="flex:none;width:1px;height:20px;background:#DCE0E6;margin:0 4px">
+        </div>
+        <span style="flex:none;font-size:12.5px;color:#696D74;white-space:nowrap">$5,280 approved · $2,380 pending signature · $6,400 rejected</span>
+          <div style="flex:1">
+          </div>
+          <button style="flex:none;display:flex;align-items:center;height:29px;padding:0 14px;background:linear-gradient(180deg,#FFCD11,#F7B244);border:1px solid #E0A032;border-radius:3px;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;color:#1A1D21;cursor:pointer;white-space:nowrap">NEW CHANGE ORDER</button>
+          </div>
+          <div data-scrollarea="1" style="flex:1;overflow:auto;padding:16px 18px 40px">
+            <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow-x:auto;margin-bottom:14px">
+              <div style="min-width:880px;display:grid;column-gap:10px;grid-template-columns:76px 1fr 148px 100px 108px 92px 132px;padding:7px 14px;background:#FAFBFC;border-bottom:1px solid #DCE0E6">
+                <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">CO</span>
+                  <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">DESCRIPTION</span>
+                    <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">JOB SITE</span>
+                      <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">RAISED</span>
+                        <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">COST</span>
+                          <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">DAYS</span>
+                            <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">STATUS</span>
+                            </div>
+                            <sc-for list="{{ coGroups }}" as="g" hint-placeholder-count="3">
+                              <div style="min-width:880px;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#F7F9FB;border-bottom:1px solid #EDEFF1">
+                                <span style="flex:none;width:9px;height:9px;border-radius:2px;background:{{ g.color }}">
+                                </span>
+                                <span style="font-size:12.5px;font-weight:700;white-space:nowrap">{{ g.site }}</span>
+                                  <span style="font-size:11.5px;color:#8B9096;white-space:nowrap">{{ g.count }}</span>
+                                    <span style="flex:1">
+                                    </span>
+                                    <span style="font-size:11px;color:#8B9096;white-space:nowrap">{{ g.totalLabel }}</span>
+                                      <span style="font-size:12.5px;font-weight:700;white-space:nowrap">{{ g.total }}</span>
+                                      </div>
+                                      <sc-for list="{{ g.rows }}" as="c" hint-placeholder-count="2">
+                                        <div style-hover="background:#FAFCFF" style="min-width:880px;display:grid;column-gap:10px;grid-template-columns:76px 1fr 148px 100px 108px 92px 132px;align-items:center;padding:9px 14px;border-bottom:1px solid #F1F3F5;background:{{ c.rowBg }};cursor:pointer">
+                                          <span style="font-size:12.5px;font-weight:700;color:#007BFF">{{ c.no }}</span>
+                                            <span style="font-size:13px;font-weight:500;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.desc }}</span>
+                                              <span style="font-size:12.5px;color:#4A5057">{{ c.site }}</span>
+                                                <span style="font-size:12.5px;color:#4A5057">{{ c.raised }}</span>
+                                                  <span style="font-size:13px;font-weight:600;text-align:right;color:{{ c.costFg }}">{{ c.cost }}</span>
+                                                    <span style="font-size:13px;text-align:right;color:#4A5057">{{ c.days }}</span>
+                                                      <span style="display:flex;justify-content:flex-end">
+                                                        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:11px;font-size:11px;font-weight:700;white-space:nowrap;background:{{ c.stBg }};color:{{ c.stFg }}">
+                                                          <span style="width:6px;height:6px;border-radius:50%;background:{{ c.stFg }}">
+                                                          </span>{{ c.status }}</span>
+                                                        </span>
+                                                      </div>
+                                                    </sc-for>
+                                                  </sc-for>
+                                                </div>
+                                                <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+                                                  <div style="flex:1 1 560px;min-width:420px;background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow:hidden">
+                                                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-bottom:1px solid #DCE0E6;flex-wrap:wrap">
+                                                      <span style="display:flex;align-items:center;gap:10px">
+                                                        <span style="font-size:16px;font-weight:600">CO-03 · Relocate laundry to second floor</span>
+                                                          <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:11px;background:#FFF6DE;color:#8A6100;font-size:11px;font-weight:700">Pending client</span>
+                                                          </span>
+                                                          <span style="font-size:12.5px;color:#696D74">Maple Ridge · raised Aug 3 by Miguel Ortiz</span>
+                                                          </div>
+                                                          <div style="padding:14px 15px;border-bottom:1px solid #DCE0E6">
+                                                            <span style="display:block;font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#8B9096;margin-bottom:6px">SCOPE OF THE CHANGE</span>
+                                                              <p style="margin:0;font-size:13.5px;line-height:1.55;color:#4A5057;text-wrap:pretty">Owner asked to move the laundry from the mudroom to the second-floor hall. Adds a wet wall in the hall partition, reroutes supply and waste through the joist bay, and a dedicated 20A circuit. Framing in that partition must stop until this is signed — Miguel flagged it on the plan so nobody closes the wall.</p>
+                                                              </div>
+                                                              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;background:#DCE0E6">
+                                                                <sc-for list="{{ coImpact }}" as="i" hint-placeholder-count="4">
+                                                                  <div style="display:flex;flex-direction:column;gap:3px;padding:12px 14px;background:#fff">
+                                                                    <span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:#8B9096;white-space:nowrap">{{ i.k }}</span>
+                                                                      <span style="font-size:18px;font-weight:600;color:{{ i.fg }}">{{ i.v }}</span>
+                                                                        <span style="font-size:11.5px;color:#8B9096">{{ i.note }}</span>
+                                                                        </div>
+                                                                      </sc-for>
+                                                                    </div>
+                                                                    <div style="overflow-x:auto;border-top:1px solid #DCE0E6">
+                                                                      <sc-for list="{{ coLines }}" as="l" hint-placeholder-count="4">
+                                                                        <div style="min-width:520px;display:grid;column-gap:10px;grid-template-columns:1fr 118px 108px;align-items:center;padding:9px 15px;border-bottom:1px solid #F1F3F5">
+                                                                          <span style="display:flex;align-items:center;gap:9px;min-width:0">
+                                                                            <span style="font-size:11.5px;font-weight:700;color:#8B9096">{{ l.code }}</span>
+                                                                              <span style="font-size:13px">{{ l.name }}</span>
+                                                                              </span>
+                                                                              <span style="font-size:12.5px;color:#696D74;text-align:right">{{ l.detail }}</span>
+                                                                                <span style="font-size:13px;font-weight:600;text-align:right">{{ l.amt }}</span>
+                                                                                </div>
+                                                                              </sc-for>
+                                                                            </div>
+                                                                          </div>
+                                                                          <div style="flex:1 1 320px;min-width:300px;display:flex;flex-direction:column;gap:12px">
+                                                                            <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow:hidden">
+                                                                              <div style="padding:11px 14px;border-bottom:1px solid #DCE0E6;font-size:15px;font-weight:600">Client approval</div>
+                                                                                <div style="display:flex;flex-direction:column;gap:0">
+                                                                                  <sc-for list="{{ coSteps }}" as="s" hint-placeholder-count="3">
+                                                                                    <div style="display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-bottom:1px solid #F1F3F5">
+                                                                                      <sc-if value="{{ s.done }}">
+                                                                                        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="#28A745" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px">
+                                                                                          <path d="M3 8.4l3.2 3.2L13 4.8"/>
+                                                                                        </svg>
+                                                                                      </sc-if>
+                                                                                      <sc-if value="{{ s.wait }}">
+                                                                                        <span style="flex:none;display:block;width:17px;height:17px;margin-top:1px;border-radius:50%;border:2px solid #FFC107">
+                                                                                        </span>
+                                                                                      </sc-if>
+                                                                                      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+                                                                                        <span style="font-size:13px;font-weight:600;color:{{ s.fg }}">{{ s.name }}</span>
+                                                                                          <span style="font-size:11.5px;color:#8B9096">{{ s.when }}</span>
+                                                                                          </div>
+                                                                                        </div>
+                                                                                      </sc-for>
+                                                                                    </div>
+                                                                                    <div style="display:flex;flex-direction:column;gap:9px;padding:13px 14px">
+                                                                                      <span style="font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#8B9096">SIGNATURE</span>
+                                                                                        <div style="display:flex;align-items:center;justify-content:center;height:82px;border:1.5px dashed #C3C9D0;border-radius:4px;background:#FAFBFC">
+                                                                                          <span style="font-size:12.5px;color:#8B9096">Awaiting Priya Lindqvist</span>
+                                                                                          </div>
+                                                                                          <span style="font-size:11.5px;line-height:1.45;color:#8B9096">Signed in the client portal — no printing, no scanning. The signed PDF lands in Plans &amp; Docs.</span>
+                                                                                            <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="width:100%;height:32px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">Send reminder</button>
+                                                                                            </div>
+                                                                                          </div>
+                                                                                          <div style="display:flex;gap:10px;padding:13px 14px;background:#FDECEE;border:1px solid #F3C4CB;border-radius:8px">
+                                                                                            <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="#D2051E" stroke-width="1.5" style="flex:none;margin-top:1px">
+                                                                                              <path d="M8 2.6L14.4 13H1.6z" stroke-linejoin="round"/>
+                                                                                              <path d="M8 6.4v3.1" stroke-linecap="round"/>
+                                                                                              <path d="M8 11.4h.01" stroke-width="1.8" stroke-linecap="round"/>
+                                                                                            </svg>
+                                                                                            <span style="font-size:12.5px;line-height:1.5;color:#6E3B41">Framing that partition is scheduled Thursday. If this isn't signed by Wednesday afternoon it becomes rework, and rework on a change order is the argument you never win.</span>
+                                                                                            </div>
+                                                                                          </div>
+                                                                                        </div>
+                                                                                      </div>
+                                                                                    </sc-if>

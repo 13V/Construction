@@ -43,6 +43,9 @@ export interface JobSiteRow {
   lng: number
   radius_m: number
   budget: number | null
+  client_name: string | null
+  progress_pct: number | null
+  schedule_note: string | null
 }
 
 export interface PositionRow {
@@ -204,4 +207,143 @@ export interface CertificationRow {
   worker_id: string
   name: string
   expires_on: string | null
+}
+
+// ------------------------------------------------- v4 row types (schema_v4)
+
+export interface EstimateRow {
+  id: string
+  company_id: string
+  site_id: string | null
+  client_name: string
+  title: string
+  revision: number
+  parent_id: string | null
+  status: 'draft' | 'awaiting_approval' | 'approved' | 'rejected' | 'superseded'
+  note: string | null
+  sent_at: string | null
+  created_at: string
+}
+
+export interface EstimateLineRow {
+  id: string
+  estimate_id: string
+  cost_code: string | null
+  name: string
+  qty: number
+  unit: string
+  unit_price: number
+  markup_pct: number
+  /** Generated in Postgres: qty * unit_price * (1 + markup/100). Never write it. */
+  line_total: number
+  sort: number
+}
+
+export interface PurchaseOrderRow {
+  id: string
+  company_id: string
+  site_id: string | null
+  po_no: string
+  vendor: string
+  issued_on: string
+  expected_on: string | null
+  status: 'draft' | 'sent' | 'partially_received' | 'received' | 'cancelled'
+  note: string | null
+}
+
+export interface PoLineRow {
+  id: string
+  po_id: string
+  name: string
+  ordered_qty: number
+  received_qty: number
+  unit: string
+  unit_cost: number
+  /** Generated: ordered_qty * unit_cost. */
+  line_total: number
+  cost_code: string | null
+  sort: number
+}
+
+export interface InvoiceRow {
+  id: string
+  company_id: string
+  site_id: string | null
+  invoice_no: string
+  client_name: string
+  period: string | null
+  issued_on: string
+  due_on: string | null
+  amount: number
+  paid_amount: number
+  status: 'draft' | 'sent' | 'paid' | 'void'
+  note: string | null
+}
+
+export interface InvoiceLineRow {
+  id: string
+  invoice_id: string
+  cost_code: string | null
+  description: string
+  pct_complete: number | null
+  amount: number
+  sort: number
+}
+
+export interface ChangeOrderRow {
+  id: string
+  company_id: string
+  site_id: string | null
+  co_no: string
+  description: string
+  detail: string | null
+  cost_impact: number
+  days_impact: number
+  status: 'draft' | 'pending_client' | 'approved' | 'rejected'
+  raised_on: string
+  signature: { name: string; signed_at: string } | null
+}
+
+export interface ChangeOrderLineRow {
+  id: string
+  change_order_id: string
+  cost_code: string | null
+  name: string
+  detail: string | null
+  amount: number
+  sort: number
+}
+
+export interface MilestoneRow {
+  id: string
+  company_id: string
+  site_id: string
+  name: string
+  due_on: string | null
+  done_on: string | null
+  sort: number
+}
+
+export interface SelectionRow {
+  id: string
+  company_id: string
+  site_id: string
+  name: string
+  detail: string | null
+  needed_by: string | null
+  status: 'pending' | 'chosen'
+  chosen: string | null
+  chosen_at: string | null
+}
+
+export interface PortalContactRow {
+  id: string
+  company_id: string
+  site_id: string | null
+  auth_user_id: string | null
+  kind: 'client' | 'sub'
+  name: string
+  org: string | null
+  invite_email: string | null
+  active: boolean
 }

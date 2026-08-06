@@ -1,0 +1,81 @@
+<sc-if value="{{ isTime }}">
+  <div data-scrollarea="1" style="flex:1;overflow:auto;padding:16px 18px 40px">
+    <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1 1 560px;min-width:420px;background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid #DCE0E6">
+          <span style="font-size:15px;font-weight:600">Hours on {{ site.name }}</span>
+            <span style="font-size:12.5px;color:#8B9096">{{ site.timePeriod }}</span>
+            </div>
+            <div style="display:grid;column-gap:10px;grid-template-columns:1fr 92px 108px 128px 108px;padding:7px 14px;background:#FAFBFC;border-bottom:1px solid #DCE0E6">
+              <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">WORKER</span>
+                <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">HOURS</span>
+                  <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">RATE</span>
+                    <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">COST CODE</span>
+                      <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">COST</span>
+                      </div>
+                      <sc-for list="{{ siteTime }}" as="t" hint-placeholder-count="5">
+                        <div style="display:grid;column-gap:10px;grid-template-columns:1fr 92px 108px 128px 108px;align-items:center;padding:9px 14px;border-bottom:1px solid #F1F3F5">
+                          <span style="display:flex;align-items:center;gap:9px;min-width:0">
+                            <span style="flex:none;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#3F454B;color:#fff;font-size:9px;font-weight:700">{{ t.ini }}</span>
+                              <span style="min-width:0;display:flex;flex-direction:column">
+                                <span style="font-size:13px;font-weight:600">{{ t.name }}</span>
+                                  <span style="font-size:11px;color:#8B9096">{{ t.trade }}</span>
+                                  </span>
+                                </span>
+                                <span style="font-size:13px;font-weight:600;text-align:right">{{ t.hrs }}</span>
+                                  <span style="font-size:12.5px;color:#4A5057;text-align:right">{{ t.rate }}</span>
+                                    <span style="font-size:12px;color:#4A5057">{{ t.code }}</span>
+                                      <span style="font-size:13px;font-weight:600;text-align:right">{{ t.cost }}</span>
+                                      </div>
+                                    </sc-for>
+                                    <div style="display:grid;column-gap:10px;grid-template-columns:1fr 92px 108px 128px 108px;align-items:center;padding:10px 14px;background:#FAFBFC">
+                                      <span style="font-size:13px;font-weight:700">Total</span>
+                                        <span style="font-size:13.5px;font-weight:700;text-align:right">{{ tTot.hrs }}</span>
+                                          <span>
+                                          </span>
+                                          <span>
+                                          </span>
+                                          <span style="font-size:13.5px;font-weight:700;text-align:right">{{ tTot.cost }}</span>
+                                          </div>
+                                        </div>
+                                        <div style="flex:1 1 320px;min-width:300px;display:flex;flex-direction:column;gap:12px">
+                                          <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;padding:14px">
+                                            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+                                              <span style="font-size:15px;font-weight:600">Hours by day</span>
+                                                <span style="font-size:12px;color:#8B9096">{{ site.barsNote }}</span>
+                                                </div>
+                                                <div style="display:flex;align-items:flex-end;justify-content:flex-start;gap:10px;height:132px">
+                                                  <sc-for list="{{ hoursBars }}" as="b" hint-placeholder-count="7">
+                                                    <div style="flex:1 1 0;min-width:26px;max-width:64px;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-end;height:100%">
+                                                      <span style="font-size:11px;font-weight:600;color:#4A5057">{{ b.val }}</span>
+                                                        <span style="flex:none;display:flex;align-items:flex-end;width:100%;height:86px">
+                                                          <span style="display:block;width:100%;border-radius:2px 2px 0 0;height:{{ b.h }};background:{{ b.color }}">
+                                                          </span>
+                                                        </span>
+                                                        <span style="font-size:11px;color:#8B9096">{{ b.label }}</span>
+                                                        </div>
+                                                      </sc-for>
+                                                    </div>
+                                                  </div>
+                                                  <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px">
+                                                    <span style="font-size:15px;font-weight:600">Labor to date</span>
+                                                      <div style="display:flex;justify-content:space-between;align-items:baseline">
+                                                        <span style="font-size:13px;color:#696D74">Hours logged</span>
+                                                          <span style="font-size:15px;font-weight:600">{{ site.hours }}</span>
+                                                          </div>
+                                                          <div style="display:flex;justify-content:space-between;align-items:baseline">
+                                                            <span style="font-size:13px;color:#696D74">Labor cost</span>
+                                                              <span style="font-size:15px;font-weight:600">{{ site.laborCost }}</span>
+                                                              </div>
+                                                              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                                                                <span style="font-size:13px;color:#696D74">Auto-captured</span>
+                                                                  <span style="font-size:15px;font-weight:600;color:#1B7A2C">{{ site.autoPct }}</span>
+                                                                  </div>
+                                                                  <div style="height:1px;background:#EDEFF1">
+                                                                  </div>
+                                                                  <span style="font-size:11.5px;line-height:1.45;color:#8B9096">Every hour on this page traces to a GPS punch or a named office edit. That is what makes the job costing believable.</span>
+                                                                  </div>
+                                                                </div>
+                                                              </div>
+                                                            </div>
+                                                          </sc-if>

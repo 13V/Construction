@@ -1,0 +1,87 @@
+<sc-if value="{{ isEstimates }}">
+  <div style="flex:none;display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;background:#fff;border-bottom:1px solid #DCE0E6;overflow-x:auto">
+    <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">← All estimates</button>
+      <div style="flex:none;width:1px;height:20px;background:#DCE0E6;margin:0 4px">
+      </div>
+      <span style="flex:none;font-size:12.5px;font-weight:600;white-space:nowrap">EST-2026-118 · Harbor View 3B — bath addition</span>
+        <span style="flex:none;display:inline-flex;align-items:center;padding:3px 8px;border-radius:11px;background:#F5F6F7;color:#696D74;font-size:11px;font-weight:700;white-space:nowrap">Rev 3</span>
+          <span style="flex:none;display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:11px;background:#FFF6DE;color:#8A6100;font-size:11px;font-weight:700;white-space:nowrap">
+            <span style="width:6px;height:6px;border-radius:50%;background:#FFC107">
+            </span>Awaiting approval</span>
+            <div style="flex:1">
+            </div>
+            <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">Duplicate</button>
+              <button style="flex:none;display:flex;align-items:center;height:29px;padding:0 14px;background:linear-gradient(180deg,#FFCD11,#F7B244);border:1px solid #E0A032;border-radius:3px;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;color:#1A1D21;cursor:pointer;white-space:nowrap">SEND TO CLIENT</button>
+              </div>
+              <div data-scrollarea="1" style="flex:1;overflow:auto;padding:16px 18px 40px">
+                <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+                  <div style="flex:1 1 880px;min-width:520px;background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow-x:auto">
+                    <div style="min-width:840px;display:grid;column-gap:10px;grid-template-columns:1fr 78px 62px 96px 74px 104px;padding:7px 14px;background:#FAFBFC;border-bottom:1px solid #DCE0E6">
+                      <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">LINE ITEM</span>
+                        <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">QTY</span>
+                          <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">UNIT</span>
+                            <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">UNIT PRICE</span>
+                              <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">MARKUP</span>
+                                <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">LINE TOTAL</span>
+                                </div>
+                                <sc-for list="{{ estGroups }}" as="g" hint-placeholder-count="4">
+                                  <div style="min-width:840px;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#F7F9FB;border-bottom:1px solid #EDEFF1">
+                                    <span style="font-size:11.5px;font-weight:700;color:#8B9096">{{ g.code }}</span>
+                                      <span style="font-size:12.5px;font-weight:700">{{ g.name }}</span>
+                                        <span style="flex:1">
+                                        </span>
+                                        <span style="font-size:12.5px;font-weight:700">{{ g.subtotal }}</span>
+                                        </div>
+                                        <sc-for list="{{ g.items }}" as="i" hint-placeholder-count="2">
+                                          <div style-hover="background:#FAFCFF" style="min-width:840px;display:grid;column-gap:10px;grid-template-columns:1fr 78px 62px 96px 74px 104px;align-items:center;padding:8px 14px;border-bottom:1px solid #F1F3F5">
+                                            <span style="font-size:13px;padding-left:14px">{{ i.name }}</span>
+                                              <span style="font-size:13px;text-align:right">{{ i.qty }}</span>
+                                                <span style="font-size:12.5px;color:#696D74">{{ i.unit }}</span>
+                                                  <span style="font-size:13px;text-align:right">{{ i.price }}</span>
+                                                    <span style="font-size:13px;text-align:right;color:#696D74">{{ i.markup }}</span>
+                                                      <span style="font-size:13px;text-align:right;font-weight:600">{{ i.total }}</span>
+                                                      </div>
+                                                    </sc-for>
+                                                  </sc-for>
+                                                  <div style="min-width:840px;display:flex;align-items:center;gap:12px;padding:11px 14px;background:#FAFBFC">
+                                                    <a href="#" style="font-size:12.5px;font-weight:500">+ Add line item</a>
+                                                      <a href="#" style="font-size:12.5px;font-weight:500">+ Add cost code</a>
+                                                        <span style="flex:1">
+                                                        </span>
+                                                        <span style="font-size:12.5px;color:#696D74">28 line items across 5 cost codes</span>
+                                                        </div>
+                                                      </div>
+                                                      <div style="flex:1 1 320px;min-width:290px;display:flex;flex-direction:column;gap:12px">
+                                                        <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow:hidden">
+                                                          <div style="padding:11px 14px;border-bottom:1px solid #DCE0E6;font-size:15px;font-weight:600">Totals</div>
+                                                            <div style="display:flex;flex-direction:column">
+                                                              <sc-for list="{{ estTotals }}" as="t" hint-placeholder-count="5">
+                                                                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:9px 14px;border-bottom:1px solid #F1F3F5;background:{{ t.bg }}">
+                                                                  <span style="font-size:12.5px;color:{{ t.kFg }};font-weight:{{ t.w }}">{{ t.k }}</span>
+                                                                    <span style="font-size:{{ t.size }};font-weight:{{ t.w }};color:{{ t.vFg }}">{{ t.v }}</span>
+                                                                    </div>
+                                                                  </sc-for>
+                                                                </div>
+                                                                <div style="padding:12px 14px;display:flex;flex-direction:column;gap:9px">
+                                                                  <button style="width:100%;height:34px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Convert to job</button>
+                                                                    <span style="font-size:11.5px;line-height:1.45;color:#8B9096">Creates the job site, seeds the budget from these cost codes, and the geofence arms on the first scheduled shift.</span>
+                                                                    </div>
+                                                                  </div>
+                                                                  <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow:hidden">
+                                                                    <div style="padding:11px 14px;border-bottom:1px solid #DCE0E6;font-size:15px;font-weight:600">Revisions</div>
+                                                                      <sc-for list="{{ estRevs }}" as="r" hint-placeholder-count="3">
+                                                                        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #F1F3F5">
+                                                                          <span style="flex:none;width:8px;height:8px;border-radius:50%;background:{{ r.dot }}">
+                                                                          </span>
+                                                                          <span style="flex:1;min-width:0;display:flex;flex-direction:column">
+                                                                            <span style="font-size:12.5px;font-weight:600">{{ r.name }}</span>
+                                                                              <span style="font-size:11.5px;color:#8B9096">{{ r.note }}</span>
+                                                                              </span>
+                                                                              <span style="flex:none;font-size:12.5px;font-weight:600">{{ r.total }}</span>
+                                                                              </div>
+                                                                            </sc-for>
+                                                                          </div>
+                                                                        </div>
+                                                                      </div>
+                                                                    </div>
+                                                                  </sc-if>

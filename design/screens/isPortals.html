@@ -1,0 +1,186 @@
+<sc-if value="{{ isPortals }}">
+  <div style="flex:none;display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;background:#fff;border-bottom:1px solid #DCE0E6;overflow-x:auto">
+    <span style="flex:none;font-size:12.5px;font-weight:600;white-space:nowrap">Portals</span>
+      <div style="flex:none;width:1px;height:20px;background:#DCE0E6;margin:0 4px">
+      </div>
+      <span style="flex:none;display:flex;align-items:center;gap:6px;font-size:12.5px;color:#696D74;white-space:nowrap">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#28A745" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 8.4l3.2 3.2L13 4.8"/>
+        </svg>
+        Free seats — invite as many clients and subs as you like</span>
+        <div style="flex:1">
+        </div>
+        <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">Manage access</button>
+          <button style="flex:none;display:flex;align-items:center;height:29px;padding:0 14px;background:linear-gradient(180deg,#FFCD11,#F7B244);border:1px solid #E0A032;border-radius:3px;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;color:#1A1D21;cursor:pointer;white-space:nowrap">INVITE SOMEONE</button>
+          </div>
+          <div data-scrollarea="1" style="flex:1;overflow:auto;padding:20px 20px 40px">
+            <div style="max-width:1560px;display:flex;flex-direction:column;gap:6px;margin-bottom:18px">
+              <h1 style="margin:0;font-size:19px;font-weight:600;letter-spacing:-.01em">What everyone else sees</h1>
+                <p style="margin:0;max-width:800px;font-size:13.5px;line-height:1.5;color:#696D74;text-wrap:pretty">Deliberately thin. The client sees progress and their own money; the sub sees only their scope. Neither sees your costs, your crew's rates, or another trade's business. These are the seats that get your software into a client's hands for free — and put your name in front of them every week.</p>
+                </div>
+                <div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap">
+                  <div style="flex:1 1 500px;min-width:420px;display:flex;flex-direction:column;gap:9px">
+                    <div style="display:flex;align-items:center;gap:9px">
+                      <span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:3px;background:#E7F1FF;color:#007BFF;font-size:11px;font-weight:700;letter-spacing:.04em">CLIENT PORTAL</span>
+                        <span style="font-size:13px;color:#696D74">Priya &amp; Aaron Lindqvist · Maple Ridge</span>
+                        </div>
+                        <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow:hidden">
+                          <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid #DCE0E6;background:#FAFBFC">
+                            <span style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#2B2F33;color:#fff;font-size:8px;font-weight:700">WB</span>
+                              <span style="font-size:13px;font-weight:600">Whitcomb Builders</span>
+                                <span style="flex:1">
+                                </span>
+                                <span style="font-size:12px;color:#8B9096">Your project</span>
+                                </div>
+                                <div style="display:flex;flex-direction:column;gap:9px;padding:16px 15px;border-bottom:1px solid #DCE0E6">
+                                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+                                    <span style="font-size:17px;font-weight:600">Maple Ridge residence</span>
+                                      <span style="font-size:22px;font-weight:600;letter-spacing:-.02em">78%</span>
+                                      </div>
+                                      <span style="display:block;height:8px;border-radius:4px;background:#EDEFF1;overflow:hidden">
+                                        <span style="display:block;height:8px;border-radius:4px;width:78%;background:#28A745">
+                                        </span>
+                                      </span>
+                                      <span style="font-size:12.5px;color:#696D74">On schedule · dry-in expected Sep 4</span>
+                                      </div>
+                                      <div style="display:flex;flex-direction:column;gap:0;border-bottom:1px solid #DCE0E6">
+                                        <span style="padding:12px 15px 8px;font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#8B9096">MILESTONES</span>
+                                          <sc-for list="{{ clientMilestones }}" as="m" hint-placeholder-count="4">
+                                            <div style="display:flex;align-items:center;gap:11px;padding:9px 15px;border-top:1px solid #F1F3F5">
+                                              <sc-if value="{{ m.done }}">
+                                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#28A745" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="flex:none">
+                                                  <path d="M3 8.4l3.2 3.2L13 4.8"/>
+                                                </svg>
+                                              </sc-if>
+                                              <sc-if value="{{ m.next }}">
+                                                <span style="flex:none;display:block;width:16px;height:16px;border-radius:50%;border:2px solid #007BFF">
+                                                </span>
+                                              </sc-if>
+                                              <sc-if value="{{ m.later }}">
+                                                <span style="flex:none;display:block;width:16px;height:16px;border-radius:50%;border:2px solid #DCE0E6">
+                                                </span>
+                                              </sc-if>
+                                              <span style="flex:1;font-size:13px;font-weight:{{ m.w }};color:{{ m.fg }}">{{ m.name }}</span>
+                                                <span style="flex:none;font-size:12.5px;color:#696D74">{{ m.date }}</span>
+                                                </div>
+                                              </sc-for>
+                                            </div>
+                                            <div style="display:flex;flex-direction:column;gap:9px;padding:13px 15px;border-bottom:1px solid #DCE0E6">
+                                              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                                                <span style="font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#8B9096">THIS WEEK ON SITE</span>
+                                                  <a href="#" style="font-size:12px">All 218 photos</a>
+                                                  </div>
+                                                  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+                                                    <span style="aspect-ratio:1 / 1;border-radius:4px;background:repeating-linear-gradient(135deg,#E4E7EA 0 6px,#DADEE2 6px 12px)">
+                                                    </span>
+                                                    <span style="aspect-ratio:1 / 1;border-radius:4px;background:repeating-linear-gradient(135deg,#E4E7EA 0 6px,#DADEE2 6px 12px)">
+                                                    </span>
+                                                    <span style="aspect-ratio:1 / 1;border-radius:4px;background:repeating-linear-gradient(135deg,#E4E7EA 0 6px,#DADEE2 6px 12px)">
+                                                    </span>
+                                                    <span style="aspect-ratio:1 / 1;border-radius:4px;background:repeating-linear-gradient(135deg,#E4E7EA 0 6px,#DADEE2 6px 12px)">
+                                                    </span>
+                                                  </div>
+                                                  <span style="font-size:12px;color:#696D74">Wednesday's log: second floor deck sheathing closed out, great room header set.</span>
+                                                  </div>
+                                                  <div style="display:flex;flex-direction:column;gap:9px;padding:13px 15px;background:#FFF9E8;border-bottom:1px solid #F0DCA8">
+                                                    <span style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#8A6100">
+                                                      <span style="width:7px;height:7px;border-radius:50%;background:#FFC107">
+                                                      </span>2 things need you</span>
+                                                      <div style="display:flex;align-items:center;gap:10px;padding:10px 11px;background:#fff;border:1px solid #F0DCA8;border-radius:4px">
+                                                        <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+                                                          <span style="font-size:13px;font-weight:600">CO-03 · Relocate laundry upstairs</span>
+                                                            <span style="font-size:11.5px;color:#696D74">+$2,860 · +2 days · sign to release framing</span>
+                                                            </span>
+                                                            <button style="flex:none;height:28px;padding:0 11px;background:linear-gradient(180deg,#FFCD11,#F7B244);border:1px solid #E0A032;border-radius:3px;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.04em;cursor:pointer;white-space:nowrap">REVIEW</button>
+                                                            </div>
+                                                            <div style="display:flex;align-items:center;gap:10px;padding:10px 11px;background:#fff;border:1px solid #F0DCA8;border-radius:4px">
+                                                              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+                                                                <span style="font-size:13px;font-weight:600">Selection: stair newel profile</span>
+                                                                  <span style="font-size:11.5px;color:#696D74">Rosa needs this before Monday</span>
+                                                                  </span>
+                                                                  <button style-hover="background:#F5F6F7" style="flex:none;height:28px;padding:0 11px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Choose</button>
+                                                                  </div>
+                                                                </div>
+                                                                <div style="display:flex;flex-direction:column;gap:0">
+                                                                  <span style="padding:12px 15px 8px;font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#8B9096">YOUR INVOICES</span>
+                                                                    <sc-for list="{{ clientInvoices }}" as="v" hint-placeholder-count="3">
+                                                                      <div style="display:flex;align-items:center;gap:11px;padding:10px 15px;border-top:1px solid #F1F3F5">
+                                                                        <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+                                                                          <span style="font-size:13px;font-weight:600">{{ v.no }}</span>
+                                                                            <span style="font-size:11.5px;color:#8B9096">{{ v.period }}</span>
+                                                                            </span>
+                                                                            <span style="flex:none;font-size:13px;font-weight:600">{{ v.amt }}</span>
+                                                                              <span style="flex:none;display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;font-size:11px;font-weight:700;white-space:nowrap;background:{{ v.stBg }};color:{{ v.stFg }}">{{ v.status }}</span>
+                                                                              </div>
+                                                                            </sc-for>
+                                                                            <div style="padding:11px 15px;background:#FAFBFC;border-top:1px solid #F1F3F5">
+                                                                              <span style="font-size:11.5px;color:#8B9096">No costs, no crew rates, no other jobs. Just this project.</span>
+                                                                              </div>
+                                                                            </div>
+                                                                          </div>
+                                                                        </div>
+                                                                        <div style="flex:1 1 460px;min-width:400px;display:flex;flex-direction:column;gap:9px">
+                                                                          <div style="display:flex;align-items:center;gap:9px">
+                                                                            <span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:3px;background:#F5F6F7;color:#4A5057;font-size:11px;font-weight:700;letter-spacing:.04em">SUB / VENDOR PORTAL</span>
+                                                                              <span style="font-size:13px;color:#696D74">Cascade Flashing &amp; Sheet Metal</span>
+                                                                              </div>
+                                                                              <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow:hidden">
+                                                                                <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid #DCE0E6;background:#FAFBFC">
+                                                                                  <span style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#2B2F33;color:#fff;font-size:8px;font-weight:700">WB</span>
+                                                                                    <span style="font-size:13px;font-weight:600">Whitcomb Builders</span>
+                                                                                      <span style="flex:1">
+                                                                                      </span>
+                                                                                      <span style="font-size:12px;color:#8B9096">Your work</span>
+                                                                                      </div>
+                                                                                      <div style="display:flex;flex-direction:column;gap:0;border-bottom:1px solid #DCE0E6">
+                                                                                        <span style="padding:13px 15px 8px;font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#8B9096">ASSIGNED TO YOU</span>
+                                                                                          <sc-for list="{{ subTasks }}" as="t" hint-placeholder-count="2">
+                                                                                            <div style="display:flex;align-items:flex-start;gap:11px;padding:11px 15px;border-top:1px solid #F1F3F5;background:{{ t.bg }}">
+                                                                                              <span style="flex:none;width:9px;height:9px;margin-top:4px;border-radius:50%;background:{{ t.dot }}">
+                                                                                              </span>
+                                                                                              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                                                                                                <span style="font-size:13.5px;font-weight:600">{{ t.name }}</span>
+                                                                                                  <span style="font-size:12px;line-height:1.45;color:#696D74">{{ t.detail }}</span>
+                                                                                                  </div>
+                                                                                                  <span style="flex:none;display:inline-flex;align-items:center;padding:3px 9px;border-radius:11px;font-size:11px;font-weight:700;white-space:nowrap;background:{{ t.stBg }};color:{{ t.stFg }}">{{ t.when }}</span>
+                                                                                                  </div>
+                                                                                                </sc-for>
+                                                                                              </div>
+                                                                                              <div style="display:flex;flex-direction:column;gap:0;border-bottom:1px solid #DCE0E6">
+                                                                                                <span style="padding:13px 15px 8px;font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#8B9096">WHAT YOU CAN OPEN</span>
+                                                                                                  <sc-for list="{{ subDocs }}" as="d" hint-placeholder-count="4">
+                                                                                                    <div style="display:flex;align-items:center;gap:11px;padding:10px 15px;border-top:1px solid #F1F3F5">
+                                                                                                      <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="{{ d.icon }}" stroke-width="1.3" style="flex:none">
+                                                                                                        <path d="M3.6 1.6h6l3 3v9.8H3.6z" stroke-linejoin="round"/>
+                                                                                                        <path d="M9.6 1.6v3h3" stroke-linejoin="round"/>
+                                                                                                      </svg>
+                                                                                                      <span style="flex:1;min-width:0;display:flex;flex-direction:column">
+                                                                                                        <span style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.name }}</span>
+                                                                                                          <span style="font-size:11.5px;color:#8B9096">{{ d.meta }}</span>
+                                                                                                          </span>
+                                                                                                        </div>
+                                                                                                      </sc-for>
+                                                                                                    </div>
+                                                                                                    <div style="display:flex;flex-direction:column;gap:9px;padding:13px 15px;border-bottom:1px solid #DCE0E6">
+                                                                                                      <span style="font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#8B9096">YOUR PO</span>
+                                                                                                        <div style="display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid #DCE0E6;border-radius:4px">
+                                                                                                          <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+                                                                                                            <span style="font-size:13px;font-weight:600">PO-1194 · flashing &amp; counterflashing</span>
+                                                                                                              <span style="font-size:11.5px;color:#696D74">Maple Ridge · NE corner remediation</span>
+                                                                                                              </span>
+                                                                                                              <span style="flex:none;font-size:13.5px;font-weight:600">$1,840</span>
+                                                                                                              </div>
+                                                                                                              <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="width:100%;height:32px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">Submit an invoice against this PO</button>
+                                                                                                              </div>
+                                                                                                              <div style="display:flex;gap:10px;padding:12px 15px;background:#F5F6F7">
+                                                                                                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#8B9096" stroke-width="1.4" style="flex:none;margin-top:1px">
+                                                                                                                  <rect x="3.4" y="7" width="9.2" height="6.4" rx="1.2"/>
+                                                                                                                  <path d="M5.6 7V5.2a2.4 2.4 0 014.8 0V7" stroke-linecap="round"/>
+                                                                                                                </svg>
+                                                                                                                <span style="font-size:11.5px;line-height:1.5;color:#696D74">No budget, no other trades' scopes, no client contact details, no schedule beyond their own dates. A sub who leaves the job loses access the same day.</span>
+                                                                                                                </div>
+                                                                                                              </div>
+                                                                                                            </div>
+                                                                                                          </div>
+                                                                                                        </div>
+                                                                                                      </sc-if>

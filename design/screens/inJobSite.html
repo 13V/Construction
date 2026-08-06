@@ -1,0 +1,54 @@
+<sc-if value="{{ inJobSite }}">
+  <div style="flex:none;display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;background:#fff;border-bottom:1px solid #DCE0E6;overflow-x:auto">
+    <button onClick="{{ goMap }}" style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;color:#1A1D21;cursor:pointer;white-space:nowrap">← All sites</button>
+      <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;color:#1A1D21;cursor:pointer;white-space:nowrap">Actions <span style="opacity:.5;font-size:9px">▾</span>
+      </button>
+      <div style="flex:none;width:1px;height:20px;background:#DCE0E6;margin:0 4px">
+      </div>
+      <span style="flex:none;display:flex;align-items:center;gap:6px;font-size:12.5px;color:#696D74;white-space:nowrap">
+        <span style="width:8px;height:8px;border-radius:50%;background:{{ site.liveDot }}">
+        </span>{{ site.onSite }}</span>
+        <div style="flex:1">
+        </div>
+        <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">Invite client</button>
+          <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">Export</button>
+          </div>
+          <div style="flex:none;background:#fff;border-bottom:1px solid #DCE0E6">
+            <div style="display:flex;align-items:flex-start;gap:20px;padding:15px 18px 13px">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span style="width:11px;height:11px;border-radius:3px;background:{{ site.color }}">
+                  </span>
+                  <h1 style="margin:0;font-size:21px;font-weight:600;letter-spacing:-.01em">{{ site.name }}</h1>
+                    <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:11px;font-size:11.5px;font-weight:700;background:{{ site.stBg }};color:{{ site.stFg }}">{{ site.status }}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                      <span style="font-size:13px;color:#696D74">{{ site.address }}</span>
+                        <span style="width:1px;height:12px;background:#DCE0E6">
+                        </span>
+                        <span style="font-size:13px;color:#696D74">{{ site.type }}</span>
+                          <span style="width:1px;height:12px;background:#DCE0E6">
+                          </span>
+                          <span style="font-size:13px;color:#696D74">{{ site.dates }}</span>
+                            <span style="width:1px;height:12px;background:#DCE0E6">
+                            </span>
+                            <span style="font-size:13px;color:#696D74">Foreman <b style="font-weight:600;color:#1A1D21">{{ site.foreman }}</b>
+                            </span>
+                          </div>
+                        </div>
+                        <div style="flex:none;display:flex;align-items:center;gap:10px">
+                          <div style="display:flex">
+                            <sc-for list="{{ site.avatars }}" as="a" hint-placeholder-count="4">
+                              <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;border:2px solid #fff;font-size:10px;font-weight:700;margin-left:{{ a.ml }};background:{{ a.bg }};color:{{ a.fg }}">{{ a.ini }}</span>
+                              </sc-for>
+                            </div>
+                            <span style="font-size:12.5px;color:#8B9096;white-space:nowrap">{{ site.assigned }}</span>
+                            </div>
+                          </div>
+                          <div style="display:flex;align-items:center;gap:0;padding:0 18px;overflow-x:auto">
+                            <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="8">
+                              <button onClick="{{ t.go }}" style="flex:none;padding:0 13px;height:35px;background:transparent;border:0;border-bottom:2px solid transparent;font-family:inherit;font-size:13px;cursor:pointer;white-space:nowrap;border-bottom-color:{{ t.edge }};color:{{ t.fg }};font-weight:{{ t.w }}">{{ t.label }}</button>
+                              </sc-for>
+                            </div>
+                          </div>
+                        </sc-if>

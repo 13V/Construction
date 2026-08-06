@@ -1,0 +1,184 @@
+<sc-if value="{{ isTimesheets }}">
+  <div style="flex:none;display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;background:#fff;border-bottom:1px solid #DCE0E6;overflow-x:auto">
+    <div style="flex:none;display:flex;height:27px;border:1px solid #DCE0E6;border-radius:3px;overflow:hidden">
+      <span style="display:flex;align-items:center;padding:0 9px;background:#fff;color:#4A5057;font-size:13px;cursor:pointer">‹</span>
+        <span style="display:flex;align-items:center;padding:0 11px;background:#fff;border-left:1px solid #DCE0E6;border-right:1px solid #DCE0E6;font-size:12.5px;font-weight:600;white-space:nowrap">Mon Jul 27 – Sun Aug 2</span>
+          <span style="display:flex;align-items:center;padding:0 9px;background:#fff;color:#4A5057;font-size:13px;cursor:pointer">›</span>
+          </div>
+          <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">All sites <span style="opacity:.5;font-size:9px">▾</span>
+          </button>
+          <button style-hover="background:#F5F6F7;border-color:#C3C9D0" style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">All crew <span style="opacity:.5;font-size:9px">▾</span>
+          </button>
+          <div style="flex:none;width:1px;height:20px;background:#DCE0E6;margin:0 4px">
+          </div>
+          <span style="flex:none;display:flex;align-items:center;gap:6px;height:27px;padding:0 10px;border-radius:3px;background:#FDECEE;font-size:12.5px;font-weight:600;color:#A00417;white-space:nowrap">3 exceptions</span>
+            <div style="flex:1">
+            </div>
+            <div style="flex:none;display:flex;align-items:center;gap:9px">
+              <div style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+                <span style="font-size:11px;color:#8B9096;white-space:nowrap">Syncs to QuickBooks · ADP · Gusto · Paychex</span>
+                </div>
+                <button style="display:flex;align-items:center;height:29px;padding:0 14px;background:linear-gradient(180deg,#FFCD11,#F7B244);border:1px solid #E0A032;border-radius:3px;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;color:#1A1D21;cursor:pointer;white-space:nowrap">EXPORT TO PAYROLL</button>
+                </div>
+              </div>
+              <div data-scrollarea="1" style="flex:1;overflow:auto;padding:14px 16px 40px">
+                <div style="display:flex;flex-direction:column;background:#fff;border:1px solid #DCE0E6;border-left:3px solid #D2051E;border-radius:8px;overflow:hidden;margin-bottom:12px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid #DCE0E6">
+                    <span style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600">Exceptions — clear these before you export<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#D2051E;color:#fff;font-size:10.5px;font-weight:700">3</span>
+                    </span>
+                    <a href="#" style="font-size:12.5px;font-weight:500">Approve all with notes</a>
+                    </div>
+                    <sc-for list="{{ exceptions }}" as="e" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:12px;padding:9px 13px;border-bottom:1px solid #F1F3F5">
+                        <span style="flex:none;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#3F454B;color:#fff;font-size:9px;font-weight:700">{{ e.ini }}</span>
+                          <span style="flex:none;width:148px;font-size:13px;font-weight:600">{{ e.name }}</span>
+                            <span style="flex:1;font-size:12.5px;color:#4A5057">{{ e.what }}</span>
+                              <span style="flex:none;font-size:12px;color:#8B9096;width:62px">{{ e.day }}</span>
+                                <span style="flex:none;display:flex;gap:6px">
+                                  <button style="height:24px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer">Approve</button>
+                                    <button style="height:24px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer">Edit</button>
+                                    </span>
+                                  </div>
+                                </sc-for>
+                              </div>
+                              <div style="display:flex;align-items:center;gap:18px;padding:0 2px 9px">
+                                <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#696D74;white-space:nowrap">
+                                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#4A5057" stroke-width="1.4">
+                                    <path d="M8 14.2s4.6-4.4 4.6-7.6a4.6 4.6 0 10-9.2 0C3.4 9.8 8 14.2 8 14.2z" stroke-linejoin="round"/>
+                                    <circle cx="8" cy="6.4" r="1.7"/>
+                                  </svg>
+                                  Auto-captured by GPS</span>
+                                  <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#696D74;white-space:nowrap">
+                                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#8A6100" stroke-width="1.4">
+                                      <path d="M11.2 2.4l2.4 2.4-8 8H3.2v-3z" stroke-linejoin="round"/>
+                                    </svg>
+                                    Manually edited <span style="display:inline-block;width:14px;height:14px;border-radius:2px;background:#FFF6DE;border:1px solid #F0DCA8">
+                                  </span>
+                                </span>
+                                <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#696D74;white-space:nowrap">
+                                  <span style="display:inline-block;width:14px;height:14px;border-radius:2px;background:#FDECEE;border:1px solid #F3C4CB">
+                                  </span>Over 40 hrs</span>
+                                </div>
+                                <div style="background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow-x:auto">
+                                  <div style="display:grid;min-width:1150px;grid-template-columns:196px repeat(7,minmax(58px,1fr)) 72px 118px 112px;background:#FAFBFC;border-bottom:1px solid #DCE0E6">
+                                    <div style="padding:7px 11px;font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">WORKER</div>
+                                      <sc-for list="{{ tsDays }}" as="d" hint-placeholder-count="7">
+                                        <div style="padding:7px 8px;border-left:1px solid #EDEFF1;font-size:10.5px;font-weight:700;letter-spacing:.05em;color:{{ d.fg }};text-align:right;white-space:nowrap">{{ d.label }}</div>
+                                        </sc-for>
+                                        <div style="padding:7px 8px;border-left:1px solid #DCE0E6;font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">TOTAL</div>
+                                          <div style="padding:7px 9px;border-left:1px solid #EDEFF1;font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74">COMPLIANCE</div>
+                                            <div style="padding:7px 9px;border-left:1px solid #EDEFF1;font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#696D74;text-align:right">APPROVE</div>
+                                            </div>
+                                            <sc-for list="{{ tsRows }}" as="r" hint-placeholder-count="7">
+                                              <div style-hover="background:#FAFCFF" style="display:grid;min-width:1150px;grid-template-columns:196px repeat(7,minmax(58px,1fr)) 72px 118px 112px;border-bottom:1px solid #EDEFF1;align-items:stretch">
+                                                <div style="display:flex;align-items:center;gap:8px;padding:7px 11px">
+                                                  <span style="flex:none;display:flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;background:#3F454B;color:#fff;font-size:9.5px;font-weight:700">{{ r.ini }}</span>
+                                                    <div style="min-width:0;display:flex;flex-direction:column;gap:0">
+                                                      <span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span>
+                                                        <span style="font-size:11px;color:#8B9096;white-space:nowrap">{{ r.trade }} · {{ r.rate }}</span>
+                                                        </div>
+                                                      </div>
+                                                      <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="7">
+                                                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;padding:7px 8px;border-left:1px solid #EDEFF1;background:{{ c.bg }}">
+                                                          <sc-if value="{{ c.pin }}">
+                                                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#9AA0A6" stroke-width="1.6" style="flex:none">
+                                                              <path d="M8 14.2s4.6-4.4 4.6-7.6a4.6 4.6 0 10-9.2 0C3.4 9.8 8 14.2 8 14.2z" stroke-linejoin="round"/>
+                                                              <circle cx="8" cy="6.4" r="1.6"/>
+                                                            </svg>
+                                                          </sc-if>
+                                                          <sc-if value="{{ c.edit }}">
+                                                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#B98A13" stroke-width="1.7" style="flex:none">
+                                                              <path d="M11.2 2.4l2.4 2.4-8 8H3.2v-3z" stroke-linejoin="round"/>
+                                                            </svg>
+                                                          </sc-if>
+                                                          <span style="font-size:13px;font-weight:{{ c.w }};color:{{ c.fg }}">{{ c.h }}</span>
+                                                          </div>
+                                                        </sc-for>
+                                                        <div style="display:flex;align-items:center;justify-content:flex-end;padding:7px 8px;border-left:1px solid #DCE0E6;background:{{ r.totBg }}">
+                                                          <span style="font-size:13.5px;font-weight:700;color:{{ r.totFg }}">{{ r.total }}</span>
+                                                          </div>
+                                                          <div style="display:flex;align-items:center;padding:7px 9px;border-left:1px solid #EDEFF1">
+                                                            <sc-if value="{{ r.compliance }}">
+                                                              <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:10px;font-size:10.5px;font-weight:600;line-height:1.25;background:{{ r.compBg }};color:{{ r.compFg }}">{{ r.compliance }}</span>
+                                                              </sc-if>
+                                                            </div>
+                                                            <div style="display:flex;align-items:center;justify-content:flex-end;padding:7px 9px;border-left:1px solid #EDEFF1">
+                                                              <sc-if value="{{ r.approved }}">
+                                                                <span style="display:flex;flex-direction:column;align-items:flex-end;gap:0">
+                                                                  <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#1B7A2C">
+                                                                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                                                      <path d="M3 8.4l3.2 3.2L13 4.8"/>
+                                                                    </svg>Approved</span>
+                                                                    <span style="font-size:10.5px;color:#8B9096">{{ r.approved }}</span>
+                                                                    </span>
+                                                                  </sc-if>
+                                                                  <sc-if value="{{ r.pending }}">
+                                                                    <button style="height:25px;padding:0 11px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Approve</button>
+                                                                    </sc-if>
+                                                                  </div>
+                                                                </div>
+                                                                <sc-if value="{{ r.expand }}">
+                                                                  <div style="border-bottom:1px solid #EDEFF1;background:#FAFBFC;padding:2px 11px 10px 46px">
+                                                                    <div style="display:flex;align-items:center;gap:8px;padding:8px 0 6px">
+                                                                      <span style="font-size:11px;font-weight:700;letter-spacing:.05em;color:#696D74">TUE JUL 28 — 8.2 HRS BROKEN OUT</span>
+                                                                        <span style="flex:1;height:1px;background:#DCE0E6">
+                                                                        </span>
+                                                                        <a href="#" style="font-size:11.5px">Collapse</a>
+                                                                        </div>
+                                                                        <div style="display:flex;flex-direction:column;gap:6px">
+                                                                          <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:#fff;border:1px solid #DCE0E6;border-radius:4px">
+                                                                            <span style="flex:none;width:8px;height:8px;border-radius:2px;background:#4C7FB8">
+                                                                            </span>
+                                                                            <span style="flex:none;width:150px;font-size:12.5px;font-weight:600">Maple Ridge</span>
+                                                                              <span style="flex:1;font-size:12.5px;color:#4A5057">06-100 Rough Carpentry</span>
+                                                                                <span style="flex:none;font-size:12px;color:#8B9096">6:42 AM – 12:10 PM</span>
+                                                                                  <span style="flex:none;width:52px;text-align:right;font-size:13px;font-weight:600">5.0</span>
+                                                                                  </div>
+                                                                                  <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:#fff;border:1px solid #DCE0E6;border-radius:4px">
+                                                                                    <span style="flex:none;width:8px;height:8px;border-radius:2px;background:#5C8A63">
+                                                                                    </span>
+                                                                                    <span style="flex:none;width:150px;font-size:12.5px;font-weight:600">Northgate Plaza</span>
+                                                                                      <span style="flex:1;font-size:12.5px;color:#4A5057">16-100 Electrical</span>
+                                                                                        <span style="flex:none;font-size:12px;color:#8B9096">12:44 PM – 3:58 PM</span>
+                                                                                          <span style="flex:none;width:52px;text-align:right;font-size:13px;font-weight:600">3.2</span>
+                                                                                          </div>
+                                                                                          <div style="display:flex;align-items:center;gap:8px;padding:2px 0 0">
+                                                                                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8B9096" stroke-width="1.4" style="flex:none">
+                                                                                              <circle cx="8" cy="8" r="6"/>
+                                                                                              <path d="M8 5.2v.01M8 7.4v3.4" stroke-linecap="round" stroke-width="1.6"/>
+                                                                                            </svg>
+                                                                                            <span style="font-size:11.5px;color:#8B9096">Split created automatically from GPS site changes. Travel between sites (34 min) is unpaid per company policy.</span>
+                                                                                            </div>
+                                                                                          </div>
+                                                                                        </div>
+                                                                                      </sc-if>
+                                                                                    </sc-for>
+                                                                                    <div style="display:flex;align-items:center;gap:26px;padding:11px 13px;background:#FAFBFC;border-top:1px solid #DCE0E6;flex-wrap:wrap;row-gap:10px">
+                                                                                      <div style="display:flex;flex-direction:column;gap:1px">
+                                                                                        <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#8B9096">TOTAL HOURS</span>
+                                                                                          <span style="font-size:16px;font-weight:600">270.8</span>
+                                                                                          </div>
+                                                                                          <div style="display:flex;flex-direction:column;gap:1px">
+                                                                                            <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#8B9096">REGULAR / OT</span>
+                                                                                              <span style="font-size:16px;font-weight:600">264.3 <span style="color:#D2051E">/ 6.5</span>
+                                                                                              </span>
+                                                                                            </div>
+                                                                                            <div style="display:flex;flex-direction:column;gap:1px">
+                                                                                              <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#8B9096">TOTAL LABOR COST</span>
+                                                                                                <span style="font-size:16px;font-weight:600">$9,827.70</span>
+                                                                                                </div>
+                                                                                                <div style="display:flex;flex-direction:column;gap:1px">
+                                                                                                  <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#8B9096">APPROVED</span>
+                                                                                                    <span style="font-size:16px;font-weight:600;color:#1B7A2C">4 of 7</span>
+                                                                                                    </div>
+                                                                                                    <div style="display:flex;flex-direction:column;gap:1px">
+                                                                                                      <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:#8B9096">PENDING</span>
+                                                                                                        <span style="font-size:16px;font-weight:600;color:#8A6100">3</span>
+                                                                                                        </div>
+                                                                                                        <div style="flex:1">
+                                                                                                        </div>
+                                                                                                        <span style="font-size:11.5px;color:#8B9096">94% of hours captured automatically. 6% edited by office.</span>
+                                                                                                        </div>
+                                                                                                      </div>
+                                                                                                    </div>
+                                                                                                  </sc-if>

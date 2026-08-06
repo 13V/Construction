@@ -1,0 +1,62 @@
+<sc-if value="{{ isPhotos }}">
+  <div data-scrollarea="1" style="flex:1;overflow:auto;padding:16px 18px 40px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:13px">
+      <div style="display:flex;height:28px;border:1px solid #DCE0E6;border-radius:3px;overflow:hidden;background:#fff">
+        <span style="display:flex;align-items:center;padding:0 11px;background:#E7F1FF;color:#007BFF;font-size:12.5px;font-weight:600;white-space:nowrap">All {{ site.phAll }}</span>
+          <span style="display:flex;align-items:center;padding:0 11px;border-left:1px solid #DCE0E6;font-size:12.5px;white-space:nowrap">Progress {{ site.phProgress }}</span>
+            <span style="display:flex;align-items:center;padding:0 11px;border-left:1px solid #DCE0E6;font-size:12.5px;white-space:nowrap">Issues {{ site.phIssues }}</span>
+              <span style="display:flex;align-items:center;padding:0 11px;border-left:1px solid #DCE0E6;font-size:12.5px;white-space:nowrap">Before &amp; After {{ site.phBA }}</span>
+                <span style="display:flex;align-items:center;padding:0 11px;border-left:1px solid #DCE0E6;font-size:12.5px;white-space:nowrap">Inspections {{ site.phInsp }}</span>
+                </div>
+                <div style="flex:1">
+                </div>
+                <button style="display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">All crew <span style="opacity:.5;font-size:9px">▾</span>
+                </button>
+                <button style="display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;background:#fff;border:1px solid #DCE0E6;border-radius:3px;font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap">Newest first <span style="opacity:.5;font-size:9px">▾</span>
+                </button>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:center;gap:12px;height:78px;margin-bottom:16px;border:1.5px dashed #C3C9D0;border-radius:8px;background:#fff">
+                <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="#8B9096" stroke-width="1.4">
+                  <path d="M8 11.4V3.2M4.8 6.4L8 3.2l3.2 3.2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M2.6 11v2.4h10.8V11"/>
+                </svg>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:13.5px;font-weight:600">Drop photos here, or they arrive from the crew's phones</span>
+                    <span style="font-size:12px;color:#8B9096">Every photo keeps its GPS location, timestamp and uploader. {{ site.phAll }} photos on this job.</span>
+                    </div>
+                  </div>
+                  <sc-for list="{{ photoDays }}" as="day" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:10px;margin:0 0 10px">
+                      <span style="font-size:13px;font-weight:700;letter-spacing:.02em">{{ day.label }}</span>
+                        <span style="font-size:12px;color:#8B9096">{{ day.count }}</span>
+                          <span style="flex:1;height:1px;background:#DCE0E6">
+                          </span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:11px;margin-bottom:22px">
+                          <sc-for list="{{ day.tiles }}" as="p" hint-placeholder-count="6">
+                            <div style="display:flex;flex-direction:column;background:#fff;border:1px solid #DCE0E6;border-radius:8px;overflow:hidden">
+                              <div style="position:relative;height:138px;background:repeating-linear-gradient(135deg,#E4E7EA 0 7px,#DADEE2 7px 14px)">
+                                <span style="position:absolute;left:0;right:0;bottom:0;padding:6px 8px;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.42));display:flex;align-items:center;justify-content:space-between">
+                                  <span style="display:flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:#fff">
+                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.7">
+                                      <path d="M8 14.2s4.6-4.4 4.6-7.6a4.6 4.6 0 10-9.2 0C3.4 9.8 8 14.2 8 14.2z" stroke-linejoin="round"/>
+                                    </svg>{{ p.geo }}</span>
+                                    <span style="font-size:10.5px;font-weight:600;color:#fff">{{ p.time }}</span>
+                                    </span>
+                                    <span style="position:absolute;top:7px;left:8px;padding:2px 7px;border-radius:3px;background:rgba(26,29,33,.62);color:#fff;font-size:10px;font-weight:700;letter-spacing:.04em">{{ p.kind }}</span>
+                                      <sc-if value="{{ p.issue }}">
+                                        <span style="position:absolute;top:7px;right:8px;display:flex;align-items:center;gap:4px;padding:2px 7px;border-radius:3px;background:#D2051E;color:#fff;font-size:10px;font-weight:700">
+                                          <span style="width:6px;height:6px;border-radius:50%;background:#fff">
+                                          </span>ISSUE</span>
+                                        </sc-if>
+                                      </div>
+                                      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px">
+                                        <span style="flex:none;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#3F454B;color:#fff;font-size:8.5px;font-weight:700">{{ p.ini }}</span>
+                                          <span style="flex:1;min-width:0;font-size:12px;line-height:1.35;color:{{ p.capFg }};overflow:hidden">{{ p.caption }}</span>
+                                          </div>
+                                        </div>
+                                      </sc-for>
+                                    </div>
+                                  </sc-for>
+                                </div>
+                              </sc-if>
