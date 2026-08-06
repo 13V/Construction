@@ -1,11 +1,36 @@
-import { useMemo } from 'react'
-import { AdvancedMarker, Circle, Map, Polyline } from '@vis.gl/react-google-maps'
-import type { JobSite, LatLng, WorkerState } from '../types'
-import { DEFAULT_CENTER } from '../data/seed'
-import { theme } from '../theme'
-import { SiteMarker, WorkerMarker } from './markers'
+import { useEffect, useRef, useState } from 'react'
+import {
+  GeoJSONSource,
+  LngLatBounds,
+  Map as MapLibreMap,
+  Marker,
+  setWorkerUrl,
+} from 'maplibre-gl'
+import type { MapMouseEvent } from 'maplibre-gl'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
-import { MAPS_MAP_ID } from '../config'
+// MapLibre derives its worker URL from import.meta.url, which after bundling
+// points at a path that was never emitted — the map then silently fails to
+// render tiles. Pin it to the asset Vite actually produces.
+setWorkerUrl(maplibreWorkerUrl)
+import type { JobSite, LatLng, WorkerState } from '../types'
+import { DEFAULT_CENTER, MAP_STYLE_URL } from '../data/seed'
+import { statusColor, theme } from '../theme'
+import { offset } from '../geofence/geo'
+
+/**
+ * Live map on MapLibre GL + OpenFreeMap tiles.
+ *
+ * No API key, no billing account, no request cap, and commercial use is
+ * explicitly allowed — which is why this replaced Google Maps. Google bills per
+ * map load with a 10,000/month free tier, so every dashboard open cost money;
+ * here it costs nothing and there is no key to leak or restrict.
+ *
+ * The map instance is created once and kept for the life of the component.
+ * Markers and sources are mutated in place rather than torn down, so a position
+ * update never re-initialises anything.
+ */
 
 export interface DraftFence {
   center: LatLng
@@ -18,20 +43,69 @@ interface LiveMapProps {
   selectedId: string | null
   onSelect: (id: string | null) => void
   showFences: boolean
-  /** Geofence being placed on the Job Sites screen. */
   draft?: DraftFence | null
-  /** When set, clicking the map reports coordinates instead of clearing selection. */
   onPick?: (at: LatLng) => void
 }
 
-/**
- * COST NOTE: every mount of <Map> is one billable Dynamic Maps load, and
- * Google retired the universal $200/month credit in March 2025. This component
- * is mounted once for the life of the session and never keyed or unmounted —
- * navigating away hides it or renders beside it. Moving markers costs nothing,
- * which is also why placing a job site reuses this map rather than opening a
- * second one. See MAPS.md at the repo root.
- */
+const FENCE_SRC = 'geofences'
+const DRAFT_SRC = 'draft-fence'
+const TRAIL_SRC = 'trail'
+
+/** Circles must be in metres, not pixels, so they're drawn as polygons. */
+function circlePolygon(center: LatLng, radiusM: number, steps = 64) {
+  const ring: [number, number][] = []
+  for (let i = 0; i <= steps; i++) {
+    const p = offset(center, (i / steps) * 360, radiusM)
+    ring.push([p.lng, p.lat])
+  }
+  return { type: 'Polygon' as const, coordinates: [ring] }
+}
+
+const fenceCollection = (sites: JobSite[]) => ({
+  type: 'FeatureCollection' as const,
+  features: sites.map((site) => ({
+    type: 'Feature' as const,
+    properties: { pending: site.status === 'starting_soon' },
+    geometry: circlePolygon(site.center, site.radiusM),
+  })),
+})
+
+const emptyCollection = { type: 'FeatureCollection' as const, features: [] }
+
+function siteMarkerEl(site: JobSite, onSite: number, selected: boolean) {
+  const el = document.createElement('div')
+  const dim = site.status === 'starting_soon'
+  el.style.cssText = `display:flex;align-items:center;gap:7px;padding:5px 9px 5px 6px;border-radius:6px;background:${theme.panel};border:1px solid ${selected ? theme.accent : theme.border};box-shadow:0 1px 4px rgba(0,0,0,.18);cursor:pointer;white-space:nowrap;opacity:${dim ? 0.75 : 1};font:400 12px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif`
+  el.innerHTML = `
+    <span style="width:8px;height:8px;border-radius:50%;background:${dim ? theme.inkFaint : theme.accent}"></span>
+    <span style="display:flex;flex-direction:column">
+      <span style="font-weight:600;color:${theme.ink}">${escapeHtml(site.name)}</span>
+      <span style="font-size:10.5px;color:${theme.inkSoft}">${Math.round(site.radiusM * 3.28084)} ft · ${
+        dim ? 'starts soon' : `${onSite} on site`
+      }</span>
+    </span>`
+  return el
+}
+
+function workerMarkerEl(state: WorkerState, selected: boolean) {
+  const ring = statusColor[state.status] ?? theme.inkFaint
+  const el = document.createElement('div')
+  el.style.cssText = 'position:relative;cursor:pointer'
+  el.innerHTML = `
+    <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:${theme.railSoft};color:#fff;font:700 10.5px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;letter-spacing:.02em;border:2.5px solid ${ring};box-shadow:${
+      selected ? `0 0 0 3px ${theme.accentFill},` : ''
+    }0 1px 4px rgba(0,0,0,.3)">${escapeHtml(state.worker.initials)}</span>
+    ${
+      state.exception
+        ? `<span style="position:absolute;right:-3px;bottom:-3px;width:13px;height:13px;border-radius:50%;background:${theme.alert};border:2px solid #fff;color:#fff;font:700 9px/9px sans-serif;text-align:center">!</span>`
+        : ''
+    }`
+  return el
+}
+
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
 export function LiveMap({
   sites,
   crew,
@@ -41,112 +115,216 @@ export function LiveMap({
   draft,
   onPick,
 }: LiveMapProps) {
-  // Only used on first mount — the map is uncontrolled after that, so later
-  // site changes never yank the viewport out from under the user.
-  const initialCenter = useMemo(() => {
-    if (sites.length === 0) return DEFAULT_CENTER
-    return {
-      lat: sites.reduce((sum, s) => sum + s.center.lat, 0) / sites.length,
-      lng: sites.reduce((sum, s) => sum + s.center.lng, 0) / sites.length,
+  const container = useRef<HTMLDivElement | null>(null)
+  const map = useRef<MapLibreMap | null>(null)
+  const [ready, setReady] = useState(false)
+  const markers = useRef(new Map<string, Marker>())
+  const centred = useRef(false)
+
+  // Handlers change every render; hold them in refs so the map is built once.
+  const pick = useRef(onPick)
+  const select = useRef(onSelect)
+  pick.current = onPick
+  select.current = onSelect
+
+  useEffect(() => {
+    if (!container.current || map.current) return
+
+    const m = new MapLibreMap({
+      container: container.current,
+      style: MAP_STYLE_URL,
+      center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
+      zoom: 11,
+      attributionControl: { compact: true },
+    })
+    map.current = m
+
+    m.on('click', (e: MapMouseEvent) => {
+      if (pick.current) pick.current({ lat: e.lngLat.lat, lng: e.lngLat.lng })
+      else select.current(null)
+    })
+
+    m.on('load', () => {
+      m.addSource(FENCE_SRC, { type: 'geojson', data: emptyCollection })
+      m.addLayer({
+        id: 'geofence-fill',
+        type: 'fill',
+        source: FENCE_SRC,
+        paint: {
+          'fill-color': ['case', ['get', 'pending'], theme.inkFaint, theme.accent],
+          'fill-opacity': 0.12,
+        },
+      })
+      m.addLayer({
+        id: 'geofence-line',
+        type: 'line',
+        source: FENCE_SRC,
+        paint: {
+          'line-color': ['case', ['get', 'pending'], theme.inkFaint, theme.accent],
+          'line-opacity': 0.55,
+          'line-width': 1,
+        },
+      })
+
+      m.addSource(DRAFT_SRC, { type: 'geojson', data: emptyCollection })
+      m.addLayer({
+        id: 'draft-fill',
+        type: 'fill',
+        source: DRAFT_SRC,
+        paint: { 'fill-color': theme.ctaTo, 'fill-opacity': 0.18 },
+      })
+      m.addLayer({
+        id: 'draft-line',
+        type: 'line',
+        source: DRAFT_SRC,
+        paint: { 'line-color': theme.ctaTo, 'line-width': 2 },
+      })
+
+      m.addSource(TRAIL_SRC, { type: 'geojson', data: emptyCollection })
+      m.addLayer({
+        id: 'trail-line',
+        type: 'line',
+        source: TRAIL_SRC,
+        layout: { 'line-cap': 'round' },
+        paint: {
+          'line-color': theme.accent,
+          'line-width': 2,
+          'line-opacity': 0.9,
+          'line-dasharray': [1, 1.6],
+        },
+      })
+
+      setReady(true)
+    })
+
+    return () => {
+      for (const marker of markers.current.values()) marker.remove()
+      markers.current.clear()
+      m.remove()
+      map.current = null
+      setReady(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sites.length > 0])
+  }, [])
 
-  const countOnSite = (siteId: string) =>
-    crew.filter((c) => c.siteId === siteId && c.status === 'on_clock').length
+  // Geofences
+  useEffect(() => {
+    const m = map.current
+    if (!m || !ready) return
+    const src = m.getSource(FENCE_SRC) as GeoJSONSource | undefined
+    src?.setData(showFences ? fenceCollection(sites) : emptyCollection)
+  }, [sites, showFences, ready])
 
-  const trailFor = crew.find((c) => c.worker.id === selectedId && c.trail.length > 1)
+  // Draft geofence while placing a job site
+  useEffect(() => {
+    const m = map.current
+    if (!m || !ready) return
+    const src = m.getSource(DRAFT_SRC) as GeoJSONSource | undefined
+    src?.setData(
+      draft
+        ? {
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                properties: {},
+                geometry: circlePolygon(draft.center, draft.radiusM),
+              },
+            ],
+          }
+        : emptyCollection,
+    )
+  }, [draft, ready])
 
-  return (
-    <Map
-      mapId={MAPS_MAP_ID}
-      defaultCenter={initialCenter}
-      defaultZoom={13}
-      gestureHandling="greedy"
-      disableDefaultUI
-      clickableIcons={false}
-      onClick={(event) => {
-        const at = event.detail.latLng
-        if (onPick && at) onPick({ lat: at.lat, lng: at.lng })
-        else onSelect(null)
-      }}
-      style={{ width: '100%', height: '100%' }}
-    >
-      {showFences &&
-        sites.map((site) => (
-          <Circle
-            key={`fence-${site.id}`}
-            center={site.center}
-            radius={site.radiusM}
-            strokeColor={site.status === 'starting_soon' ? theme.inkFaint : theme.accent}
-            strokeOpacity={0.55}
-            strokeWeight={1}
-            fillColor={site.status === 'starting_soon' ? theme.inkFaint : theme.accent}
-            fillOpacity={0.12}
-            clickable={false}
-          />
-        ))}
+  // Breadcrumb trail for the selected worker
+  useEffect(() => {
+    const m = map.current
+    if (!m || !ready) return
+    const src = m.getSource(TRAIL_SRC) as GeoJSONSource | undefined
+    const trailFor = crew.find((c) => c.worker.id === selectedId && c.trail.length > 1)
+    src?.setData(
+      trailFor
+        ? {
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                  type: 'LineString',
+                  coordinates: trailFor.trail.map((p) => [p.lng, p.lat]),
+                },
+              },
+            ],
+          }
+        : emptyCollection,
+    )
+  }, [crew, selectedId, ready])
 
-      {draft && (
-        <>
-          <Circle
-            center={draft.center}
-            radius={draft.radiusM}
-            strokeColor={theme.ctaTo}
-            strokeOpacity={0.95}
-            strokeWeight={2}
-            fillColor={theme.ctaTo}
-            fillOpacity={0.18}
-            clickable={false}
-          />
-          <AdvancedMarker position={draft.center} zIndex={80}>
-            <div
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: '50%',
-                background: theme.ctaTo,
-                border: '2px solid #fff',
-                boxShadow: '0 1px 4px rgba(0,0,0,.35)',
-              }}
-            />
-          </AdvancedMarker>
-        </>
-      )}
+  // Markers — reuse existing ones and move them; never rebuild the whole set.
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
 
-      {trailFor && (
-        <Polyline
-          path={trailFor.trail}
-          strokeColor={theme.accent}
-          strokeOpacity={0}
-          icons={[
-            {
-              icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.9, strokeWeight: 2, scale: 2 },
-              offset: '0',
-              repeat: '11px',
-            },
-          ]}
-        />
-      )}
+    const live = new Set<string>()
+    const upsert = (key: string, lngLat: [number, number], el: HTMLElement, onClick: () => void) => {
+      live.add(key)
+      const existing = markers.current.get(key)
+      if (existing) {
+        existing.setLngLat(lngLat)
+        const node = existing.getElement()
+        node.replaceChildren(...Array.from(el.childNodes))
+        node.style.cssText = el.style.cssText
+        return
+      }
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        onClick()
+      })
+      markers.current.set(key, new Marker({ element: el }).setLngLat(lngLat).addTo(m))
+    }
 
-      {sites.map((site) => (
-        <SiteMarker
-          key={site.id}
-          site={site}
-          onSite={countOnSite(site.id)}
-          selected={selectedId === site.id}
-          onSelect={onSelect}
-        />
-      ))}
+    for (const site of sites) {
+      const onSite = crew.filter((c) => c.siteId === site.id && c.status === 'on_clock').length
+      upsert(
+        `site:${site.id}`,
+        [site.center.lng, site.center.lat],
+        siteMarkerEl(site, onSite, selectedId === site.id),
+        () => select.current(site.id),
+      )
+    }
 
-      {crew.map((state) => (
-        <WorkerMarker
-          key={state.worker.id}
-          state={state}
-          selected={selectedId === state.worker.id}
-          onSelect={onSelect}
-        />
-      ))}
-    </Map>
-  )
+    for (const state of crew) {
+      if (!state.position) continue
+      upsert(
+        `worker:${state.worker.id}`,
+        [state.position.lng, state.position.lat],
+        workerMarkerEl(state, selectedId === state.worker.id),
+        () => select.current(state.worker.id),
+      )
+    }
+
+    for (const [key, marker] of markers.current) {
+      if (!live.has(key)) {
+        marker.remove()
+        markers.current.delete(key)
+      }
+    }
+  }, [sites, crew, selectedId])
+
+  // Frame the sites once, the first time any exist.
+  useEffect(() => {
+    const m = map.current
+    if (!m || centred.current || sites.length === 0) return
+    centred.current = true
+
+    if (sites.length === 1) {
+      m.easeTo({ center: [sites[0].center.lng, sites[0].center.lat], zoom: 14 })
+      return
+    }
+    const bounds = new LngLatBounds()
+    for (const s of sites) bounds.extend([s.center.lng, s.center.lat])
+    m.fitBounds(bounds, { padding: 120, maxZoom: 15, duration: 600 })
+  }, [sites])
+
+  return <div ref={container} style={{ width: '100%', height: '100%' }} />
 }

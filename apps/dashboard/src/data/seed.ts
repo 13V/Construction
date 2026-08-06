@@ -16,3 +16,13 @@ export const costCodes: CostCode[] = [
 
 /** Fallback map centre before any job site exists (Brisbane CBD). */
 export const DEFAULT_CENTER = { lat: -27.4698, lng: 153.0251 }
+
+/**
+ * OpenFreeMap tiles: no API key, no request cap, commercial use allowed.
+ * "positron" is the light desaturated style, closest to the app palette.
+ * Self-hostable if the public instance ever becomes a reliability concern —
+ * see MAPS.md.
+ */
+export const MAP_STYLE_URL =
+  (import.meta.env.VITE_MAP_STYLE_URL as string) ||
+  'https://tiles.openfreemap.org/styles/positron'

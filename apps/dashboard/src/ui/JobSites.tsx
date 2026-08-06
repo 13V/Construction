@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { useMapsLibrary } from '@vis.gl/react-google-maps'
+import { useState } from 'react'
 import { supabase } from '../data/supabase'
 import { theme } from '../theme'
 import type { JobSite, LatLng } from '../types'
@@ -63,34 +62,59 @@ interface JobSitesProps {
 }
 
 export function JobSites({ sites, draft, onDraftChange, onSaved, canEdit }: JobSitesProps) {
-  const geocoding = useMapsLibrary('geocoding')
-  const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (geocoding) setGeocoder(new geocoding.Geocoder())
-  }, [geocoding])
 
   const patch = (changes: Partial<Draft>) =>
     onDraftChange({ ...(draft ?? empty), ...changes })
 
+  /**
+   * Photon (OpenStreetMap) — keyless, like the map tiles. Results are biased
+   * toward wherever the existing sites are, which matters because street names
+   * repeat across cities. Clicking the map is always the fallback.
+   */
   async function findAddress() {
-    if (!geocoder || !draft?.address.trim()) return
+    const query = draft?.address.trim()
+    if (!query) return
     setError(null)
+    setBusy(true)
+
+    const bias = draft?.center ?? sites[0]?.center
+    const params = new URLSearchParams({ q: query, limit: '1' })
+    if (bias) {
+      params.set('lat', String(bias.lat))
+      params.set('lon', String(bias.lng))
+    }
+
     try {
-      const { results } = await geocoder.geocode({ address: draft.address })
-      const hit = results[0]
+      const res = await fetch(`https://photon.komoot.io/api/?${params}`)
+      if (!res.ok) throw new Error(String(res.status))
+      const data = (await res.json()) as {
+        features: Array<{
+          geometry: { coordinates: [number, number] }
+          properties: Record<string, string>
+        }>
+      }
+      const hit = data.features?.[0]
       if (!hit) {
-        setError('No match for that address — drop the pin on the map instead.')
+        setError('No match for that address — click the map to drop the pin instead.')
         return
       }
-      patch({
-        center: { lat: hit.geometry.location.lat(), lng: hit.geometry.location.lng() },
-        address: hit.formatted_address,
-      })
+      const [lng, lat] = hit.geometry.coordinates
+      const p = hit.properties
+      const label = [
+        [p.housenumber, p.street].filter(Boolean).join(' ') || p.name,
+        p.city ?? p.district,
+        p.state,
+        p.postcode,
+      ]
+        .filter(Boolean)
+        .join(', ')
+      patch({ center: { lat, lng }, address: label || query })
     } catch {
-      setError('Address lookup failed — drop the pin on the map instead.')
+      setError('Address lookup failed — click the map to drop the pin instead.')
+    } finally {
+      setBusy(false)
     }
   }
 

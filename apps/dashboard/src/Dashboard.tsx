@@ -7,7 +7,6 @@ import { JobSites, type JobSiteDraft } from './ui/JobSites'
 import { Crew } from './ui/Crew'
 import { useLive } from './data/useLive'
 import { supabase, type WorkerRow } from './data/supabase'
-import { mapsConfigured } from './config'
 import { theme } from './theme'
 
 export function Dashboard({ me }: { me: WorkerRow }) {
@@ -82,9 +81,6 @@ export function Dashboard({ me }: { me: WorkerRow }) {
             Maps load. Other sections render over or beside it.
           */}
           <div style={{ position: 'absolute', inset: 0 }}>
-            {!mapsConfigured ? (
-              <MapUnavailable />
-            ) : (
             <LiveMap
               sites={live.sites}
               crew={live.crew}
@@ -102,7 +98,6 @@ export function Dashboard({ me }: { me: WorkerRow }) {
                   : undefined
               }
             />
-            )}
           </div>
 
           {nav === 'Map' && (
@@ -183,32 +178,6 @@ export function Dashboard({ me }: { me: WorkerRow }) {
               </div>
             )}
         </main>
-      </div>
-    </div>
-  )
-}
-
-function MapUnavailable() {
-  return (
-    <div
-      style={{
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: theme.appBg,
-        padding: 24,
-      }}
-    >
-      <div style={{ maxWidth: 420, textAlign: 'center' }}>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
-          Map not configured
-        </div>
-        <p style={{ fontSize: 13, color: theme.inkSoft, lineHeight: 1.55 }}>
-          Add <code>VITE_GOOGLE_MAPS_API_KEY</code> in Vercel and redeploy. Everything
-          else works without it — crew, timesheets and job sites by address. Geofences
-          still run server-side, so clock-ins keep working.
-        </p>
       </div>
     </div>
   )

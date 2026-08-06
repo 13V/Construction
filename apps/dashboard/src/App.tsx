@@ -1,8 +1,6 @@
-import { APIProvider } from '@vis.gl/react-google-maps'
 import { AuthScreen } from './auth/AuthScreen'
 import { useSession } from './auth/useSession'
 import { supabaseConfigured } from './data/supabase'
-import { MAPS_API_KEY } from './config'
 import { Dashboard } from './Dashboard'
 import { SetupNotice } from './ui/SetupNotice'
 import { theme } from './theme'
@@ -72,9 +70,5 @@ export default function App() {
     )
   }
 
-  return (
-    <APIProvider apiKey={MAPS_API_KEY}>
-      <Dashboard me={me} />
-    </APIProvider>
-  )
+  return <Dashboard me={me} />
 }

@@ -1,83 +1,62 @@
-# Maps — mockup vs production
+# Maps
 
-Google Maps is the right call for the shipped product. It is **not** something you can drop
-into the prototype, and the reason matters.
+The app renders its live map with **MapLibre GL** against **OpenFreeMap** tiles.
+No API key, no billing account, no request cap, and commercial use is explicitly
+allowed.
 
-## Why the prototype can't load a live Google Map
+## Why not Google Maps
 
-- Claude Design components and published Artifacts run under a **strict CSP that blocks all
-  external requests**. `maps.googleapis.com` will not load. The current Crewline file has zero
-  external URLs, which is why it renders reliably.
-- You'd have to **embed an API key** in a file you share by link.
-- Worst of all: without billing enabled, Google renders a **darkened map plastered with "For
-  development purposes only"** watermarks. In front of a client that looks far worse than a
-  clean drawn map.
+The app originally used Google Maps. It worked, but it came with a meter attached:
 
-## What to do instead — real geography, no runtime calls
+- Google **retired the universal $200/month credit in March 2025**. The free tier is now
+  10,000 Dynamic Maps loads per month, then roughly **$7 per 1,000**.
+- Loads are billed **per map mount**, not per user. An office manager with the dashboard
+  open all day plus an owner checking his phone burns through 10,000 across surprisingly
+  few customers.
+- It needs a billing account, a key to restrict and rotate, and a Cloud Console Map ID
+  before Advanced Markers will even render. Without billing it serves a darkened map
+  stamped "For development purposes only".
 
-Use the **Static Maps API** to generate a PNG of the actual area, then embed it as a base64
-`data:` URI and keep the existing SVG overlay — geofence circles, worker pins, breadcrumb
-trail — drawn on top of it.
+At A$450–600/mo per customer that was a real margin line and an onboarding obstacle. It
+is gone.
 
-```
-https://maps.googleapis.com/maps/api/staticmap
-  ?center=<site address>
-  &zoom=15
-  &size=1280x800
-  &scale=2
-  &maptype=roadmap
-  &style=feature:poi|visibility:off
-  &style=feature:all|element:labels|saturation:-80
-  &key=YOUR_KEY
-```
+## What replaced it
 
-Download it, base64 it, inline it. One call, effectively free, no key in the shipped file, no
-CSP problem — and the demo shows **his actual suburb with real street names**, which lands
-harder than an abstraction. Desaturate the basemap so it doesn't fight the UI palette.
+| | |
+|---|---|
+| Renderer | MapLibre GL JS — open source, no key |
+| Tiles | OpenFreeMap `positron` (light, desaturated — closest to the app palette) |
+| Style URL | `https://tiles.openfreemap.org/styles/positron` |
+| Geocoding | Photon (OpenStreetMap) — keyless, biased toward existing job sites |
+| Cost | $0 |
 
-Keep the markers as SVG overlay rather than Static Maps `markers=` parameters — you need the
-avatar-with-status-ring treatment, which the static API can't draw.
+Override the style with `VITE_MAP_STYLE_URL` if you want a different look or your own
+tile server.
 
-*Terms note: overlaying your own markers on Static Maps imagery is ordinary permitted use.
-Don't crop out the Google attribution.*
+## Implementation notes
 
-## Production build
+- **Geofences are polygons, not circle markers.** A MapLibre `circle` layer sizes in
+  pixels, which would make a 150 m fence shrink as you zoom out. `circlePolygon()` in
+  `LiveMap.tsx` generates a 64-point ring in real metres so the fence stays true to the
+  ground.
+- **The worker URL is pinned.** MapLibre derives it from `import.meta.url`, which after
+  bundling points at a file that was never emitted — the map then fails to render tiles
+  with only a console 404 to show for it. `LiveMap.tsx` imports the worker through
+  Vite's `?worker&url` and calls `setWorkerUrl()`, so the asset is emitted and hashed
+  like any other.
+- **Markers are mutated, not rebuilt.** Position updates move existing `Marker`
+  instances and swap their child nodes; nothing is torn down between renders.
+- The map instance is created once for the life of the dashboard. That mattered for
+  billing under Google and still matters for performance.
 
-**Web dashboard** — Maps JavaScript API with **Advanced Markers**
-(`google.maps.marker.AdvancedMarkerElement`). The old `google.maps.Marker` has been deprecated
-since Feb 2024 (v3.56). Advanced Markers accept **custom HTML and CSS**, which is exactly what
-this design needs: circular avatars with colored status rings. Requires a `mapId`.
+## Caveats worth knowing
 
-- **Cloud-based map styling** on that `mapId` — desaturate the basemap to match the palette.
-- `google.maps.Circle` for geofences, `Polyline` for breadcrumb trails.
-- `@googlemaps/markerclusterer` when a site has a lot of crew on it.
-- Geocode each job site address **once at creation and cache the coordinates** — don't geocode
-  on render.
-
-**Mobile** — Maps SDK for Android / iOS. On iOS, MapKit is free and worth considering for the
-worker app, where the map is decorative; save Google for the dashboard where it isn't.
-
-## Cost — read this before pricing the product
-
-**Google retired the universal $200/month credit in March 2025.** It's now per-SKU monthly free
-tiers: **Essentials 10,000** billable events, Pro 5,000, Enterprise 1,000. Past that, roughly
-**$2–$7 per 1,000**.
-
-Subscription plans: Starter $100/mo (50k calls), Essentials $275/mo (100k), Pro $1,200/mo (250k).
-
-**Dynamic Maps loads are the exposure.** Every dashboard open or reload is one map load. An
-office manager with the live map up all day, plus the owner checking his phone, burns through
-10,000 loads/month across surprisingly few customers — then it's $7/1,000.
-
-At A$450–600/mo per customer, uncontrolled map spend is a real margin line. Mitigations:
-
-- Initialize **one** map instance and keep it alive; never re-init on navigation.
-- Poll worker positions from your own API and **move existing markers** — that costs nothing.
-  Only the initial map load bills.
-- Use **Static Maps** for thumbnails in cards and list views; they're far cheaper than dynamic.
-- Cache geocodes permanently.
-
-**Alternatives:** Mapbox and MapLibre are materially cheaper at scale with better styling
-control. Google still wins on Australian address geocoding and Places autocomplete, which
-matters when the owner is typing in job site addresses. A common split is Google for
-geocoding/autocomplete, a cheaper provider for tile rendering.
+- **No satellite imagery.** OpenFreeMap is vector street data only. For construction that
+  is a genuine loss — aerial views help when checking site boundaries. Esri's World
+  Imagery tiles can be added as an optional raster layer with attribution if it matters.
+- **No SLA.** OpenFreeMap is donation-funded. It is explicitly built to be self-hosted —
+  full planet extracts are published weekly — so the escape hatch is to run your own and
+  change one environment variable. Worth doing before this is business-critical.
+- **Geocoding quality.** Photon is good but Google is better at Australian addresses.
+  Clicking the map to place a pin is always available and is the more precise method
+  anyway, since a geofence should sit on the work area, not the postal address.
