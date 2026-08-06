@@ -470,19 +470,19 @@ function HeaderContent({
   const color = siteTagColor(site.id)
   const dates = siteRow?.schedule_note?.trim() || '—'
 
-  // "Foreman" isn't a stored role — the closest honest signal the data gives
-  // us is whoever has logged the most hours on this site.
+  // The design labels this "Foreman", but no site has a stored foreman. Where
+  // someone whose trade IS Foreman has worked here, name them and say so;
+  // otherwise fall back to whoever has logged the most hours and label it
+  // "Most hours" — calling a labourer the foreman is worse than not saying.
   const hoursByWorker = new Map<string, number>()
   for (const s of shifts) hoursByWorker.set(s.worker_id, (hoursByWorker.get(s.worker_id) ?? 0) + hoursOf(s))
-  let foremanId: string | null = null
-  let foremanHours = 0
-  for (const [id, hrs] of hoursByWorker) {
-    if (hrs > foremanHours) {
-      foremanId = id
-      foremanHours = hrs
-    }
-  }
-  const foremanName = foremanId ? workers.find((w) => w.id === foremanId)?.name ?? '—' : '—'
+  const ranked = [...hoursByWorker.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => workers.find((w) => w.id === id))
+    .filter((w): w is Worker => Boolean(w))
+  const actualForeman = ranked.find((w) => /foreman/i.test(w.trade))
+  const leadLabel = actualForeman ? 'Foreman' : 'Most hours'
+  const leadName = (actualForeman ?? ranked[0])?.name ?? '—'
 
   // Avatar stack: crew most recently active here, newest first.
   const lastSeen = new Map<string, number>()
@@ -523,7 +523,7 @@ function HeaderContent({
           <span style={{ fontSize: 13, color: theme.inkSoft }}>{dates}</span>
           <Sep />
           <span style={{ fontSize: 13, color: theme.inkSoft }}>
-            Foreman <b style={{ fontWeight: 600, color: theme.ink }}>{foremanName}</b>
+            {leadLabel} <b style={{ fontWeight: 600, color: theme.ink }}>{leadName}</b>
           </span>
         </div>
       </div>

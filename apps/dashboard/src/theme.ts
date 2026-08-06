@@ -59,7 +59,7 @@ export const statusColor: Record<string, string> = {
 export const statusLabel: Record<string, string> = {
   on_clock: 'On the clock',
   arriving: 'Arriving',
-  traveling: 'Traveling',
+  traveling: 'Travelling',
   exception: 'Needs review',
   off: 'Off',
 }

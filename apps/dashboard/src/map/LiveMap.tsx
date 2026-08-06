@@ -4,6 +4,7 @@ import {
   LngLatBounds,
   Map as MapLibreMap,
   Marker,
+  ScaleControl,
   setWorkerUrl,
 } from 'maplibre-gl'
 import type { MapMouseEvent } from 'maplibre-gl'
@@ -169,6 +170,10 @@ export function LiveMap({
       attributionControl: { compact: true },
     })
     map.current = m
+
+    // Metric, and driven by the real zoom. Australian job sites are measured
+    // in metres and the geofence radius is stored that way.
+    m.addControl(new ScaleControl({ unit: 'metric', maxWidth: 90 }), 'bottom-left')
 
     m.on('moveend', () => {
       const c = m.getCenter()

@@ -1037,7 +1037,7 @@ export function Timesheets({
                 }
               />
             )}
-            <Stat label="TOTAL LABOR COST" value={money(view === 'week' ? weekCost : dayCost)} />
+            <Stat label="TOTAL LABOUR COST" value={money(view === 'week' ? weekCost : dayCost)} />
             <Stat
               label="APPROVED"
               value={view === 'week' ? `${weekApprovedCount} of ${weekWorkersWithShifts.length}` : `${dayApprovedCount} of ${visibleRows.length}`}

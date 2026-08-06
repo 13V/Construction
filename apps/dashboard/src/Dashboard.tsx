@@ -208,7 +208,9 @@ export function Dashboard({ me }: { me: WorkerRow }) {
           )}
 
           {screen && (
-            <div style={{ position: 'absolute', inset: 0, background: theme.appBg }}>
+            // zIndex clears MapLibre's own controls, which sit at z-index 2 and
+            // otherwise show through the screen covering the map.
+            <div style={{ position: 'absolute', inset: 0, background: theme.appBg, zIndex: 3 }}>
               {screen}
             </div>
           )}

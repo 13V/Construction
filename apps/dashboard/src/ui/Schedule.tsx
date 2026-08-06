@@ -684,7 +684,7 @@ export function Schedule({
                   {visibleAssignments.length} shift{visibleAssignments.length === 1 ? '' : 's'} scheduled · {unassignedShifts.length} unassigned
                 </span>
                 <span style={{ fontSize: 12.5, color: theme.inkSoft }}>
-                  Projected labor{' '}
+                  Projected labour{' '}
                   <b style={{ fontWeight: 600, color: theme.ink, fontVariantNumeric: 'tabular-nums' }}>{money(laborCost)}</b> this week
                 </span>
               </div>

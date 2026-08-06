@@ -32,7 +32,7 @@ export function StatStrip({ snapshot }: { snapshot: CrewSnapshot }) {
   const cells: Array<{ label: string; value: string; dot?: string; alert?: boolean }> = [
     { label: 'ON THE CLOCK', value: String(snapshot.onClock), dot: theme.success },
     { label: 'HOURS TODAY', value: snapshot.hoursToday.toFixed(1) },
-    { label: 'LABOR COST TODAY', value: money(snapshot.labourCostToday) },
+    { label: 'LABOUR COST TODAY', value: money(snapshot.labourCostToday) },
     { label: 'NEEDS REVIEW', value: String(needsReview), dot: theme.alert, alert: true },
   ]
 
@@ -379,7 +379,7 @@ export function RosterPanel({
                 }}
               />
             }
-            label="Traveling"
+            label="Travelling"
           />
           <LegendItem
             swatch={
@@ -394,14 +394,6 @@ export function RosterPanel({
               />
             }
             label="Exception"
-          />
-          <LegendItem
-            swatch={
-              <span
-                style={{ width: 12, height: 12, borderRadius: 3, background: theme.rail }}
-              />
-            }
-            label="Equipment"
           />
           <LegendItem
             swatch={
@@ -428,19 +420,12 @@ export function RosterPanel({
           >
             Open full crew list →
           </a>
-          <span
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 11,
-              color: '#8B9096',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <span style={{ display: 'block', width: 40, height: 5, border: '1px solid #9AA0A6', borderTop: 0 }} />
-            500 ft
-          </span>
+          {/*
+            The design draws a "500 ft" scale bar here. It was hardcoded and
+            wired to nothing, so it stated a scale the map wasn't at — and in
+            imperial, for an Australian builder. The map now carries MapLibre's
+            real metric ScaleControl instead.
+          */}
         </div>
       </div>
 
