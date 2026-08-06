@@ -37,4 +37,3 @@ cd apps/dashboard && npm install && npm run dev
 configuration. The dashboard and the worker app ship as one project.
 
 **[supabase/](supabase)** — `schema.sql` (tables, RLS, realtime) and `seed.sql`.
-
