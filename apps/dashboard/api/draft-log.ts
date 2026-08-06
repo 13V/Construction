@@ -75,8 +75,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     { data: expenseRows, error: expensesError }, { data: equipmentRows, error: equipmentError }] =
     await Promise.all([
       db
+        // shifts has two foreign keys to workers (worker_id and approved_by), so
+        // the embed must name the constraint or PostgREST rejects it as ambiguous.
         .from('shifts')
-        .select('worker_id, started_at, ended_at, workers(name)')
+        .select('worker_id, started_at, ended_at, workers!shifts_worker_id_fkey(name)')
         .eq('site_id', siteId)
         .eq('company_id', worker.company_id)
         .gte('started_at', dayStart.toISOString())
