@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
-import type { CrewSnapshot } from '../state/useCrew'
-import { costCodes, siteById } from '../data/seed'
+import { costCodes } from '../data/seed'
 import { theme } from '../theme'
-import type { Shift } from '../types'
+import type { CrewSnapshot, JobSite, Shift } from '../types'
 
 const hhmm = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
@@ -53,8 +52,15 @@ function Provenance({ shift }: { shift: Shift }) {
   )
 }
 
-export function Timesheets({ snapshot }: { snapshot: CrewSnapshot }) {
+export function Timesheets({
+  snapshot,
+  sites,
+}: {
+  snapshot: CrewSnapshot
+  sites: JobSite[]
+}) {
   const [approved, setApproved] = useState<Set<string>>(new Set())
+  const siteById = (id: string) => sites.find((s) => s.id === id)
 
   const rows = useMemo(
     () =>

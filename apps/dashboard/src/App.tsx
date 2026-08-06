@@ -1,188 +1,81 @@
-import { useMemo, useState } from 'react'
 import { APIProvider } from '@vis.gl/react-google-maps'
-import { LiveMap } from './map/LiveMap'
-import { Sidebar, ToolbarButton, TopBar, type NavItem } from './ui/Chrome'
-import { EventLog, Playback, RosterPanel, StatStrip, ToolRail } from './ui/Overlays'
+import { AuthScreen } from './auth/AuthScreen'
+import { useSession } from './auth/useSession'
+import { supabaseConfigured } from './data/supabase'
+import { Dashboard } from './Dashboard'
 import { SetupNotice } from './ui/SetupNotice'
-import { Timesheets } from './ui/Timesheets'
-import { createSimulatedFeed } from './data/simulatedFeed'
-import { jobSites } from './data/seed'
-import { useCrew } from './state/useCrew'
 import { theme } from './theme'
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
 
+function Centered({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: theme.appBg,
+        color: theme.inkSoft,
+        font: '14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        padding: 24,
+        textAlign: 'center',
+      }}
+    >
+      <div style={{ maxWidth: 460 }}>{children}</div>
+    </div>
+  )
+}
+
 export default function App() {
-  // One feed for the life of the session. Swap createSimulatedFeed() for
-  // createSupabaseFeed() once phones are reporting — nothing else changes.
-  const feed = useMemo(() => createSimulatedFeed({ speed: 90 }), [])
-  const snapshot = useCrew(feed)
+  const { loading, session, me, error } = useSession()
 
-  const [nav, setNav] = useState<NavItem>('Map')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [speed, setSpeed] = useState(90)
-  const [showFences, setShowFences] = useState(true)
+  if (!supabaseConfigured || !API_KEY) return <SetupNotice />
+  if (loading) return <Centered>Loading…</Centered>
+  if (!session) return <AuthScreen />
 
-  const changeSpeed = (next: number) => {
-    setSpeed(next)
-    feed.setSpeed?.(next)
+  if (error) {
+    return (
+      <Centered>
+        <strong style={{ color: theme.alert }}>Could not load your account</strong>
+        <p>{error}</p>
+      </Centered>
+    )
   }
 
-  if (!API_KEY) return <SetupNotice />
-
-  const today = new Date(snapshot.now).toLocaleDateString([], {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
-  })
+  // Signed in, but no workers row — every RLS policy keys off that row, so the
+  // dashboard would be silently empty. Say so instead.
+  if (!me) {
+    return (
+      <Centered>
+        <strong style={{ color: theme.ink }}>This login isn't linked to a company yet</strong>
+        <p>
+          Ask whoever set up your company to add you, or run this against your
+          Supabase database:
+        </p>
+        <pre
+          style={{
+            textAlign: 'left',
+            background: theme.panel,
+            border: `1px solid ${theme.border}`,
+            borderRadius: 4,
+            padding: 12,
+            fontSize: 12,
+            overflowX: 'auto',
+          }}
+        >
+{`update workers
+   set auth_user_id = '${session.user.id}'
+ where name = 'Your Name';`}
+        </pre>
+      </Centered>
+    )
+  }
 
   return (
     <APIProvider apiKey={API_KEY}>
-      <div
-        style={{
-          height: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          background: theme.appBg,
-          color: theme.ink,
-          overflow: 'hidden',
-        }}
-      >
-        <TopBar
-          toolbar={
-            <>
-              <ToolbarButton>{today}</ToolbarButton>
-              <ToolbarButton
-                active={showFences}
-                onClick={() => setShowFences((v) => !v)}
-              >
-                Geofences
-              </ToolbarButton>
-              <ToolbarButton onClick={() => setSelectedId(null)}>
-                Clear selection
-              </ToolbarButton>
-              <span style={{ marginLeft: 'auto' }} />
-              <ToolbarButton>Filter by site</ToolbarButton>
-              <ToolbarButton>Export day</ToolbarButton>
-            </>
-          }
-        />
-
-        <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-          <Sidebar active={nav} onNavigate={setNav} />
-
-          <main style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-            {/*
-              The map is mounted once and never unmounted — each mount is a
-              billable Dynamic Maps load. Other sections render *over* it.
-            */}
-            <div style={{ position: 'absolute', inset: 0 }}>
-              <LiveMap
-                sites={showFences ? jobSites : []}
-                crew={snapshot.crew}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
-            </div>
-
-            <div
-              style={{
-                position: 'absolute',
-                top: 12,
-                left: 12,
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 12,
-                pointerEvents: 'none',
-              }}
-            >
-              <div style={{ pointerEvents: 'auto' }}>
-                <ToolRail />
-              </div>
-              <div style={{ pointerEvents: 'auto' }}>
-                <StatStrip snapshot={snapshot} />
-              </div>
-            </div>
-
-            <div
-              style={{
-                position: 'absolute',
-                top: 12,
-                right: 12,
-                bottom: 12,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-                alignItems: 'flex-end',
-              }}
-            >
-              <RosterPanel
-                snapshot={snapshot}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
-              <EventLog snapshot={snapshot} />
-            </div>
-
-            <div style={{ position: 'absolute', left: 12, bottom: 12 }}>
-              <Playback now={snapshot.now} speed={speed} onSpeed={changeSpeed} />
-            </div>
-
-            {nav === 'Timesheets' && (
-              <div style={{ position: 'absolute', inset: 0, background: theme.appBg }}>
-                <Timesheets snapshot={snapshot} />
-              </div>
-            )}
-
-            {nav !== 'Map' && nav !== 'Timesheets' && (
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(245,246,247,.97)',
-                  textAlign: 'center',
-                  padding: 24,
-                }}
-              >
-                <div style={{ maxWidth: 420 }}>
-                  <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>
-                    {nav}
-                  </div>
-                  <p style={{ fontSize: 13, color: theme.inkSoft, lineHeight: 1.55 }}>
-                    Not built yet. This MVP covers the live map, the geofence
-                    engine behind it, the timesheet it produces, and the worker's
-                    phone at <code>/worker</code>. The map stays mounted underneath
-                    this panel rather than unmounting, because every remount is a
-                    billable Google Maps load.
-                  </p>
-                  <button
-                    onClick={() => setNav('Map')}
-                    style={{
-                      marginTop: 14,
-                      padding: '7px 14px',
-                      borderRadius: 3,
-                      border: 'none',
-                      background: `linear-gradient(90deg, ${theme.ctaFrom}, ${theme.ctaTo})`,
-                      color: theme.ink,
-                      font: 'inherit',
-                      fontSize: 11.5,
-                      fontWeight: 700,
-                      letterSpacing: '.04em',
-                      textTransform: 'uppercase',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Back to map
-                  </button>
-                </div>
-              </div>
-            )}
-          </main>
-        </div>
-      </div>
+      <Dashboard me={me} />
     </APIProvider>
   )
 }

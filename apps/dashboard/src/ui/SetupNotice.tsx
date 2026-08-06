@@ -29,10 +29,10 @@ export function SetupNotice() {
         }}
       >
         <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>
-          Add a Google Maps API key
+          Finish setting up Crewline
         </div>
         <p style={{ fontSize: 13.5, color: theme.inkSoft, marginTop: 0 }}>
-          Copy <code>.env.example</code> to <code>.env.local</code> and set your key:
+          Copy <code>.env.example</code> to <code>.env.local</code> and fill these in:
         </p>
         <pre
           style={{
@@ -45,9 +45,15 @@ export function SetupNotice() {
           }}
         >
 {`VITE_GOOGLE_MAPS_API_KEY=your-key-here
-VITE_GOOGLE_MAPS_MAP_ID=DEMO_MAP_ID`}
+VITE_GOOGLE_MAPS_MAP_ID=DEMO_MAP_ID
+VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key`}
         </pre>
         <ol style={{ fontSize: 13, color: theme.inkSoft, paddingLeft: 18 }}>
+          <li>
+            Run <code>supabase/schema.sql</code> in your Supabase SQL editor, then
+            create an account through the app.
+          </li>
           <li>
             Enable <strong>Maps JavaScript API</strong> in Google Cloud Console.
           </li>

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { theme } from '../theme'
-import { jobSites } from '../data/seed'
+import type { JobSite } from '../types'
 
 const NAV = [
   'Map',
@@ -31,7 +31,25 @@ const btn = {
   cursor: 'pointer',
 } as const
 
-export function TopBar({ toolbar }: { toolbar?: ReactNode }) {
+export function TopBar({
+  toolbar,
+  company,
+  userName,
+  onSignOut,
+}: {
+  toolbar?: ReactNode
+  company: string
+  userName: string
+  onSignOut: () => void
+}) {
+  const mark =
+    company
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]!.toUpperCase())
+      .join('') || '··'
+
   return (
     <div style={{ flex: 'none', background: theme.panel }}>
       <div
@@ -59,9 +77,9 @@ export function TopBar({ toolbar }: { toolbar?: ReactNode }) {
               fontWeight: 700,
             }}
           >
-            WB
+            {mark}
           </span>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Whitcomb Builders</span>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>{company || "Your company"}</span>
           <span style={{ color: theme.inkFaint, fontSize: 10 }}>▾</span>
         </div>
 
@@ -91,9 +109,21 @@ export function TopBar({ toolbar }: { toolbar?: ReactNode }) {
             color: theme.inkSoft,
           }}
         >
-          <span>Notifications</span>
-          <span>Help</span>
-          <span style={{ color: theme.ink, fontWeight: 500 }}>Ray Whitcomb ▾</span>
+          <span style={{ color: theme.ink, fontWeight: 500 }}>{userName}</span>
+          <button
+            onClick={onSignOut}
+            style={{
+              border: 'none',
+              background: 'none',
+              color: theme.accent,
+              font: 'inherit',
+              fontSize: 12.5,
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            Sign out
+          </button>
         </div>
       </div>
 
@@ -140,9 +170,11 @@ export function ToolbarButton({
 
 export function Sidebar({
   active,
+  sites,
   onNavigate,
 }: {
   active: NavItem
+  sites: JobSite[]
   onNavigate: (item: NavItem) => void
 }) {
   return (
@@ -197,7 +229,7 @@ export function Sidebar({
       >
         JOB SITES
       </div>
-      {jobSites.map((site) => (
+      {sites.map((site) => (
         <div
           key={site.id}
           style={{

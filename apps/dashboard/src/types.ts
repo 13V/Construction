@@ -89,3 +89,15 @@ export interface TimelineEvent {
   siteId: string | null
   message: string
 }
+
+/** Everything the dashboard renders. Implemented by the live Supabase hook. */
+export interface CrewSnapshot {
+  now: number
+  crew: WorkerState[]
+  events: TimelineEvent[]
+  shifts: Shift[]
+  onClock: number
+  activeSites: number
+  hoursToday: number
+  labourCostToday: number
+}

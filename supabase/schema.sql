@@ -22,6 +22,9 @@ create table if not exists workers (
   id            uuid primary key default gen_random_uuid(),
   company_id    uuid not null references companies(id) on delete cascade,
   auth_user_id  uuid unique references auth.users(id) on delete set null,
+  -- Set by the office when adding someone. The first login with a matching
+  -- email claims this row instead of creating a new company.
+  invite_email  text,
   name          text not null,
   initials      text not null,
   trade         text not null,
@@ -32,6 +35,8 @@ create table if not exists workers (
   created_at    timestamptz not null default now()
 );
 create index if not exists workers_company_idx on workers (company_id);
+create unique index if not exists workers_invite_email_idx
+  on workers (lower(invite_email)) where invite_email is not null;
 
 create table if not exists job_sites (
   id          uuid primary key default gen_random_uuid(),
@@ -155,6 +160,11 @@ create policy companies_read on companies
 drop policy if exists workers_read on workers;
 create policy workers_read on workers
   for select using (company_id = current_company_id());
+
+drop policy if exists workers_office_write on workers;
+create policy workers_office_write on workers
+  for all using (company_id = current_company_id() and current_is_office())
+  with check (company_id = current_company_id() and current_is_office());
 
 drop policy if exists job_sites_read on job_sites;
 create policy job_sites_read on job_sites

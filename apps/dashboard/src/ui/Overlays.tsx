@@ -1,8 +1,13 @@
-import type { CrewSnapshot } from '../state/useCrew'
-import { liveMsFor } from '../state/useCrew'
-import { siteById } from '../data/seed'
 import { statusColor, statusLabel, theme } from '../theme'
-import type { WorkerState } from '../types'
+import type { CrewSnapshot, JobSite, WorkerState } from '../types'
+
+/** Milliseconds on the clock today, including any shift still running. */
+function liveMsFor(state: WorkerState, now: number): number {
+  return (
+    state.bankedMs +
+    (state.clockedInAt !== null ? Math.max(0, now - state.clockedInAt) : 0)
+  )
+}
 
 const panel = {
   background: theme.panel,
@@ -179,19 +184,22 @@ function RosterRow({
 
 export function RosterPanel({
   snapshot,
+  sites,
   selectedId,
   onSelect,
 }: {
   snapshot: CrewSnapshot
+  sites: JobSite[]
   selectedId: string | null
   onSelect: (id: string) => void
 }) {
+  const siteName = (id: string) => sites.find((s) => s.id === id)?.name ?? 'On site'
   const groups = new Map<string, WorkerState[]>()
   for (const state of snapshot.crew) {
     const key = state.exception
       ? 'Needs review'
       : state.siteId
-        ? (siteById(state.siteId)?.name ?? 'On site')
+        ? siteName(state.siteId)
         : state.status === 'off'
           ? 'Not scheduled'
           : 'En route'

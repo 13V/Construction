@@ -160,10 +160,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
   if (stateError) console.error('[ping] dwell_state upsert failed', stateError)
 
+  // The full phase goes back so the phone renders the authoritative dwell
+  // countdown rather than a second, drifting one of its own.
   return res.status(200).json({
     ok: true,
-    phase: result.phase.kind,
-    siteId: result.phase.kind === 'offsite' ? null : result.phase.siteId,
-    events: result.events.map((e) => e.kind),
+    phase: result.phase,
+    events: result.events.map((e) => ({ kind: e.kind, siteId: e.siteId, at: e.at })),
+    sites: sites.map((s) => ({
+      id: s.id,
+      name: s.name,
+      lat: s.center.lat,
+      lng: s.center.lng,
+      radiusM: s.radiusM,
+    })),
   })
 }
