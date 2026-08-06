@@ -314,7 +314,7 @@ export function Expenses({ me, sites, workers, onChanged }: {
     <div style={{ height: '100%', overflowY: 'auto', background: theme.appBg }}>
       <div style={{ padding: 16, maxWidth: 1100 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Expenses</h1>
+          <h1 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Expenses</h1>
           <span style={{ fontSize: 13, color: theme.inkSoft }}>{rows.length}</span>
           {!form && (
             <button onClick={() => setForm(blankForm())} style={{ ...cta, marginLeft: 'auto' }}>
@@ -797,7 +797,7 @@ const statLabel = {
 }
 
 const statValue = {
-  fontSize: 22,
+  fontSize: 17,
   fontWeight: 600,
   marginTop: 4,
 }

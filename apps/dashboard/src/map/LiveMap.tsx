@@ -47,6 +47,33 @@ interface LiveMapProps {
   onPick?: (at: LatLng) => void
 }
 
+/**
+ * The map view survives a reload. Without this the map opens on a default
+ * centre and then animates to fit the sites on every single page load, which
+ * reads as the map reloading itself every time you arrive.
+ */
+const VIEW_KEY = 'crewline.map.view'
+
+interface SavedView {
+  lng: number
+  lat: number
+  zoom: number
+}
+
+function readView(): SavedView | null {
+  try {
+    const raw = localStorage.getItem(VIEW_KEY)
+    if (!raw) return null
+    const v = JSON.parse(raw) as Partial<SavedView>
+    if ([v.lng, v.lat, v.zoom].every((n) => typeof n === 'number' && Number.isFinite(n))) {
+      return v as SavedView
+    }
+  } catch {
+    // A corrupt or unavailable store just means we fall back to fitting sites.
+  }
+  return null
+}
+
 const FENCE_SRC = 'geofences'
 const DRAFT_SRC = 'draft-fence'
 const TRAIL_SRC = 'trail'
@@ -116,6 +143,8 @@ export function LiveMap({
   onPick,
 }: LiveMapProps) {
   const container = useRef<HTMLDivElement | null>(null)
+  // Read once on mount; later writes must not re-trigger the map build.
+  const saved = useRef<SavedView | null>(readView())
   const map = useRef<MapLibreMap | null>(null)
   const [ready, setReady] = useState(false)
   const markers = useRef(new Map<string, Marker>())
@@ -133,11 +162,25 @@ export function LiveMap({
     const m = new MapLibreMap({
       container: container.current,
       style: MAP_STYLE_URL,
-      center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
-      zoom: 11,
+      center: saved.current
+        ? [saved.current.lng, saved.current.lat]
+        : [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
+      zoom: saved.current ? saved.current.zoom : 11,
       attributionControl: { compact: true },
     })
     map.current = m
+
+    m.on('moveend', () => {
+      const c = m.getCenter()
+      try {
+        localStorage.setItem(
+          VIEW_KEY,
+          JSON.stringify({ lng: c.lng, lat: c.lat, zoom: m.getZoom() }),
+        )
+      } catch {
+        // Private browsing can refuse writes; the map still works.
+      }
+    })
 
     m.on('click', (e: MapMouseEvent) => {
       if (pick.current) pick.current({ lat: e.lngLat.lat, lng: e.lngLat.lng })
@@ -311,19 +354,22 @@ export function LiveMap({
     }
   }, [sites, crew, selectedId])
 
-  // Frame the sites once, the first time any exist.
+  // Frame the sites only on a first visit. Once someone has moved the map,
+  // their view is restored above and yanking it back would be the bug.
   useEffect(() => {
     const m = map.current
     if (!m || centred.current || sites.length === 0) return
     centred.current = true
+    if (saved.current) return
 
     if (sites.length === 1) {
-      m.easeTo({ center: [sites[0].center.lng, sites[0].center.lat], zoom: 14 })
+      m.jumpTo({ center: [sites[0].center.lng, sites[0].center.lat], zoom: 14 })
       return
     }
     const bounds = new LngLatBounds()
     for (const s of sites) bounds.extend([s.center.lng, s.center.lat])
-    m.fitBounds(bounds, { padding: 120, maxZoom: 15, duration: 600 })
+    // No animation: on a cold load this is the opening view, not a transition.
+    m.fitBounds(bounds, { padding: 120, maxZoom: 15, duration: 0 })
   }, [sites])
 
   return <div ref={container} style={{ width: '100%', height: '100%' }} />

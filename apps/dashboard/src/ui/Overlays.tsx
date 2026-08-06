@@ -60,7 +60,7 @@ export function StatStrip({ snapshot }: { snapshot: CrewSnapshot }) {
               alignItems: 'center',
               gap: 6,
               marginTop: 3,
-              fontSize: 19,
+              fontSize: 14,
               fontWeight: 600,
               lineHeight: 1,
             }}

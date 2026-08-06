@@ -386,7 +386,7 @@ export function Timesheets({
     <div style={{ height: '100%', overflowY: 'auto', background: theme.appBg }}>
       <div style={{ padding: 16, maxWidth: 1180 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Timesheets</h1>
+          <h1 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Timesheets</h1>
 
           <div style={{ display: 'flex', border: `1px solid ${theme.border}`, borderRadius: 4, overflow: 'hidden' }}>
             {(['day', 'week'] as const).map((v) => (

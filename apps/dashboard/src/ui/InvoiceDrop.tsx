@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { supabase, type WorkerRow } from '../data/supabase'
 import { BUCKET_RECEIPTS, objectPath, uploadFile } from '../data/storage'
 import { costCodes } from '../data/seed'
+import { money2 as money } from '../format'
 import { theme } from '../theme'
 import type { JobSite } from '../types'
 
@@ -28,9 +29,6 @@ const ACCEPTED = [
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf',
 ]
 const MAX_BYTES = 25 * 1024 * 1024
-
-const money = (n: number) =>
-  n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 
 const fileToBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {

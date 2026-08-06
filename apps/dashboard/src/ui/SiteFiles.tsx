@@ -113,7 +113,7 @@ export function SiteFiles({ me, sites, workers, onChanged }: {
     <div style={{ height: '100%', overflowY: 'auto', background: theme.appBg }}>
       <div style={{ padding: 16, maxWidth: 1100 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Site Files</h1>
+          <h1 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Site Files</h1>
           {sites.length > 0 ? (
             <select
               value={siteId}

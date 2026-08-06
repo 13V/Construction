@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type MaterialRow, type ShiftRow, type WorkerRow } from '../data/supabase'
 import { costCodes } from '../data/seed'
+import { money, money2 } from '../format'
 import { theme } from '../theme'
 import type { JobSite, Worker } from '../types'
 
@@ -16,11 +17,6 @@ import type { JobSite, Worker } from '../types'
 
 const UNITS = ['ea', 'lm', 'm', 'm²', 'm³', 'kg', 't', 'L', 'box', 'pack', 'sheet', 'hr']
 const STATUSES = ['ordered', 'delivered', 'used', 'returned'] as const
-
-const money = (n: number) =>
-  n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
-const money2 = (n: number) =>
-  n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 
 const blank = {
   name: '',
@@ -208,7 +204,7 @@ export function Materials({
     <div style={{ height: '100%', overflowY: 'auto', background: theme.appBg }}>
       <div style={{ padding: 16, maxWidth: 1100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Materials</h1>
+          <h1 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Materials</h1>
           <select
             value={siteId}
             onChange={(e) => setSiteId(e.target.value)}
@@ -252,7 +248,7 @@ export function Materials({
               <div style={statLabel}>{label}</div>
               <div
                 style={{
-                  fontSize: 19,
+                  fontSize: 14,
                   fontWeight: 600,
                   marginTop: 3,
                   fontVariantNumeric: 'tabular-nums',
@@ -271,10 +267,10 @@ export function Materials({
                 defaultValue={site?.budget ?? ''}
                 onBlur={(e) => void setBudget(e.target.value)}
                 placeholder="Set a budget"
-                style={{ ...input, marginTop: 3, height: 26, fontSize: 15, fontWeight: 600 }}
+                style={{ ...input, marginTop: 3, height: 24, fontSize: 14, fontWeight: 600 }}
               />
             ) : (
-              <div style={{ fontSize: 19, fontWeight: 600, marginTop: 3 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>
                 {site?.budget ? money(site.budget) : '—'}
               </div>
             )}

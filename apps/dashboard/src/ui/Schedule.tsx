@@ -253,7 +253,7 @@ export function Schedule({
     <div style={{ height: '100%', overflowY: 'auto', background: theme.appBg }}>
       <div style={{ padding: 16, maxWidth: 1100 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Schedule</h1>
+          <h1 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Schedule</h1>
           <span style={{ fontSize: 13, color: theme.inkSoft }}>{rangeLabel}</span>
           <div style={{ display: 'flex', gap: 6 }}>
             <button style={ghost} onClick={() => setWeekOffset((w) => w - 1)}>

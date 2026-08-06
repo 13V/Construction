@@ -339,7 +339,7 @@ export function Chat({ me, sites, workers, onChanged }: {
     <div style={{ height: '100%', overflowY: 'auto', background: theme.appBg }}>
       <div style={{ padding: 16, maxWidth: 1100, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flex: 'none' }}>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Chat</h1>
+          <h1 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Chat</h1>
         </div>
 
         {channelsError && (
