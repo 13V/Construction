@@ -1,78 +1,119 @@
 import { theme } from '../theme'
 
+const VARS = [
+  ['VITE_SUPABASE_URL', 'https://xxxx.supabase.co'],
+  ['VITE_SUPABASE_ANON_KEY', 'eyJhbGci…'],
+  ['VITE_GOOGLE_MAPS_API_KEY', 'AIza…'],
+  ['VITE_GOOGLE_MAPS_MAP_ID', 'DEMO_MAP_ID'],
+  ['SUPABASE_URL', 'same as above'],
+  ['SUPABASE_ANON_KEY', 'same as above'],
+  ['SUPABASE_SERVICE_ROLE_KEY', 'server only — never VITE_'],
+] as const
+
 /**
- * Shown when no Maps key is configured. Better than a grey box: an unbilled or
- * missing key renders Google's "For development purposes only" watermark,
- * which looks broken in front of a client.
+ * Shown when credentials are missing. Deployed and local need different
+ * instructions — telling someone looking at a Vercel URL to edit `.env.local`
+ * just wastes their time.
  */
 export function SetupNotice() {
+  const local =
+    typeof window !== 'undefined' &&
+    /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname)
+
   return (
     <div
       style={{
-        height: '100vh',
+        minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         background: theme.appBg,
         color: theme.ink,
         padding: 24,
+        font: '14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
       }}
     >
       <div
         style={{
-          maxWidth: 560,
+          maxWidth: 620,
           background: theme.panel,
           border: `1px solid ${theme.border}`,
           borderRadius: 8,
           padding: 28,
-          lineHeight: 1.6,
         }}
       >
-        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
           Finish setting up Crewline
         </div>
         <p style={{ fontSize: 13.5, color: theme.inkSoft, marginTop: 0 }}>
-          Copy <code>.env.example</code> to <code>.env.local</code> and fill these in:
+          {local ? (
+            <>
+              Copy <code>.env.example</code> to <code>.env.local</code> and fill these in,
+              then restart the dev server.
+            </>
+          ) : (
+            <>
+              Add these in <strong>Vercel → Settings → Environment Variables</strong>, then
+              redeploy. Environment variables are baked in at build time, so an existing
+              deployment won't pick them up.
+            </>
+          )}
         </p>
-        <pre
-          style={{
-            background: theme.appBg,
-            border: `1px solid ${theme.border}`,
-            borderRadius: 4,
-            padding: 12,
-            fontSize: 12,
-            overflowX: 'auto',
-          }}
-        >
-{`VITE_GOOGLE_MAPS_API_KEY=your-key-here
-VITE_GOOGLE_MAPS_MAP_ID=DEMO_MAP_ID
-VITE_SUPABASE_URL=https://xxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key`}
-        </pre>
-        <ol style={{ fontSize: 13, color: theme.inkSoft, paddingLeft: 18 }}>
+
+        <table style={{ width: '100%', borderCollapse: 'collapse', margin: '14px 0' }}>
+          <tbody>
+            {VARS.map(([key, hint]) => (
+              <tr key={key}>
+                <td
+                  style={{
+                    padding: '5px 10px 5px 0',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontSize: 12,
+                    whiteSpace: 'nowrap',
+                    borderBottom: `1px solid ${theme.border}`,
+                  }}
+                >
+                  {key}
+                </td>
+                <td
+                  style={{
+                    padding: '5px 0',
+                    fontSize: 12,
+                    color: theme.inkFaint,
+                    borderBottom: `1px solid ${theme.border}`,
+                  }}
+                >
+                  {hint}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <ol style={{ fontSize: 13, color: theme.inkSoft, paddingLeft: 18, margin: 0 }}>
           <li>
-            Run <code>supabase/schema.sql</code> in your Supabase SQL editor, then
-            create an account through the app.
+            Create a Supabase project and run <code>supabase/schema.sql</code> in its SQL
+            editor. URL and <code>anon</code> key are under Settings → API.
           </li>
           <li>
-            Enable <strong>Maps JavaScript API</strong> in Google Cloud Console.
+            Turn <strong>off</strong> email confirmation under Authentication → Providers →
+            Email for the first run, or signup can't finish creating your company.
           </li>
           <li>
-            <strong>Enable billing.</strong> Without it, Google renders a darkened map
+            In Google Cloud Console enable <strong>Maps JavaScript API</strong> and{' '}
+            <strong>Geocoding API</strong>, then create an API key.
+          </li>
+          <li>
+            <strong>Enable billing.</strong> Without it Google renders a darkened map
             covered in “For development purposes only”.
           </li>
-          <li>
-            Restrict the key to <code>http://localhost:*</code> before committing anything.
-          </li>
-          <li>
-            Optional: create a Map ID and apply <code>mapStyle.json</code> to it in the
-            console. Advanced Markers need a Map ID, and inline styles are ignored once
-            one is set.
-          </li>
+          <li>Restrict the key to this domain before you ship it anywhere.</li>
         </ol>
-        <p style={{ fontSize: 12.5, color: theme.inkFaint, marginBottom: 0 }}>
-          See <code>MAPS.md</code> at the repo root for the cost model — the free tier is
-          10,000 map loads per month, and it is per map load, not per user.
+
+        <p style={{ fontSize: 12, color: theme.inkFaint, marginBottom: 0 }}>
+          <code>SUPABASE_SERVICE_ROLE_KEY</code> bypasses row-level security. Set it as a
+          server variable only — never with a <code>VITE_</code> prefix, or it ends up in
+          the browser bundle. See <code>DEPLOY.md</code>.
         </p>
       </div>
     </div>
