@@ -1,39 +1,58 @@
-# Construction crew tracking app
+# Crewline
 
-A workforce tracking app for small-to-mid construction companies. Concept docs plus a
-working MVP slice of the owner dashboard.
+A workforce tracking app for small-to-mid construction companies.
 
-Core ideas: GPS crew tracking with geofenced automatic clock-in/out, timesheets built from
-that location data, a document folder per job site (photos, plans, docs), per-site and
-per-worker chat, and AI receipt capture that files invoices into a job site's expense ledger.
+GPS crew tracking with geofenced automatic clock-in, timesheets built from that location
+data rather than typed in, weekly scheduling, per-site photo and document folders, per-site
+and direct chat, equipment and safety tracking, AI receipt capture, and daily logs that
+draft themselves from the day's activity.
 
-**[DESIGN-PROMPT.md](DESIGN-PROMPT.md)** — a ready-to-paste prompt for generating a clickable
-visual prototype of the app, for showing the vision to a prospective owner.
-
-**[STYLE-REFERENCE.md](STYLE-REFERENCE.md)** — analysis of Fieldwire (by Hilti), the visual
-reference the design prompt's palette and chrome specs are drawn from.
-
-**[COMPETITIVE-ANALYSIS.md](COMPETITIVE-ANALYSIS.md)** — feature parity across Jack,
-Buildertrend, Workyard, busybusy and ClockShark, with the gaps worth attacking.
-
-**[PRICING.md](PRICING.md)** — competitor list prices modeled at 20 users, and what
-that implies for positioning.
-
-**[MAPS.md](MAPS.md)** — why the prototype can't embed a live Google Map, how to get real
-geography into it anyway, and the production Maps build with its cost exposure.
+It runs on real data or tells you what's missing — there is no demo mode.
 
 ## Code
 
-**[apps/dashboard](apps/dashboard)** — the owner dashboard. React + Vite + TypeScript.
-Live Google Map with geofenced automatic clock-in, driven by a simulated crew so it runs
-with no backend. The dwell-based geofence engine (`src/geofence/dwell.ts`) rejects drive-by
-clock-ins and backdates clock-outs to the last confirmed ping on site.
+**[apps/dashboard](apps/dashboard)** — the whole product. React + Vite + TypeScript,
+Supabase for data, auth, realtime and storage, MapLibre GL + OpenFreeMap for the map, and
+Vercel serverless functions for location ingest and the AI endpoints. Office dashboard at
+`/`, worker app at `/worker`.
 
 ```bash
 cd apps/dashboard && npm install && npm run dev
 ```
 
-**[DEPLOY.md](DEPLOY.md)** — Supabase schema, Google Maps setup, and Vercel
-configuration. The dashboard and the worker app ship as one project.
+**[supabase/](supabase)** — `schema.sql`, `schema_v2.sql` and `storage.sql`: 17 tables,
+row-level security throughout, realtime publication, and two private storage buckets.
 
-**[supabase/](supabase)** — `schema.sql` (tables, RLS, realtime) and `seed.sql`.
+**[DEPLOY.md](DEPLOY.md)** — Supabase setup, Vercel configuration, environment variables,
+and the first-run walkthrough.
+
+## The part that matters
+
+`apps/dashboard/src/geofence/dwell.ts` is the geofence engine, and it runs **server-side**
+as the system of record — timesheets have to be produced whether or not anyone has the
+dashboard open, and a browser clock is something a worker could tamper with.
+
+Entering a geofence does not clock you in: you have to stay for two minutes, so driving past
+a site is rejected rather than paid. Leaving does not clock you out either, so a trip to the
+truck for a tool doesn't end the shift. Clock-outs are backdated to the last ping confirmed
+inside the fence, so nobody is paid for the drive home.
+
+Drive-by clock-ins are the single most common complaint about every competitor in this
+category. That's the wedge.
+
+## Background reading
+
+**[COMPETITIVE-ANALYSIS.md](COMPETITIVE-ANALYSIS.md)** — feature parity across Jack,
+Buildertrend, Workyard, busybusy and ClockShark, and the gaps worth attacking.
+
+**[PRICING.md](PRICING.md)** — competitor list prices modeled at 20 users in both AUD and
+USD, and what that implies for positioning.
+
+**[MAPS.md](MAPS.md)** — why Google Maps was dropped for MapLibre + OpenFreeMap, and how to
+self-host tiles later.
+
+**[STYLE-REFERENCE.md](STYLE-REFERENCE.md)** — analysis of Fieldwire (by Hilti), the source
+of the palette and chrome conventions.
+
+**[DESIGN-PROMPT.md](DESIGN-PROMPT.md)** — the original prompt used to generate the visual
+prototype the build was based on.
