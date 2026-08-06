@@ -151,6 +151,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       kind: event.kind,
       message,
     })
+
+    // Mirror into the site's chat as a system message. Clock-ins threading
+    // through the crew's conversation is what makes the chat feel like part of
+    // the app rather than a bolt-on.
+    const { data: channel } = await db
+      .from('channels')
+      .select('id')
+      .eq('site_id', event.siteId)
+      .eq('kind', 'site')
+      .maybeSingle()
+
+    if (channel) {
+      await db.from('messages').insert({
+        company_id: worker.company_id,
+        channel_id: channel.id,
+        author_id: null,
+        kind: 'system',
+        body: message,
+      })
+    }
   }
 
   const { error: stateError } = await db.from('dwell_state').upsert({
