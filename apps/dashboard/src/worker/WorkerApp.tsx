@@ -304,7 +304,12 @@ function Tracker({ me }: { me: WorkerRow }) {
       {screen === 'tracker' && (
         <>
           {!tracking ? (
-            <GateScreen me={me} onShowAccount={() => setShowAccount(true)} onStart={() => setTracking(true)} />
+            <GateScreen
+              me={me}
+              onShowAccount={() => setShowAccount(true)}
+              onStart={() => setTracking(true)}
+              onOpenPanel={(k) => setScreen(k)}
+            />
           ) : celebration ? (
             <CelebrationScreen
               me={me}
@@ -541,6 +546,44 @@ function TrackerHeader({
 /** The three-tile action row from isClockin step 4 — reused on every
  *  tracking screen (not just on-the-clock) since a worker can log a photo,
  *  a receipt or a chat message before they've settled in, same as before. */
+/**
+ * The three things a worker does when they are NOT working: check tomorrow's
+ * roster, dispute a punch from a shift that has already ended, and ask for
+ * leave. They were originally only on the on-clock screens, which put them
+ * out of reach at exactly the times they are wanted.
+ */
+function OffClockActions({ onOpen }: { onOpen: (screen: PanelScreen) => void }) {
+  const tile: CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    height: 82,
+    background: theme.panel,
+    border: `1px solid ${theme.border}`,
+    borderRadius: 3,
+    font: 'inherit',
+    cursor: 'pointer',
+  }
+  return (
+    <div style={{ flex: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 9 }}>
+      <button style={tile} onClick={() => onOpen('schedule')}>
+        <CalendarIcon />
+        <span style={{ fontSize: 12.5, fontWeight: 600 }}>My Jobs</span>
+      </button>
+      <button style={tile} onClick={() => onOpen('correction')}>
+        <FixIcon />
+        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Fix a Punch</span>
+      </button>
+      <button style={tile} onClick={() => onOpen('timeoff')}>
+        <LeaveIcon />
+        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Time Off</span>
+      </button>
+    </div>
+  )
+}
+
 function ActionGrid({ onOpen }: { onOpen: (screen: PanelScreen) => void }) {
   const tile: CSSProperties = {
     display: 'flex',
@@ -816,7 +859,17 @@ const sectionLabel: CSSProperties = {
  *  the same visual language (header, blue callout, big yellow CTA) as the
  *  "Approaching" screen it hands off to, so it reads as part of the same
  *  app rather than a bolt-on. Nothing is recorded before this tap. */
-function GateScreen({ me, onStart, onShowAccount }: { me: WorkerRow; onStart: () => void; onShowAccount: () => void }) {
+function GateScreen({
+  me,
+  onStart,
+  onShowAccount,
+  onOpenPanel,
+}: {
+  me: WorkerRow
+  onStart: () => void
+  onShowAccount: () => void
+  onOpenPanel: (s: PanelScreen) => void
+}) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <TrackerHeader me={me} tone="off" label="Off the clock" onAvatarTap={onShowAccount} />
@@ -825,6 +878,11 @@ function GateScreen({ me, onStart, onShowAccount }: { me: WorkerRow; onStart: ()
           Turn on tracking and you'll be clocked in <b style={{ fontWeight: 700 }}>automatically</b> when you reach a
           job site.
         </Callout>
+
+        <div style={{ marginTop: 18 }}>
+          <OffClockActions onOpen={onOpenPanel} />
+        </div>
+
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <span style={{ fontSize: 13, color: design.faint, lineHeight: 1.45 }}>
