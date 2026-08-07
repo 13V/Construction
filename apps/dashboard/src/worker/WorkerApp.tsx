@@ -18,6 +18,7 @@ import { DWELL_IN_MS, type DwellPhase } from '../geofence/dwell'
 import { distanceM } from '../geofence/geo'
 import { backend, backendNote, startWatching, type LocationWatch } from './location'
 import { clockTime, dayDate, shortDate } from '../format'
+import { PhotosTab } from './PhotosTab'
 import { theme } from '../theme'
 import type { LatLng } from '../types'
 
@@ -122,6 +123,16 @@ export function WorkerApp() {
 type PanelScreen = 'photo' | 'receipt' | 'chat' | 'schedule' | 'correction' | 'timeoff'
 type Screen = 'tracker' | PanelScreen
 
+/**
+ * Four tabs that persist, per Crewline Mobile screen 3.
+ *
+ * The six-tile grid this replaces was all one-way trips: you went in, you came
+ * back. There was no persistent home for Time or Photos, so a worker checking
+ * their hours on payday had to remember which tile it was — and Photos was not
+ * reachable at all, because the gallery did not exist.
+ */
+type Tab = 'jobs' | 'time' | 'photos' | 'chat'
+
 interface Celebration {
   siteId: string
   at: number
@@ -138,6 +149,7 @@ function Tracker({ me }: { me: WorkerRow }) {
   const [tick, setTick] = useState(Date.now())
   const [tracking, setTracking] = useState(false)
   const [screen, setScreen] = useState<Screen>('tracker')
+  const [tab, setTab] = useState<Tab>('jobs')
   const [celebration, setCelebration] = useState<Celebration | null>(null)
   const [clockOutConfirm, setClockOutConfirm] = useState(false)
   const [note, setNote] = useState<string | null>(null)
@@ -310,7 +322,24 @@ function Tracker({ me }: { me: WorkerRow }) {
         <ChatScreen me={me} currentSiteId={currentSiteId} sites={sites} onClose={() => setScreen('tracker')} />
       )}
 
-      {screen === 'tracker' && (
+      {screen === 'tracker' && tab === 'photos' && (
+        <PhotosTab
+          me={me}
+          sites={sites}
+          activeSiteId={currentSiteId}
+          onTakePhoto={() => setScreen('photo')}
+        />
+      )}
+
+      {screen === 'tracker' && tab === 'chat' && (
+        <ChatScreen me={me} currentSiteId={currentSiteId} sites={sites} onClose={() => setTab('jobs')} />
+      )}
+
+      {screen === 'tracker' && tab === 'time' && (
+        <ScheduleScreen me={me} onClose={() => setTab('jobs')} />
+      )}
+
+      {screen === 'tracker' && tab === 'jobs' && (
         <>
           {!tracking ? (
             <GateScreen
@@ -373,7 +402,107 @@ function Tracker({ me }: { me: WorkerRow }) {
           {showAccount && <AccountSheet me={me} onClose={() => setShowAccount(false)} />}
         </>
       )}
+
+      {/* The bar is the app. It shows on every tab and never on a panel that
+          was opened from one — a panel is a trip you come back from. */}
+      {screen === 'tracker' && <TabBar active={tab} unread={0} onPick={setTab} />}
     </div>
+  )
+}
+
+function TabBar({
+  active,
+  unread,
+  onPick,
+}: {
+  active: Tab
+  unread: number
+  onPick: (t: Tab) => void
+}) {
+  const items: Array<{ key: Tab; label: string; icon: (c: string) => ReactNode }> = [
+    { key: 'jobs', label: 'Jobs', icon: (c) => <FolderIcon color={c} /> },
+    { key: 'time', label: 'Time', icon: (c) => <ClockTabIcon color={c} /> },
+    { key: 'photos', label: 'Photos', icon: (c) => <CameraIcon color={c} size={22} /> },
+    { key: 'chat', label: 'Chat', icon: (c) => <ChatBubbleIcon color={c} size={22} /> },
+  ]
+  return (
+    <div
+      style={{
+        flex: 'none',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        borderTop: `1px solid ${theme.border}`,
+        background: theme.panel,
+        // 56px plus the home-indicator inset, per the design note.
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
+    >
+      {items.map((it) => {
+        const on = active === it.key
+        const colour = on ? theme.accent : theme.inkFaint
+        return (
+          <button
+            key={it.key}
+            onClick={() => onPick(it.key)}
+            style={{
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 3,
+              height: 56,
+              border: 'none',
+              background: 'transparent',
+              font: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            {it.icon(colour)}
+            <span style={{ fontSize: 10.5, fontWeight: on ? 700 : 500, color: colour }}>{it.label}</span>
+            {it.key === 'chat' && unread > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 6,
+                  left: 'calc(50% + 6px)',
+                  minWidth: 16,
+                  height: 16,
+                  padding: '0 4px',
+                  borderRadius: 8,
+                  background: theme.alert,
+                  color: '#fff',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {unread}
+              </span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function FolderIcon({ color }: { color: string }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.8 2.2h9.2A1.5 1.5 0 0 1 21 9.7v7.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
+    </svg>
+  )
+}
+
+function ClockTabIcon({ color }: { color: string }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
+      <circle cx="12" cy="12" r="8.4" />
+      <path d="M12 7.4V12l3.1 1.9" strokeLinecap="round" />
+    </svg>
   )
 }
 
