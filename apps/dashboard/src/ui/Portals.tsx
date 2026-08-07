@@ -75,11 +75,16 @@ function companyMark(name: string) {
   )
 }
 
+const invoiceOwing = (inv: InvoiceRow) => Math.max(0, Number(inv.amount) - Number(inv.paid_amount))
+
 function invoiceBadge(inv: InvoiceRow): { label: string; bg: string; fg: string } {
-  const overdue = inv.status === 'sent' && Boolean(inv.due_on) && inv.due_on! < todayStr()
+  // Outstanding has to be part of it, or a client who has settled the invoice
+  // still sees "Overdue" until someone gets around to changing its status.
+  const overdue =
+    inv.status === 'sent' && Boolean(inv.due_on) && inv.due_on! < todayStr() && invoiceOwing(inv) > 0
   if (overdue) return { label: 'Overdue', ...RED }
   if (inv.status === 'paid') return { label: 'Paid', ...GREEN }
-  if (inv.status === 'sent') return { label: 'Sent', ...BLUE }
+  if (inv.status === 'sent') return { label: invoiceOwing(inv) < Number(inv.amount) ? 'Part paid' : 'Sent', ...BLUE }
   if (inv.status === 'void') return { label: 'Void', ...GREY }
   return { label: 'Draft', ...GREY }
 }
@@ -1015,12 +1020,24 @@ export function Portals({
                                 <span style={{ fontSize: 13, fontWeight: 600 }}>{v.invoice_no}</span>
                                 <span style={{ fontSize: 11.5, color: '#8B9096' }}>
                                   {v.period || `Issued ${shortDate(v.issued_on)}`}
+                                  {Number(v.paid_amount) > 0 && invoiceOwing(v) > 0
+                                    ? ` · ${money(Number(v.paid_amount))} received`
+                                    : ''}
                                 </span>
                               </span>
                               <span
-                                style={{ flex: 'none', fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+                                style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}
                               >
-                                {money(Number(v.amount))}
+                                <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                  {money(Number(v.amount))}
+                                </span>
+                                {/* A client who has paid part of a claim must see it acknowledged
+                                    here, or the portal reads as though the money never arrived. */}
+                                {Number(v.paid_amount) > 0 && invoiceOwing(v) > 0 && (
+                                  <span style={{ fontSize: 11, color: '#8B9096', fontVariantNumeric: 'tabular-nums' }}>
+                                    {money(invoiceOwing(v))} outstanding
+                                  </span>
+                                )}
                               </span>
                               <span
                                 style={{
