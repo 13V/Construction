@@ -128,6 +128,60 @@ RLS policies, database constraints, and the trigger-driven notices. The PAT is
 needed to read the `service_role` key (for minting confirmed test users, since
 signup now needs a real email) and to clean up afterwards.
 
+## Keeping the surfaces working with each other
+
+There are four apps over one database: the office dashboard, the worker app on
+the web, the same worker app inside the native shell, and the client and
+subcontractor portals. They never call each other. Everything they share goes
+through one of five seams:
+
+| Seam | Who writes | Who reads | Breaks silently if |
+|---|---|---|---|
+| Postgres + RLS | everyone | everyone | a policy is added without `security_invoker` on a view over it |
+| Supabase realtime | the database | dashboard, worker | a table is dropped from the `supabase_realtime` publication |
+| `/api/ping` | the phone | the geofence engine | the request or response shape changes on one side only |
+| Storage buckets | phone, office | everyone with a signed URL | a bucket policy narrows |
+| `notifications` + triggers | the database | dashboard, worker | a trigger stops firing after a table is recreated |
+
+None of those failures throws. The dashboard just stops updating, or a notice
+never arrives, and nobody finds out until a worker's hours are wrong. So there
+is a test that walks the whole path:
+
+```bash
+SUPABASE_ANON_KEY=... SUPABASE_PAT=sbp_... node scripts/integration.mjs
+```
+
+It drives simulated GPS through the deployed `/api/ping`, watches the shift
+appear on a realtime subscription the way the dashboard would, sends chat both
+directions, publishes a roster and checks the phone is told, uploads a photo
+from the phone and reads it back as the office, and confirms a client portal
+sees the job and none of the crew's hours. Eleven assertions, a throwaway
+company, deleted after.
+
+**Run it after any schema change, any change to `api/ping.ts`, and before a
+release.** `scripts/smoke.mjs` proves each surface obeys RLS on its own, which
+is a different question — it will pass happily while the surfaces have stopped
+reaching each other.
+
+### The one that will bite: the native app is a different version
+
+The web surfaces update the moment you deploy. **The native app does not.** It
+bundles its own copy of the web assets — deliberately, because a job site is
+where signal drops and the clock has to open with no network — so an installed
+phone keeps running whatever build was in the APK.
+
+That is fine until a schema change lands. A column the new server writes and the
+old phone does not know about is harmless; a column the *phone* writes that the
+server has renamed is a worker's hours going missing. The rules that follow from
+it:
+
+- **Add columns, don't rename or drop them.** If the phone writes it, it is a
+  public API with an install base you cannot force to upgrade.
+- **`/api/ping` accepts old request shapes forever.** It is the one endpoint an
+  out-of-date phone cannot avoid calling.
+- **Ship a phone build whenever the worker app changes.** `npm run sync` in
+  `apps/mobile`, then a new APK. A web deploy alone does not reach them.
+
 ## How the pieces fit
 
 ```
