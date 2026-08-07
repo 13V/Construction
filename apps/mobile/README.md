@@ -58,7 +58,7 @@ only the worker app:
 
 | | Before | Now |
 |---|---|---|
-| JavaScript parsed | 1,457 kB | 457 kB |
+| JavaScript parsed | 1,457 kB | 514 kB |
 | Dead files in the APK | ~1.7 MB | none |
 
 The office dashboard imported both surfaces statically, so the phone was
@@ -66,6 +66,21 @@ downloading and parsing the entire dashboard — MapLibre GL included, roughly
 800 kB of a mapping library the worker surface never once references — before it
 could show a clock-in button. `VITE_SURFACE=worker` now folds to a constant at
 build time and Rollup drops the dashboard entirely.
+
+## What is on the phone
+
+Four tabs — Jobs, Time, Photos, Chat — and five things you do at a job:
+Take Photo, Upload Receipt, Plans, Safety and Daily Log.
+
+| Screen | What it is for |
+|---|---|
+| Jobs | The clock-in story: approaching, the two-minute settle window, on the clock |
+| Time | The payday screen — the week against your own ordinary hours, the evidence behind each punch, Fix a Punch, and Time off |
+| Photos | The job's photos, grouped by day, filtered, with a full-screen viewer |
+| Chat | The site channel, shared with the office |
+| Plans | Sheets with the revision loudest, superseded in red, and pins you can drop and resolve |
+| Safety | Your tickets, and the sign-on gate: no start until the SWMS is signed |
+| Daily Log | Drafted from today's punches, photos and deliveries, posted only when you send it |
 
 ## Permissions, and why each one
 
