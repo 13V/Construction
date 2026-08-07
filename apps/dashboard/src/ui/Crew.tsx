@@ -39,7 +39,8 @@ import type { JobSite, Worker } from '../types'
 
 const DAY_MS = 86_400_000
 const NO_CLOCKOUT_MS = 12 * 3_600_000 // matches Timesheets.tsx's own "forgot to clock out" threshold
-const OVERTIME_WEEKLY_MS_HRS = 40
+/** Matches Timesheets and payroll: the NES week is 38 hours, not 40. */
+const OVERTIME_WEEKLY_MS_HRS = 38
 const NEARING_WEEKLY_HRS = 38
 const CERT_WARNING_DAYS = 30
 
@@ -339,10 +340,20 @@ export function Crew({ me, sites, workers, onChanged }: {
       weekBuckets.set(s.worker_id, buckets)
     }
 
+    /*
+     * Only weeks that start inside the month count. The fetched range begins
+     * on the Monday before the 1st so a part-week is not truncated, but
+     * summing those extra days here produced an overtime figure larger than
+     * the "hours this month" it sits next to.
+     */
     const overtimeMonth = new Map<string, number>()
+    const monthFirstWeek = mondayOf(monthStart).getTime()
     for (const [workerId, buckets] of weekBuckets) {
       let total = 0
-      for (const hrs of buckets.values()) total += Math.max(0, hrs - OVERTIME_WEEKLY_MS_HRS)
+      for (const [wk, hrs] of buckets) {
+        if (wk < monthFirstWeek) continue
+        total += Math.max(0, hrs - OVERTIME_WEEKLY_MS_HRS)
+      }
       overtimeMonth.set(workerId, total)
     }
 

@@ -1,0 +1,29 @@
+<!--
+  Merge into android/app/src/main/AndroidManifest.xml after `npx cap add android`.
+
+  ACCESS_BACKGROUND_LOCATION is the one that matters. Without it Android stops
+  delivering fixes as soon as the app leaves the foreground, which is the exact
+  failure the native shell exists to fix.
+
+  Note for the Play Store listing: background location triggers a review. The
+  declared use is automatic timesheet clock-in at the employer's job sites,
+  tracking only while the worker has turned it on, with a persistent
+  notification the whole time. Have the crew's written consent on file.
+-->
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+<uses-permission android:name="android.permission.INTERNET" />
+
+<!-- Inside <application>: -->
+<!--
+<service
+    android:name="com.equimaps.capacitor_background_geolocation.BackgroundGeolocationService"
+    android:foregroundServiceType="location"
+    android:enabled="true"
+    android:exported="false" />
+-->

@@ -1,0 +1,24 @@
+<!--
+  Merge into ios/App/App/Info.plist after `npx cap add ios`.
+
+  iOS shows these strings verbatim in the permission prompt, so they are
+  written for the person holding the phone, not for the App Store reviewer.
+  "Always" is what keeps the clock honest when the screen is off; without it
+  iOS only reports while the app is open.
+-->
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Crewline uses your location to clock you in automatically when you arrive at a job site.</string>
+
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>Crewline records your hours by noticing when you arrive at and leave a job site. Choosing "Always" means your hours keep recording with your phone in your pocket. Location is only used while you have tracking switched on.</string>
+
+<key>UIBackgroundModes</key>
+<array>
+  <string>location</string>
+</array>
+
+<key>NSCameraUsageDescription</key>
+<string>Take site photos and photograph receipts.</string>
+
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>Save site photos you take in Crewline.</string>

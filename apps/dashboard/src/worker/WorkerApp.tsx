@@ -16,6 +16,7 @@ import type {
 import { BUCKET_FILES, BUCKET_RECEIPTS, objectPath, uploadFile } from '../data/storage'
 import { DWELL_IN_MS, type DwellPhase } from '../geofence/dwell'
 import { distanceM } from '../geofence/geo'
+import { backend, backendNote, startWatching, type LocationWatch } from './location'
 import { clockTime, dayDate, shortDate } from '../format'
 import { theme } from '../theme'
 import type { LatLng } from '../types'
@@ -223,16 +224,23 @@ function Tracker({ me }: { me: WorkerRow }) {
 
   useEffect(() => {
     if (!tracking) return
-    if (!('geolocation' in navigator)) {
-      setError('This device has no location services.')
-      return
+    let watch: LocationWatch | null = null
+    let cancelled = false
+
+    void startWatching(
+      (f) => onFix({ lat: f.lat, lng: f.lng }, f.accuracyM),
+      (message) => setError(message),
+    ).then((w) => {
+      // The effect can be torn down while the native watcher is still being
+      // registered; without this the watcher outlives the screen.
+      if (cancelled) w.stop()
+      else watch = w
+    })
+
+    return () => {
+      cancelled = true
+      watch?.stop()
     }
-    const id = navigator.geolocation.watchPosition(
-      (p) => onFix({ lat: p.coords.latitude, lng: p.coords.longitude }, p.coords.accuracy),
-      (err) => setError(err.message),
-      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
-    )
-    return () => navigator.geolocation.clearWatch(id)
   }, [tracking, onFix])
 
   // The one thing this tap really does: stop sending location. It does NOT
@@ -755,6 +763,12 @@ function PrivacyLine({ fix }: { fix: { pos: LatLng; accuracyM: number } | null }
       {fix ? `GPS ±${Math.round(fix.accuracyM)} m · reporting every ${PING_INTERVAL_MS / 1000}s` : 'No fix yet'}
       <br />
       Location is only recorded while tracking is on.
+      {backend() === 'web' && (
+        <>
+          <br />
+          <span style={{ color: '#8A6100' }}>{backendNote()}</span>
+        </>
+      )}
     </p>
   )
 }

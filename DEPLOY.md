@@ -18,7 +18,9 @@ Create a project, then run these in the SQL editor, in order:
    owner and handed every company's invoices to any signed-in user.
 6. `supabase/schema_v6.sql` — time off, punch corrections, plan pins, contract
    value, invoice retention, and the expense↔purchase-order link
-7. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+7. `supabase/schema_v7.sql` — in-app notifications, raised by trigger
+8. `supabase/schema_v8.sql` — stops one worker holding two overlapping shifts
+9. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
 
 Grab three values from Settings → API: the project URL, the `anon` key, and the
 `service_role` key.
@@ -26,10 +28,25 @@ Grab three values from Settings → API: the project URL, the `anon` key, and th
 > The `service_role` key bypasses RLS. Set it as a server variable only — never with a
 > `VITE_` prefix, or Vite will bundle it into the browser.
 
-**Email confirmation.** Supabase requires it by default, which means signup can't finish
-setting up the account in one step. For a first run, turn it off under
-Authentication → Providers → Email so the flow completes immediately. Turn it back on
-before you have real users.
+**Email confirmation must stay ON, and that means you need SMTP.**
+
+`/api/bootstrap` hands an invited worker row to whoever signs up with that email
+address — that is how crew join without invite tokens. If the address is not verified,
+anyone who knows a crew member's email can sign up as them and take the record: their
+pay rate, their timesheets, the ability to file corrections in their name. The endpoint
+refuses to do it unless Supabase reports the address confirmed, and confirmation is on.
+
+The consequence is that **signup depends on email actually being delivered**, and
+Supabase's built-in sender is rate limited to a handful an hour and shares a sender
+reputation you do not control. Onboarding a crew of six will hit that limit.
+
+Before you add real people, set your own SMTP under Authentication → Emails → SMTP
+Settings. Any transactional provider works. Until you do, expect
+`over_email_send_rate_limit` on signup.
+
+After confirming, the account lands on a short "one more step" screen that finishes the
+setup — signup itself cannot, because it has no session until the link is clicked, and
+the click often opens in a different browser.
 
 ## 2. Maps — nothing to do
 
@@ -139,11 +156,17 @@ extraction. Nothing else in the app depends on it.
 
 ## Still to do before this is a real product
 
-- **Background location.** Mobile web only reports while the page is open. Reliable
-  background tracking needs a native app — see the SDK recommendations in MAPS.md. This is
-  the single biggest remaining piece, and the one to fix before a paying crew relies on it.
-- **Payroll export.** The button exists; Xero and MYOB are the ones that matter for
-  Australia.
+- **Background location.** Mobile web only reports while the page is open. The native
+  shell that fixes this is scaffolded in `apps/mobile` — the app already picks a
+  location backend at run time and tells the worker when tracking is degraded — but
+  neither platform has been compiled: this was built in a container with no Android SDK
+  and no Xcode. Read `apps/mobile/README.md` before trusting it, and test on a real
+  phone with the screen off. This is still the last thing between the app and a paying
+  crew.
+- **Payroll export** produces Xero and MYOB timesheet CSVs plus a detailed audit
+  trail, ordinary/overtime split at 38 hours. The earnings-rate names
+  ("Ordinary Hours", "Overtime Hours") must match what is set up in your payroll
+  package or the import will reject the rows.
 - **Employee consent.** Get a written tracking policy signed before any real crew is
   tracked. Notice requirements vary by state.
 

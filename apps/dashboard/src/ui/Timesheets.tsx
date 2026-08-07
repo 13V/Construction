@@ -78,6 +78,17 @@ const defaultCostCode = (trade?: string) => {
 }
 
 /** Paid time: clock-to-clock, less any unpaid break the worker recorded. */
+/**
+ * Postgres speaks in constraint names; a builder should not have to.
+ * 23P01 here can only be the shifts_no_overlap exclusion constraint.
+ */
+function friendlyShiftError(err: { code?: string; message: string }): string {
+  if (err.code === '23P01') {
+    return 'That clashes with another shift for the same person — nobody can be on two jobs at once. Check their other hours that day first.'
+  }
+  return err.message
+}
+
 const durationMs = (row: ShiftRow) => {
   const gross = Math.max(
     0,
@@ -354,7 +365,7 @@ export function Timesheets({
       .eq('id', editTarget.id)
     setEditBusy(false)
     if (err) {
-      setEditError(err.message)
+      setEditError(friendlyShiftError(err))
       return
     }
     closeEdit()
@@ -374,7 +385,7 @@ export function Timesheets({
       return next
     })
     if (err) {
-      setError(err.message)
+      setError(friendlyShiftError(err))
       return
     }
     await load()
@@ -396,7 +407,7 @@ export function Timesheets({
       return next
     })
     if (err) {
-      setError(err.message)
+      setError(friendlyShiftError(err))
       return
     }
     await load()
@@ -425,7 +436,7 @@ export function Timesheets({
       )
     setBulkBusy(false)
     if (err) {
-      setError(err.message)
+      setError(friendlyShiftError(err))
       return
     }
     await load()
@@ -467,7 +478,7 @@ export function Timesheets({
       })
     setAddBusy(false)
     if (err) {
-      setAddError(err.message)
+      setAddError(friendlyShiftError(err))
       return
     }
     setAdding(false)
