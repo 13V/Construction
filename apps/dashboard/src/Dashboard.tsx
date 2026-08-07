@@ -1,27 +1,70 @@
-import { useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState } from 'react'
+import type { ComponentType } from 'react'
 import { LiveMap, type MapHandle } from './map/LiveMap'
 import { NAV_ITEMS, Sidebar, ToolbarButton, TopBar, type NavItem, type SearchHit } from './ui/Chrome'
 import { EventLog, RosterPanel, StatStrip, ToolRail } from './ui/Overlays'
-import { Timesheets } from './ui/Timesheets'
 import { JobSites, type JobSiteDraft } from './ui/JobSites'
-import { JobSiteFolder } from './ui/JobSiteFolder'
-import { Crew } from './ui/Crew'
-import { Schedule } from './ui/Schedule'
-import { Expenses } from './ui/Expenses'
-import { DailyLogs } from './ui/DailyLogs'
-import { Chat } from './ui/Chat'
-import { Materials } from './ui/Materials'
-import { Safety } from './ui/Safety'
-import { Estimates } from './ui/Estimates'
-import { PurchaseOrders } from './ui/PurchaseOrders'
-import { Invoices } from './ui/Invoices'
-import { ChangeOrders } from './ui/ChangeOrders'
-import { Portals } from './ui/Portals'
 import { useLive } from './data/useLive'
 import { useNotifications } from './data/useNotifications'
 import { supabase, type WorkerRow } from './data/supabase'
 import { theme } from './theme'
+
+/**
+ * The feature screens load on demand.
+ *
+ * The map is the landing screen and it sits behind whatever else is in the
+ * bundle: nothing can initialise MapLibre until the JavaScript before it has
+ * parsed. Importing all fourteen screens eagerly meant roughly twenty thousand
+ * lines of Invoices, Portals, Timesheets and the rest had to be parsed on every
+ * cold load and every refresh before the first tile could be requested — for
+ * screens the user had not asked for and might never open.
+ *
+ * Each is its own chunk now, fetched the first time someone navigates to it and
+ * cached from then on. JobSites stays eager: it is the site-setup panel that
+ * renders *beside* the map during fence drawing, not one of these.
+ */
+const lazyScreen = <K extends string>(load: () => Promise<Record<K, ComponentType<FeatureProps>>>, key: K) =>
+  lazy(() => load().then((m) => ({ default: m[key] })))
+
+const Schedule = lazyScreen(() => import('./ui/Schedule'), 'Schedule')
+const Timesheets = lazyScreen(() => import('./ui/Timesheets'), 'Timesheets')
+const JobSiteFolder = lazyScreen(() => import('./ui/JobSiteFolder'), 'JobSiteFolder')
+const Expenses = lazyScreen(() => import('./ui/Expenses'), 'Expenses')
+const Materials = lazyScreen(() => import('./ui/Materials'), 'Materials')
+const DailyLogs = lazyScreen(() => import('./ui/DailyLogs'), 'DailyLogs')
+const Chat = lazyScreen(() => import('./ui/Chat'), 'Chat')
+const Crew = lazyScreen(() => import('./ui/Crew'), 'Crew')
+const Estimates = lazyScreen(() => import('./ui/Estimates'), 'Estimates')
+const PurchaseOrders = lazyScreen(() => import('./ui/PurchaseOrders'), 'PurchaseOrders')
+const Invoices = lazyScreen(() => import('./ui/Invoices'), 'Invoices')
+const ChangeOrders = lazyScreen(() => import('./ui/ChangeOrders'), 'ChangeOrders')
+const Safety = lazyScreen(() => import('./ui/Safety'), 'Safety')
+const Portals = lazyScreen(() => import('./ui/Portals'), 'Portals')
+
+/** Every feature screen takes the same props, so adding one is a single entry. */
+interface FeatureProps {
+  me: WorkerRow
+  sites: ReturnType<typeof useLive>['sites']
+  workers: ReturnType<typeof useLive>['workers']
+  onChanged: () => void
+}
+
+const SCREENS: Partial<Record<NavItem, ComponentType<FeatureProps>>> = {
+  Schedule,
+  Timesheets,
+  'Job Sites': JobSiteFolder,
+  Expenses,
+  Materials,
+  'Daily Logs': DailyLogs,
+  Chat,
+  Crew,
+  Estimates,
+  'Purchase Orders': PurchaseOrders,
+  Invoices,
+  'Change Orders': ChangeOrders,
+  Safety,
+  Portals,
+}
 
 export function Dashboard({ me }: { me: WorkerRow }) {
   const live = useLive()
@@ -69,33 +112,15 @@ export function Dashboard({ me }: { me: WorkerRow }) {
     day: 'numeric',
   })
 
-  // Every feature screen takes the same props, so adding one is a single entry.
-  const featureProps = {
+  const featureProps: FeatureProps = {
     me,
     sites: live.sites,
     workers: live.workers,
     onChanged: live.refresh,
   }
 
-  const SCREENS: Partial<Record<NavItem, ReactNode>> = {
-    Schedule: <Schedule {...featureProps} />,
-    Timesheets: <Timesheets {...featureProps} />,
-    'Job Sites': <JobSiteFolder {...featureProps} />,
-    Expenses: <Expenses {...featureProps} />,
-    Materials: <Materials {...featureProps} />,
-    'Daily Logs': <DailyLogs {...featureProps} />,
-    Chat: <Chat {...featureProps} />,
-    Crew: <Crew {...featureProps} />,
-    Estimates: <Estimates {...featureProps} />,
-    'Purchase Orders': <PurchaseOrders {...featureProps} />,
-    Invoices: <Invoices {...featureProps} />,
-    'Change Orders': <ChangeOrders {...featureProps} />,
-    Safety: <Safety {...featureProps} />,
-    Portals: <Portals {...featureProps} />,
-  }
-
   // Site setup hands the main area back to the map so a fence can be drawn.
-  const screen = inSiteSetup ? null : SCREENS[nav]
+  const Screen = inSiteSetup ? undefined : SCREENS[nav]
 
   const openSiteSetup = () => {
     setNav('Job Sites')
@@ -263,15 +288,35 @@ export function Dashboard({ me }: { me: WorkerRow }) {
             </>
           )}
 
-          {screen && (
+          {Screen && (
             // zIndex clears MapLibre's own controls, which sit at z-index 2 and
             // otherwise show through the screen covering the map.
             <div style={{ position: 'absolute', inset: 0, background: theme.appBg, zIndex: 3 }}>
-              {screen}
+              {/* Only shows on the first visit to a screen; the chunk is cached after. */}
+              <Suspense fallback={<ScreenLoading />}>
+                <Screen {...featureProps} />
+              </Suspense>
             </div>
           )}
         </main>
       </div>
+    </div>
+  )
+}
+
+function ScreenLoading() {
+  return (
+    <div
+      style={{
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 12.5,
+        color: theme.inkFaint,
+      }}
+    >
+      Loading…
     </div>
   )
 }

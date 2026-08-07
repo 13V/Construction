@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      The map is the landing screen, and its first tile request cannot start
+      until DNS and the TLS handshake to the tile host are done. Opening those
+      connections while the bundle is still parsing takes that setup off the
+      critical path instead of paying for it after.
+    -->
+    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
+    <link rel="dns-prefetch" href="https://tiles.openfreemap.org" />
     <title>Crewline — Live Map</title>
   </head>
   <body>
