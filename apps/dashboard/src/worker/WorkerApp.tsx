@@ -19,6 +19,8 @@ import { distanceM } from '../geofence/geo'
 import { backend, backendNote, startWatching, type LocationWatch } from './location'
 import { clockTime, dayDate, shortDate } from '../format'
 import { HoursTab } from './HoursTab'
+import { DailyLogScreen } from './DailyLogScreen'
+import { useSites } from './useSites'
 import { PlansScreen } from './PlansScreen'
 import { SafetyScreen } from './SafetyScreen'
 import { PhotosTab } from './PhotosTab'
@@ -123,7 +125,7 @@ export function WorkerApp() {
 
 // ============================================================== the tracker
 
-type PanelScreen = 'photo' | 'receipt' | 'chat' | 'schedule' | 'correction' | 'timeoff' | 'safety' | 'plans'
+type PanelScreen = 'photo' | 'receipt' | 'chat' | 'schedule' | 'correction' | 'timeoff' | 'safety' | 'plans' | 'dailylog'
 type Screen = 'tracker' | PanelScreen
 
 /**
@@ -321,6 +323,9 @@ function Tracker({ me }: { me: WorkerRow }) {
         <CorrectionScreen me={me} onClose={() => setScreen('tracker')} />
       )}
       {screen === 'timeoff' && <TimeOffScreen me={me} onClose={() => setScreen('tracker')} />}
+      {screen === 'dailylog' && (
+        <DailyLogScreen me={me} siteId={currentSiteId} onClose={() => setScreen('tracker')} />
+      )}
       {screen === 'plans' && (
         <PlansScreen
           me={me}
@@ -761,7 +766,7 @@ function ActionGrid({ onOpen }: { onOpen: (screen: PanelScreen) => void }) {
     cursor: 'pointer',
   }
   return (
-    <div style={{ flex: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, padding: '16px 20px' }}>
+    <div style={{ flex: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 9, padding: '16px 20px' }}>
       <button style={tile} onClick={() => onOpen('photo')}>
         <CameraIcon />
         <span style={{ fontSize: 12.5, fontWeight: 600 }}>Take Photo</span>
@@ -778,7 +783,20 @@ function ActionGrid({ onOpen }: { onOpen: (screen: PanelScreen) => void }) {
         <ShieldIcon />
         <span style={{ fontSize: 12.5, fontWeight: 600 }}>Safety</span>
       </button>
+      <button style={tile} onClick={() => onOpen('dailylog')}>
+        <LogIcon />
+        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Daily Log</span>
+      </button>
     </div>
+  )
+}
+
+function LogIcon({ color = theme.ink, size = 24 }: { color?: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M8 9.5h8M8 13h8M8 16.5h5" strokeLinecap="round" />
+    </svg>
   )
 }
 
@@ -2155,7 +2173,7 @@ interface MessageWithAuthor extends MessageRow {
 function ChatScreen({
   me,
   currentSiteId,
-  sites,
+  sites: fromTracker,
   onClose,
 }: {
   me: WorkerRow
@@ -2163,7 +2181,15 @@ function ChatScreen({
   sites: ServerSite[]
   onClose: () => void
 }) {
+  // Chat is a tab. The tracker's site list is empty until someone taps Start
+  // tracking, and the screen read "Choose a site…" with nothing to choose.
+  const sites = useSites(fromTracker as never) as unknown as ServerSite[]
   const [siteId, setSiteId] = useState(currentSiteId ?? '')
+  // sites arrives a tick later than first render, so the pick cannot happen in
+  // the initialiser — otherwise a crew on one job is asked to choose it.
+  useEffect(() => {
+    if (!siteId && sites.length === 1) setSiteId(sites[0]!.id)
+  }, [sites, siteId])
   const [channel, setChannel] = useState<ChannelRow | null>(null)
   const [messages, setMessages] = useState<MessageRow[]>([])
   const [authors, setAuthors] = useState<Record<string, { name: string; initials: string }>>({})
