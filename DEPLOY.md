@@ -144,3 +144,24 @@ extraction. Nothing else in the app depends on it.
   Australia.
 - **Employee consent.** Get a written tracking policy signed before any real crew is
   tracked. Notice requirements vary by state.
+
+## What is deliberately not built
+
+Being explicit, because a missing feature that looks present is worse than a
+gap you know about.
+
+- **No notifications.** There is no email, SMS or push transport anywhere in
+  the app. Publishing a roster makes it visible under **My Jobs** in the
+  worker app; it does not text anybody. "Send reminders" on Invoices composes
+  the overdue list into your own mail client. Wiring a provider is a
+  self-contained job — the places that would call it are the `publish()` in
+  `Schedule.tsx` and `sendReminders()` in `Invoices.tsx`.
+- **The geofence does not consult the roster.** `api/ping.ts` clocks a worker
+  in wherever they dwell inside a fence, scheduled there or not. That is
+  deliberate for now — crew get moved at short notice — but it means a
+  schedule is a plan, not a gate.
+- **A shift cannot be split across two cost codes.** A worker sets one code on
+  their open shift; moving them mid-day means the office edits the timesheet.
+- **Background location needs a native app.** Mobile web only reports while
+  the page is open. This is still the single biggest gap before a paying crew
+  relies on it.
