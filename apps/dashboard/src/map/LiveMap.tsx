@@ -317,21 +317,41 @@ export const LiveMap = forwardRef<MapHandle, LiveMapProps>(function LiveMap(
     if (!m) return
 
     const live = new Set<string>()
-    const upsert = (key: string, lngLat: [number, number], el: HTMLElement, onClick: () => void) => {
+    /*
+     * MapLibre positions a marker by writing `transform` into the inline style
+     * of the element it was given. So that element is a bare wrapper it owns
+     * outright, and everything we draw goes in a single child we swap.
+     *
+     * Assigning `node.style.cssText` on update — which is what this used to do
+     * — wiped that transform, and MapLibre only rewrites it on the next map
+     * move. Every marker collapsed to the top-left corner of the map and
+     * stayed there until the user happened to pan. The crew dots never worked.
+     */
+    const upsert = (
+      key: string,
+      lngLat: [number, number],
+      el: HTMLElement,
+      onClick: () => void,
+      offset: [number, number] = [0, 0],
+    ) => {
       live.add(key)
       const existing = markers.current.get(key)
       if (existing) {
         existing.setLngLat(lngLat)
+        existing.setOffset(offset)
         const node = existing.getElement()
-        node.replaceChildren(...Array.from(el.childNodes))
-        node.style.cssText = el.style.cssText
+        if (node.firstElementChild) node.firstElementChild.replaceWith(el)
+        else node.appendChild(el)
         return
       }
-      el.addEventListener('click', (ev) => {
+      const wrapper = document.createElement('div')
+      wrapper.style.cursor = 'pointer'
+      wrapper.appendChild(el)
+      wrapper.addEventListener('click', (ev) => {
         ev.stopPropagation()
         onClick()
       })
-      markers.current.set(key, new Marker({ element: el }).setLngLat(lngLat).addTo(m))
+      markers.current.set(key, new Marker({ element: wrapper, offset }).setLngLat(lngLat).addTo(m))
     }
 
     for (const site of sites) {
@@ -344,14 +364,42 @@ export const LiveMap = forwardRef<MapHandle, LiveMapProps>(function LiveMap(
       )
     }
 
-    for (const state of crew) {
-      if (!state.position) continue
-      upsert(
-        `worker:${state.worker.id}`,
-        [state.position.lng, state.position.lat],
-        workerMarkerEl(state, selectedId === state.worker.id),
-        () => select.current(state.worker.id),
-      )
+    /*
+     * Two people standing on the same slab are metres apart, which is well
+     * under a pixel at city zoom — one marker lands exactly on top of the
+     * other and the owner cannot see the second person is there at all.
+     *
+     * Grouping by a coarse geographic key and fanning the group out by a fixed
+     * pixel offset keeps them legible at every zoom, which a geographic nudge
+     * would not.
+     */
+    const placed = crew.filter((c) => c.position)
+    const clusters = new Map<string, typeof placed>()
+    for (const state of placed) {
+      // ~55 m cells: close enough to overlap, coarse enough not to split a site.
+      const key = `${state.position!.lat.toFixed(3)},${state.position!.lng.toFixed(3)}`
+      const group = clusters.get(key)
+      if (group) group.push(state)
+      else clusters.set(key, [state])
+    }
+
+    for (const group of clusters.values()) {
+      group.forEach((state, i) => {
+        let offset: [number, number] = [0, 18]
+        if (group.length > 1) {
+          // A fan above the point, centred, so the site label stays readable.
+          const spread = 30
+          const x = (i - (group.length - 1) / 2) * spread
+          offset = [x, 18 - Math.abs(x) * 0.25]
+        }
+        upsert(
+          `worker:${state.worker.id}`,
+          [state.position!.lng, state.position!.lat],
+          workerMarkerEl(state, selectedId === state.worker.id),
+          () => select.current(state.worker.id),
+          offset,
+        )
+      })
     }
 
     for (const [key, marker] of markers.current) {
