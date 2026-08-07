@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import { WorkerApp } from './worker/WorkerApp.tsx'
+import { Crash } from './ui/Crash.tsx'
 import './index.css'
 
 /*
@@ -24,5 +25,15 @@ const isWorker =
   isNativeShell
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>{isWorker ? <WorkerApp /> : <App />}</StrictMode>,
+  <StrictMode>
+    {isWorker ? (
+      <Crash surface="The worker app">
+        <WorkerApp />
+      </Crash>
+    ) : (
+      <Crash surface="Crewline">
+        <App />
+      </Crash>
+    )}
+  </StrictMode>,
 )

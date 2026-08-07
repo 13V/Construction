@@ -47,6 +47,11 @@ const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif
 const PDF_TYPE = 'application/pdf'
 const ALLOWED_MEDIA_TYPES = [...ALLOWED_IMAGE_TYPES, PDF_TYPE]
 
+/** Anthropic's own per-image ceiling is 5 MB; base64 inflates bytes by ~4/3. */
+const MAX_IMAGE_BASE64 = Math.ceil((5 * 1024 * 1024 * 4) / 3)
+/** Job sites and cost codes get joined into the prompt — cap how many. */
+const MAX_LIST = 200
+
 /** Units a merchant might print, normalised to what the materials table uses. */
 const UNITS = ['ea', 'lm', 'm', 'm²', 'm³', 'kg', 't', 'L', 'box', 'pack', 'sheet', 'hr']
 
@@ -85,10 +90,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!ALLOWED_MEDIA_TYPES.includes(mediaType)) {
     return res.status(400).json({ error: `mediaType must be one of ${ALLOWED_MEDIA_TYPES.join(', ')}` })
   }
+  // Anthropic rejects images over 5 MB anyway, so anything larger is a request
+  // that cannot succeed — and every call here costs money, so the ceiling is
+  // enforced before the request is made rather than after it is billed.
+  if (imageBase64.length > MAX_IMAGE_BASE64) {
+    return res.status(413).json({
+      error: 'That image is too large to read. Photograph the receipt again, or crop it.',
+    })
+  }
 
-  const siteHint = typeof body.siteHint === 'string' ? body.siteHint : null
+  // These are joined into the prompt, so they are bounded too: unbounded
+  // caller-supplied arrays are a way to inflate the input token count at will.
+  const siteHint = typeof body.siteHint === 'string' ? body.siteHint.slice(0, 120) : null
   const sitesList = Array.isArray(body.sitesList)
-    ? body.sitesList.filter((s): s is string => typeof s === 'string')
+    ? body.sitesList.filter((s): s is string => typeof s === 'string').slice(0, MAX_LIST).map((s) => s.slice(0, 120))
     : []
 
   const instructions = [
@@ -108,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (siteHint) instructions.push(`This receipt was likely purchased for the job site "${siteHint}".`)
   if (sitesList.length) instructions.push(`Known job sites for this company: ${sitesList.join(', ')}.`)
   const costCodes = Array.isArray(body.costCodes)
-    ? body.costCodes.filter((c): c is string => typeof c === 'string')
+    ? body.costCodes.filter((c): c is string => typeof c === 'string').slice(0, MAX_LIST).map((c) => c.slice(0, 120))
     : []
   if (costCodes.length) {
     instructions.push(

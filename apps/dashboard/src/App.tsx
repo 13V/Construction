@@ -1,7 +1,7 @@
 import { AuthScreen } from './auth/AuthScreen'
 import { useSession } from './auth/useSession'
 import { FinishSetup } from './auth/FinishSetup'
-import { supabaseConfigured } from './data/supabase'
+import { supabase, supabaseConfigured } from './data/supabase'
 import { demoMode } from './data/demo'
 import { Dashboard } from './Dashboard'
 import { SetupNotice } from './ui/SetupNotice'
@@ -27,6 +27,30 @@ function Centered({ children }: { children: React.ReactNode }) {
   )
 }
 
+const retryBase = {
+  height: 32,
+  padding: '0 15px',
+  borderRadius: 3,
+  font: 'inherit',
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
+} as const
+
+const retryPrimary = {
+  ...retryBase,
+  background: theme.cta,
+  border: `1px solid ${theme.ctaBorder}`,
+  color: theme.ink,
+} as const
+
+const retrySecondary = {
+  ...retryBase,
+  background: theme.panel,
+  border: `1px solid ${theme.border}`,
+  color: theme.ink,
+} as const
+
 export default function App() {
   const { loading, session, me, error, reload } = useSession()
 
@@ -35,11 +59,22 @@ export default function App() {
   // In demo mode the sign-in is in flight; showing a login form would be a lie.
   if (!session) return demoMode ? <Centered>Signing in…</Centered> : <AuthScreen />
 
+  // Usually a dropped connection rather than anything wrong with the account,
+  // and a builder on site loses signal constantly — so this offers the way out
+  // instead of being a dead end with the reason printed on it.
   if (error) {
     return (
       <Centered>
         <strong style={{ color: theme.alert }}>Could not load your account</strong>
         <p>{error}</p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 4 }}>
+          <button onClick={reload} style={retryPrimary}>
+            Try again
+          </button>
+          <button onClick={() => void supabase().auth.signOut()} style={retrySecondary}>
+            Sign out
+          </button>
+        </div>
       </Centered>
     )
   }
