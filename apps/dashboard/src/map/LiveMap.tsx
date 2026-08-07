@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import {
   GeoJSONSource,
   LngLatBounds,
@@ -134,15 +134,18 @@ function workerMarkerEl(state: WorkerState, selected: boolean) {
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
-export function LiveMap({
-  sites,
-  crew,
-  selectedId,
-  onSelect,
-  showFences,
-  draft,
-  onPick,
-}: LiveMapProps) {
+/** The handful of map actions the floating tool rail drives. */
+export interface MapHandle {
+  zoomIn: () => void
+  zoomOut: () => void
+  fitSites: () => void
+  toggleFullscreen: () => void
+}
+
+export const LiveMap = forwardRef<MapHandle, LiveMapProps>(function LiveMap(
+  { sites, crew, selectedId, onSelect, showFences, draft, onPick },
+  handleRef,
+) {
   const container = useRef<HTMLDivElement | null>(null)
   // Read once on mount; later writes must not re-trigger the map build.
   const saved = useRef<SavedView | null>(readView())
@@ -377,5 +380,31 @@ export function LiveMap({
     m.fitBounds(bounds, { padding: 120, maxZoom: 15, duration: 0 })
   }, [sites])
 
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      zoomIn: () => map.current?.zoomIn(),
+      zoomOut: () => map.current?.zoomOut(),
+      fitSites: () => {
+        const m = map.current
+        if (!m || sites.length === 0) return
+        if (sites.length === 1) {
+          m.flyTo({ center: [sites[0].center.lng, sites[0].center.lat], zoom: 15 })
+          return
+        }
+        const b = new LngLatBounds()
+        for (const s of sites) b.extend([s.center.lng, s.center.lat])
+        m.fitBounds(b, { padding: 120, maxZoom: 15 })
+      },
+      toggleFullscreen: () => {
+        const el = container.current?.parentElement ?? container.current
+        if (!el) return
+        if (document.fullscreenElement) void document.exitFullscreen()
+        else void el.requestFullscreen?.()
+      },
+    }),
+    [sites],
+  )
+
   return <div ref={container} style={{ width: '100%', height: '100%' }} />
-}
+})

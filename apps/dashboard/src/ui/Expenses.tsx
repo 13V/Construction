@@ -1,6 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { supabase, type ExpenseRow, type WorkerRow } from '../data/supabase'
+import {
+  supabase,
+  type ExpenseRow,
+  type PurchaseOrderRow,
+  type WorkerRow,
+} from '../data/supabase'
 import { BUCKET_RECEIPTS, objectPath, signedUrl, uploadFile } from '../data/storage'
 import { costCodes } from '../data/seed'
 import { money, money2 } from '../format'
@@ -83,6 +88,8 @@ interface CodingDraft {
   siteId: string
   category: string
   costCode: string
+  /** The order this receipt settles, so a PO shows what has actually landed. */
+  poId: string
 }
 
 export function Expenses({ me, sites, workers, onChanged }: {
@@ -110,6 +117,7 @@ export function Expenses({ me, sites, workers, onChanged }: {
   const [allocateBusy, setAllocateBusy] = useState(false)
   const [allocateError, setAllocateError] = useState<string | null>(null)
 
+  const [openPos, setOpenPos] = useState<PurchaseOrderRow[]>([])
   const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null)
   const [quickAddBusy, setQuickAddBusy] = useState(false)
   const [quickAddError, setQuickAddError] = useState<string | null>(null)
@@ -117,16 +125,19 @@ export function Expenses({ me, sites, workers, onChanged }: {
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const { data, error: err } = await supabase()
-      .from('expenses')
-      .select('*')
-      .order('spent_on', { ascending: false })
-    if (err) {
-      setError(err.message)
+    const client = supabase()
+    const [exp, pos] = await Promise.all([
+      client.from('expenses').select('*').order('spent_on', { ascending: false }),
+      // Only orders still expecting delivery can sensibly take a receipt.
+      client.from('purchase_orders').select('*').in('status', ['sent', 'partially_received']),
+    ])
+    if (exp.error) {
+      setError(exp.error.message)
       setLoading(false)
       return
     }
-    setRows((data ?? []) as ExpenseRow[])
+    setRows((exp.data ?? []) as ExpenseRow[])
+    setOpenPos((pos.data ?? []) as PurchaseOrderRow[])
     setLoading(false)
   }, [])
 
@@ -232,7 +243,12 @@ export function Expenses({ me, sites, workers, onChanged }: {
 
   function startEdit(row: ExpenseRow) {
     setEditingId(row.id)
-    setEditDraft({ category: row.category ?? '', costCode: row.cost_code ?? '', siteId: row.site_id ?? '' })
+    setEditDraft({
+      category: row.category ?? '',
+      costCode: row.cost_code ?? '',
+      siteId: row.site_id ?? '',
+      poId: row.po_id ?? '',
+    })
   }
   function cancelEdit() {
     setEditingId(null)
@@ -259,7 +275,12 @@ export function Expenses({ me, sites, workers, onChanged }: {
 
   function openAllocate(row: ExpenseRow) {
     setInboxSelected(row.id)
-    setAllocateDraft({ siteId: siteId || '', category: row.category ?? '', costCode: row.cost_code ?? '' })
+    setAllocateDraft({
+      siteId: siteId || '',
+      category: row.category ?? '',
+      costCode: row.cost_code ?? '',
+      poId: row.po_id ?? '',
+    })
     setAllocateError(null)
   }
   function closeAllocate() {
@@ -279,6 +300,7 @@ export function Expenses({ me, sites, workers, onChanged }: {
         site_id: allocateDraft.siteId,
         category: allocateDraft.category || null,
         cost_code: allocateDraft.costCode.trim() || null,
+        po_id: allocateDraft.poId || null,
       })
       .eq('id', row.id)
     setAllocateBusy(false)
@@ -502,7 +524,7 @@ export function Expenses({ me, sites, workers, onChanged }: {
                           {row.vendor || 'Unknown supplier'}
                         </span>
                         <span style={{ fontSize: 11.5, color: FAINT }}>
-                          Added by {workerName(row.submitted_by)} · {new Date(row.created_at).toLocaleDateString()}
+                          Added by {workerName(row.submitted_by)} · {new Date(row.created_at).toLocaleDateString('en-AU')}
                         </span>
                       </div>
                       <span style={{ flex: 'none', fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
@@ -544,6 +566,15 @@ export function Expenses({ me, sites, workers, onChanged }: {
                             onChange={(v) => setAllocateDraft((d) => (d ? { ...d, costCode: v } : d))}
                             options={costCodes.map((c) => ({ value: c.code, label: `${c.code} · ${c.name}` }))}
                             placeholder="Uncoded"
+                          />
+                          <CodingField
+                            label="AGAINST PO"
+                            value={allocateDraft.poId}
+                            onChange={(v) => setAllocateDraft((d) => (d ? { ...d, poId: v } : d))}
+                            options={openPos
+                              .filter((p) => !allocateDraft.siteId || p.site_id === allocateDraft.siteId)
+                              .map((p) => ({ value: p.id, label: `${p.po_no} · ${p.vendor}` }))}
+                            placeholder="No PO"
                           />
                         </div>
                         {allocateError && <span style={{ fontSize: 12, color: theme.alert }}>{allocateError}</span>}
@@ -677,7 +708,7 @@ export function Expenses({ me, sites, workers, onChanged }: {
                     padding: '9px 14px', borderBottom: `1px solid ${HAIRLINE}`, background: expanded ? SUBTLE_BG : '#fff', cursor: 'pointer',
                   }}
                 >
-                  <span style={{ fontSize: 12.5, color: BODY }}>{new Date(row.spent_on).toLocaleDateString()}</span>
+                  <span style={{ fontSize: 12.5, color: BODY }}>{new Date(row.spent_on).toLocaleDateString('en-AU')}</span>
                   <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {row.vendor || 'Unknown'}
@@ -743,7 +774,7 @@ export function Expenses({ me, sites, workers, onChanged }: {
                           )}
                         </div>
                         <span style={{ fontSize: 11, color: FAINT }}>
-                          Submitted by {workerName(row.submitted_by)} · {new Date(row.created_at).toLocaleString()}
+                          Submitted by {workerName(row.submitted_by)} · {new Date(row.created_at).toLocaleString('en-AU')}
                         </span>
                       </div>
 
@@ -843,7 +874,7 @@ function extractedFields(row: ExpenseRow): Array<{ k: string; v: string; conf: {
   const conf = confidenceMeta(row.ai_confidence)
   const fields: Array<{ k: string; v: string; conf: { fg: string; label: string } | null }> = [
     { k: 'VENDOR', v: row.vendor || '—', conf },
-    { k: 'DATE', v: new Date(row.spent_on).toLocaleDateString(), conf },
+    { k: 'DATE', v: new Date(row.spent_on).toLocaleDateString('en-AU'), conf },
     { k: 'AMOUNT', v: money2(Number(row.amount)), conf },
     { k: 'TAX', v: money2(Number(row.tax)), conf },
     { k: 'CATEGORY', v: row.category || '—', conf },
@@ -1135,7 +1166,7 @@ function CodedPhone() {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
               <span style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.2 }}>Ferguson Plumbing Supply</span>
               <span style={{ fontSize: 14, color: '#696D74' }}>Invoice 88472 · today 10:41 AM</span>
-              <a href="#" onClick={(e) => e.preventDefault()} style={{ fontSize: 13.5, marginTop: 2 }}>Retake photo</a>
+
             </div>
           </div>
 

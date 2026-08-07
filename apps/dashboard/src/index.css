@@ -20,3 +20,60 @@ button { font-family: inherit; }
 
 /* Google's default POI clutter fights the UI; hide the terms overlay padding. */
 .gm-style-cc { opacity: .6; }
+
+/*
+ * The dashboard is laid out for a desk, but builders open it on a tablet in
+ * the ute and on a phone when someone rings. Everything below is a narrowing
+ * of the same layout — no separate mobile build, no hidden functionality.
+ *
+ * Inline styles win over classes, so these use the attribute selectors the
+ * layout already produces rather than fighting specificity with !important
+ * on every rule.
+ */
+
+/* Tablet: give the content back the space the nav rail takes. */
+@media (max-width: 1100px) {
+  nav[data-nav='sidebar'] {
+    width: 62px !important;
+  }
+  nav[data-nav='sidebar'] [data-nav-label] {
+    display: none !important;
+  }
+  nav[data-nav='sidebar'] button {
+    justify-content: center !important;
+    padding: 0 !important;
+  }
+  nav[data-nav='sidebar'] [data-nav-sites] {
+    display: none !important;
+  }
+}
+
+/* Phone: the rail becomes a scrolling strip along the top. */
+@media (max-width: 720px) {
+  [data-shell='main'] {
+    flex-direction: column !important;
+  }
+  nav[data-nav='sidebar'] {
+    width: 100% !important;
+    height: 46px;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    border-right: none !important;
+    border-bottom: 1px solid #dce0e6 !important;
+    padding: 0 !important;
+  }
+  nav[data-nav='sidebar'] button {
+    flex: none !important;
+    width: 46px !important;
+    height: 46px !important;
+  }
+  [data-topbar='search'] {
+    display: none !important;
+  }
+  /* Side panels stack above the map instead of squeezing it to nothing. */
+  [data-panel='sites'] {
+    width: 100% !important;
+    max-height: 45vh;
+  }
+}

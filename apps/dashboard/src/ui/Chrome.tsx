@@ -23,6 +23,14 @@ const NAV = [
 
 export type NavItem = (typeof NAV)[number]
 
+/** One row in the global search dropdown. */
+export interface SearchHit {
+  id: string
+  label: string
+  sub: string
+  nav: NavItem
+}
+
 
 /** Icon paths from the reference design system, one per nav item. */
 const ICONS: Record<NavItem, string> = {
@@ -89,11 +97,19 @@ export function TopBar({
   company,
   userName,
   onSignOut,
+  search,
+  onSearch,
+  results,
+  onPickResult,
 }: {
   toolbar?: ReactNode
   company: string
   userName: string
   onSignOut: () => void
+  search: string
+  onSearch: (q: string) => void
+  results: SearchHit[]
+  onPickResult: (hit: SearchHit) => void
 }) {
   const mark =
     company
@@ -157,21 +173,75 @@ export function TopBar({
           <span style={{ color: theme.inkFaint, fontSize: 10 }}>▾</span>
         </div>
 
-        <input
-          placeholder="Search sites, crew, photos, files"
-          style={{
-            flex: '0 1 320px',
-            height: 28,
-            padding: '0 10px',
-            borderRadius: 3,
-            border: `1px solid ${theme.border}`,
-            background: theme.appBg,
-            font: 'inherit',
-            fontSize: 12.5,
-            color: theme.ink,
-            outline: 'none',
-          }}
-        />
+        <div data-topbar="search" style={{ position: 'relative', flex: '0 1 320px' }}>
+          <input
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Search sites, crew, expenses, invoices"
+            style={{
+              width: '100%',
+              height: 28,
+              padding: '0 10px',
+              borderRadius: 3,
+              border: `1px solid ${theme.border}`,
+              background: theme.appBg,
+              font: 'inherit',
+              fontSize: 12.5,
+              color: theme.ink,
+              outline: 'none',
+            }}
+          />
+          {search.trim().length > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 32,
+                left: 0,
+                right: 0,
+                zIndex: 50,
+                maxHeight: 340,
+                overflowY: 'auto',
+                background: theme.panel,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 4,
+                boxShadow: '0 6px 20px rgba(26,29,33,.16)',
+              }}
+            >
+              {results.length === 0 ? (
+                <div style={{ padding: '10px 12px', fontSize: 12.5, color: theme.inkFaint }}>
+                  Nothing matches "{search.trim()}".
+                </div>
+              ) : (
+                results.map((hit) => (
+                  <button
+                    key={`${hit.nav}-${hit.id}`}
+                    onClick={() => onPickResult(hit)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 9,
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: 'none',
+                      borderBottom: `1px solid ${theme.borderSoft}`,
+                      background: 'transparent',
+                      font: 'inherit',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <NavIcon item={hit.nav} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 12.5, fontWeight: 500 }}>{hit.label}</span>
+                      <span style={{ display: 'block', fontSize: 11, color: theme.inkFaint }}>{hit.sub}</span>
+                    </span>
+                    <span style={{ fontSize: 10.5, color: theme.inkFaint }}>{hit.nav}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
         <div
           style={{
@@ -253,6 +323,7 @@ export function Sidebar({
 }) {
   return (
     <nav
+      data-nav="sidebar"
       style={{
         flex: 'none',
         width: 190,
@@ -286,12 +357,13 @@ export function Sidebar({
             }}
           >
             <NavIcon item={item} />
-            {item}
+            <span data-nav-label>{item}</span>
           </button>
         )
       })}
 
       <div
+        data-nav-sites
         style={{
           margin: '10px 14px 6px',
           paddingTop: 10,

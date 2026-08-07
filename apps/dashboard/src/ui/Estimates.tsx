@@ -204,7 +204,7 @@ export function Estimates({ me, sites, workers: _workers, onChanged }: {
   const siteNameOf = (id: string | null): string => sites.find((s) => s.id === id)?.name ?? '—'
 
   const revisionNote = (e: EstimateRow): string => {
-    const created = new Date(e.created_at).toLocaleDateString()
+    const created = new Date(e.created_at).toLocaleDateString('en-AU')
     if (e.note?.trim()) return `${created} · ${e.note.trim()}`
     if (e.status === 'superseded') return `${created} · Superseded`
     if (isTip(e.id)) return `${created} · Current revision`
@@ -905,7 +905,7 @@ export function Estimates({ me, sites, workers: _workers, onChanged }: {
                   </span>
                   <span style={{ fontSize: 12.5, color: '#4A5057' }}>{siteNameOf(row.site_id)}</span>
                   <span style={{ fontSize: 12.5, color: '#4A5057' }}>Rev {row.revision}</span>
-                  <span style={{ fontSize: 12.5, color: '#4A5057' }}>{new Date(row.created_at).toLocaleDateString()}</span>
+                  <span style={{ fontSize: 12.5, color: '#4A5057' }}>{new Date(row.created_at).toLocaleDateString('en-AU')}</span>
                   <span style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{money(totalOf(row.id))}</span>
                   <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
                     <StatusChip status={row.status} dot={STATUS_CHIP[row.status].fg} padding="3px 9px" />

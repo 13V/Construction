@@ -66,7 +66,7 @@ function isOverdue(inv: InvoiceRow, today: Date): boolean {
 }
 
 const fmtDate = (iso: string | null) =>
-  iso ? new Date(`${iso}T00:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '—'
+  iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' }) : '—'
 
 /** Monday of the week containing `d`. Weeks are the unit builders think in. */
 function weekStart(d: Date): Date {
@@ -111,6 +111,7 @@ interface ClaimForm {
   period: string
   issuedOn: string
   dueOn: string
+  retentionPct: string
   note: string
   lines: ClaimLineDraft[]
 }
@@ -279,7 +280,7 @@ export function Invoices({
 
     const max = Math.max(...weeks.flatMap((w) => [w.in, w.out]), 1)
     return weeks.map((w, i) => ({
-      week: w.from.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+      week: w.from.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' }),
       in: w.in,
       out: w.out,
       inH: `${(w.in / max) * 100}%`,
@@ -395,6 +396,28 @@ export function Invoices({
     }
   }
 
+  /**
+   * There is no mail transport in this app, so this composes the reminder and
+   * hands it to the owner's own mail client rather than claiming to have sent
+   * anything. A button that silently sends nothing is worse than no button.
+   */
+  const sendReminders = () => {
+    const late = rows.filter((r) => isOverdue(r, today))
+    if (late.length === 0) return
+    const lines = late.map(
+      (r) =>
+        `${r.invoice_no} — ${r.client_name || 'client'} — ${siteName(r.site_id)} — ${money(outstandingOf(r))} outstanding, due ${fmtDate(r.due_on)} (${daysPastDue(r.due_on, today)} days ago)`,
+    )
+    const body = [
+      'The following invoices are past their due date:',
+      '',
+      ...lines,
+      '',
+      `Total outstanding on overdue invoices: ${money(totals.overdue)}`,
+    ].join('\n')
+    window.location.href = `mailto:?subject=${encodeURIComponent('Overdue invoices')}&body=${encodeURIComponent(body)}`
+  }
+
   const startClaim = () => {
     const site = sites[0]
     const issued = new Date()
@@ -407,15 +430,27 @@ export function Invoices({
       period: '',
       issuedOn: issued.toISOString().slice(0, 10),
       dueOn: due.toISOString().slice(0, 10),
+      retentionPct: '5',
       note: '',
       lines: [blankClaimLine()],
     })
   }
 
-  const claimTotal = useMemo(
+  /**
+   * Retention is money the client holds back until practical completion. It
+   * comes off what is claimed now, so the invoice is raised net — billing the
+   * gross and "remembering" the retention is how a builder ends up chasing an
+   * amount the contract never entitled them to yet.
+   */
+  const claimGross = useMemo(
     () => (form ? form.lines.reduce((s, l) => s + (Number(l.amount) || 0), 0) : 0),
     [form],
   )
+  const claimRetained = useMemo(
+    () => (form ? claimGross * ((Number(form.retentionPct) || 0) / 100) : 0),
+    [form, claimGross],
+  )
+  const claimTotal = claimGross - claimRetained
 
   const saveClaim = async () => {
     if (!form || !canEdit || busy) return
@@ -436,8 +471,9 @@ export function Invoices({
         period: form.period.trim() || null,
         issued_on: form.issuedOn,
         due_on: form.dueOn || null,
-        amount: usable.reduce((s, l) => s + (Number(l.amount) || 0), 0),
+        amount: claimTotal,
         paid_amount: 0,
+        retention_pct: Number(form.retentionPct) || 0,
         status: 'draft',
         note: form.note.trim() || null,
       })
@@ -542,6 +578,11 @@ export function Invoices({
         <div style={{ flex: 1 }} />
 
         {loading && <span style={{ fontSize: 11.5, color: theme.inkFaint }}>Loading…</span>}
+        {canEdit && counts.overdue > 0 && (
+          <button onClick={sendReminders} style={ghost} title="Opens your mail client with the overdue invoices listed">
+            Send reminders
+          </button>
+        )}
         {canEdit && (
           <button onClick={startClaim} style={cta}>
             NEW PROGRESS CLAIM
@@ -848,6 +889,8 @@ export function Invoices({
           form={form}
           sites={sites}
           total={claimTotal}
+          gross={claimGross}
+          retained={claimRetained}
           busy={busy}
           onChange={setForm}
           onCancel={() => setForm(null)}
@@ -862,6 +905,8 @@ function ClaimEditor({
   form,
   sites,
   total,
+  gross,
+  retained,
   busy,
   onChange,
   onCancel,
@@ -870,6 +915,8 @@ function ClaimEditor({
   form: ClaimForm
   sites: JobSite[]
   total: number
+  gross: number
+  retained: number
   busy: boolean
   onChange: (f: ClaimForm) => void
   onCancel: () => void
@@ -929,13 +976,28 @@ function ClaimEditor({
             <Field label="Due">
               <input type="date" value={form.dueOn} onChange={(e) => set('dueOn', e.target.value)} style={input} />
             </Field>
+            <Field label="Retention %">
+              <input
+                value={form.retentionPct}
+                onChange={(e) => set('retentionPct', e.target.value)}
+                inputMode="decimal"
+                style={{ ...input, width: 78, textAlign: 'right' }}
+              />
+            </Field>
           </div>
 
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 11 }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontSize: 12.5, fontWeight: 600 }}>Claim lines</span>
               <span style={{ flex: 1 }} />
-              <span style={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{money2(total)}</span>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                {retained > 0 && (
+                  <span style={{ fontSize: 11.5, color: theme.inkFaint, fontVariantNumeric: 'tabular-nums' }}>
+                    {money2(gross)} less {money2(retained)} retention
+                  </span>
+                )}
+                <span style={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{money2(total)}</span>
+              </span>
             </div>
 
             {form.lines.map((l) => (

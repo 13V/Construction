@@ -3,7 +3,9 @@ import type { ReactNode } from 'react'
 import { supabase } from '../data/supabase'
 import type {
   DailyLogRow,
+  EstimateLineRow,
   ExpenseRow,
+  PlanPinRow,
   JobSiteRow,
   MaterialRow,
   ShiftRow,
@@ -129,12 +131,12 @@ function siteSpend(
 function relWhen(at: number): string {
   const d = new Date(at)
   const now = new Date()
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const time = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
   if (d.toDateString() === now.toDateString()) return `Today, ${time}`
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
   if (d.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`
-  return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`
+  return `${d.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })}, ${time}`
 }
 
 function dayHeading(dateKey: string): string {
@@ -144,7 +146,7 @@ function dayHeading(dateKey: string): string {
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
   if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
-  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+  return d.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 interface ActivityItem {
@@ -222,7 +224,7 @@ function buildActivity(
       items.push({
         id: l.id,
         at: new Date(l.confirmed_at).getTime(),
-        text: `${nameOf(l.confirmed_by)} confirmed the daily log for ${new Date(`${l.log_date}T00:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' })}`,
+        text: `${nameOf(l.confirmed_by)} confirmed the daily log for ${new Date(`${l.log_date}T00:00:00`).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })}`,
         initials: iniOf(l.confirmed_by),
         thumb: false,
       })
@@ -282,6 +284,7 @@ export function JobSiteFolder({
   const [materials, setMaterials] = useState<MaterialRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [logs, setLogs] = useState<DailyLogRow[]>([])
+  const [estLines, setEstLines] = useState<EstimateLineRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -298,13 +301,16 @@ export function JobSiteFolder({
     setLoading(true)
     setError(null)
     const client = supabase()
-    const [siteRes, filesRes, shiftsRes, materialsRes, expensesRes, logsRes] = await Promise.all([
+    const [siteRes, filesRes, shiftsRes, materialsRes, expensesRes, logsRes, estRes] = await Promise.all([
       client.from('job_sites').select('*').eq('id', siteId).maybeSingle(),
       client.from('site_files').select('*').eq('site_id', siteId).order('created_at', { ascending: false }),
       client.from('shifts').select('*').eq('site_id', siteId),
       client.from('materials').select('*').eq('site_id', siteId).order('delivered_on', { ascending: false }),
       client.from('expenses').select('*').eq('site_id', siteId).order('spent_on', { ascending: false }),
       client.from('daily_logs').select('*').eq('site_id', siteId).order('log_date', { ascending: false }).limit(60),
+      // The approved estimate is the only place the schema says what a cost
+      // code was sold for, which is what makes variance meaningful.
+      client.from('estimates').select('id').eq('site_id', siteId).eq('status', 'approved'),
     ])
     const firstError =
       siteRes.error ?? filesRes.error ?? shiftsRes.error ?? materialsRes.error ?? expensesRes.error ?? logsRes.error
@@ -319,6 +325,14 @@ export function JobSiteFolder({
     setMaterials((materialsRes.data ?? []) as MaterialRow[])
     setExpenses((expensesRes.data ?? []) as ExpenseRow[])
     setLogs((logsRes.data ?? []) as DailyLogRow[])
+
+    const estIds = ((estRes.data ?? []) as Array<{ id: string }>).map((e) => e.id)
+    if (estIds.length > 0) {
+      const { data: el } = await client.from('estimate_lines').select('*').in('estimate_id', estIds)
+      setEstLines((el ?? []) as EstimateLineRow[])
+    } else {
+      setEstLines([])
+    }
     setLoading(false)
   }, [siteId])
 
@@ -378,7 +392,15 @@ export function JobSiteFolder({
       ) : tab === 'time' ? (
         <TimeTab site={site} shifts={shifts} workers={workers} />
       ) : (
-        <BudgetTab site={site} siteRow={siteRow} shifts={shifts} materials={materials} expenses={expenses} workers={workers} />
+        <BudgetTab
+          site={site}
+          siteRow={siteRow}
+          shifts={shifts}
+          materials={materials}
+          expenses={expenses}
+          workers={workers}
+          estLines={estLines}
+        />
       )}
 
       {pickerOpen && (
@@ -433,16 +455,12 @@ function ActionBar({ shifts, onAllSites, onExport }: { shifts: ShiftRow[]; onAll
       <button onClick={onAllSites} style={actionBtnStyle}>
         ← All sites
       </button>
-      <button style={actionBtnStyle}>
-        Actions <span style={{ opacity: 0.5, fontSize: 9 }}>▾</span>
-      </button>
       <div style={{ flex: 'none', width: 1, height: 20, background: theme.border, margin: '0 4px' }} />
       <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: theme.inkSoft, whiteSpace: 'nowrap' }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: onSiteCount > 0 ? theme.success : theme.inkFaint }} />
         {onSiteCount > 0 ? `${onSiteCount} on site now` : 'No one on site right now'}
       </span>
       <div style={{ flex: 1 }} />
-      <button style={actionBtnStyle}>Invite client</button>
       <button onClick={onExport} style={actionBtnStyle}>
         Export
       </button>
@@ -986,7 +1004,7 @@ function OverviewTab({
               <span style={{ fontSize: 15, fontWeight: 600 }}>Activity</span>
               <span style={{ flex: 1 }} />
               <span style={{ fontSize: 12, color: LABEL }}>
-                {new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                {new Date().toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })}
               </span>
             </div>
             <div>
@@ -1036,7 +1054,7 @@ function OverviewTab({
                   {l.status === 'confirmed' ? 'Confirmed' : 'Draft'} — {dayHeading(`${l.log_date}T00:00:00`)}
                 </span>
                 <span style={{ flex: 'none', fontSize: 12.5, color: theme.inkSoft }}>
-                  {new Date(`${l.log_date}T00:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                  {new Date(`${l.log_date}T00:00:00`).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })}
                 </span>
               </div>
             ))}
@@ -1315,7 +1333,7 @@ function PhotosTab({
                         )}
                       </span>
                       <span style={{ fontSize: 10.5, fontWeight: 600, color: '#fff' }}>
-                        {at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        {at.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}
                       </span>
                     </span>
                     <span style={{ position: 'absolute', left: 8, bottom: 8, display: 'flex', gap: 5 }}>
@@ -1381,6 +1399,10 @@ function PlansTab({
   const [note, setNote] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [pins, setPins] = useState<PlanPinRow[]>([])
+  const [placing, setPlacing] = useState(false)
+  const [compareTo, setCompareTo] = useState<string | null>(null)
+  const [compareUrl, setCompareUrl] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const superseded = useMemo(
@@ -1389,6 +1411,19 @@ function PlansTab({
   )
 
   const selected = rows.find((r) => r.id === selectedId) ?? rows.find((r) => !superseded.has(r.id)) ?? null
+
+  // Anything this sheet supersedes, walked back down the chain.
+  const priorRevisions = useMemo(() => {
+    const out: SiteFileRow[] = []
+    let cursor = selected?.supersedes ?? null
+    while (cursor) {
+      const prev = rows.find((r) => r.id === cursor)
+      if (!prev) break
+      out.push(prev)
+      cursor = prev.supersedes
+    }
+    return out
+  }, [selected, rows])
 
   useEffect(() => {
     let cancelled = false
@@ -1399,10 +1434,73 @@ function PlansTab({
     void signedUrl(BUCKET_FILES, selected.storage_path).then((u) => {
       if (!cancelled) setPreviewUrl(u)
     })
+    void supabase()
+      .from('plan_pins')
+      .select('*')
+      .eq('file_id', selected.id)
+      .then(({ data }) => {
+        if (!cancelled) setPins((data ?? []) as PlanPinRow[])
+      })
     return () => {
       cancelled = true
     }
   }, [selected])
+
+  // The revision this sheet supersedes, for a side-by-side.
+  useEffect(() => {
+    let cancelled = false
+    if (!compareTo) {
+      setCompareUrl(null)
+      return
+    }
+    const prior = rows.find((r) => r.id === compareTo)
+    if (!prior) return
+    void signedUrl(BUCKET_FILES, prior.storage_path).then((u) => {
+      if (!cancelled) setCompareUrl(u)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [compareTo, rows])
+
+  /**
+   * Pins are stored as fractions of the sheet, so they stay on the same spot
+   * whatever size the drawing renders at.
+   */
+  const addPin = async (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!placing || !selected) return
+    const box = e.currentTarget.getBoundingClientRect()
+    const x = (e.clientX - box.left) / box.width
+    const y = (e.clientY - box.top) / box.height
+    const label = window.prompt('What is at this spot?')
+    if (label === null) {
+      setPlacing(false)
+      return
+    }
+    const { data, error: err } = await supabase()
+      .from('plan_pins')
+      .insert({
+        company_id: me.company_id,
+        site_id: siteId,
+        file_id: selected.id,
+        x: Math.min(1, Math.max(0, x)).toFixed(5),
+        y: Math.min(1, Math.max(0, y)).toFixed(5),
+        kind: /issue|leak|crack|water|damage/i.test(label) ? 'issue' : 'note',
+        label: label.trim(),
+        created_by: me.id,
+      })
+      .select()
+      .single()
+    setPlacing(false)
+    if (err) setNote(err.message)
+    else setPins((p) => [...p, data as PlanPinRow])
+  }
+
+  const removePin = async (pin: PlanPinRow) => {
+    const { error: err } = await supabase().from('plan_pins').delete().eq('id', pin.id)
+    if (err) setNote(err.message)
+    else setPins((p) => p.filter((x) => x.id !== pin.id))
+  }
 
   const upload = async (list: FileList | null, supersedesId: string | null) => {
     const file = list?.[0]
@@ -1530,7 +1628,7 @@ function PlansTab({
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf(f.uploaded_by)}</span>
                 </span>
                 <span style={{ fontSize: 12.5, color: MUTED, fontVariantNumeric: 'tabular-nums' }}>
-                  {new Date(f.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: '2-digit' })}
+                  {new Date(f.created_at).toLocaleDateString('en-AU', { month: 'short', day: 'numeric', year: '2-digit' })}
                 </span>
                 <span style={{ fontSize: 12.5, color: MUTED, fontVariantNumeric: 'tabular-nums' }}>{formatSize(f.size_bytes)}</span>
                 <span>
@@ -1586,11 +1684,36 @@ function PlansTab({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
               <span style={{ fontSize: 15, fontWeight: 600 }}>{selected.name}</span>
               <span style={{ fontSize: 12.5, color: LABEL }}>
-                {selected.version ?? 'Rev A'} · uploaded {new Date(selected.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })} ·{' '}
+                {selected.version ?? 'Rev A'} · uploaded {new Date(selected.created_at).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })} ·{' '}
                 {formatSize(selected.size_bytes)}
               </span>
             </div>
             <div style={{ flex: 1 }} />
+            <button
+              onClick={() => setPlacing((v) => !v)}
+              style={{
+                ...actionBtnStyle,
+                borderColor: placing ? theme.accent : theme.border,
+                background: placing ? theme.accentFill : theme.panel,
+                color: placing ? theme.accent : theme.ink,
+              }}
+            >
+              {placing ? 'Click the drawing…' : `Pin a spot${pins.length ? ` · ${pins.length}` : ''}`}
+            </button>
+            {priorRevisions.length > 0 && (
+              <select
+                value={compareTo ?? ''}
+                onChange={(e) => setCompareTo(e.target.value || null)}
+                style={{ ...actionBtnStyle, padding: '0 8px' }}
+              >
+                <option value="">Compare to…</option>
+                {priorRevisions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.version ?? r.name}
+                  </option>
+                ))}
+              </select>
+            )}
             {me.is_office && (
               <button onClick={() => fileRef.current?.click()} style={actionBtnStyle}>
                 Upload a new revision
@@ -1598,28 +1721,104 @@ function PlansTab({
             )}
           </div>
 
-          <div
-            style={{
-              height: 540,
-              background: theme.panel,
-              border: `1px solid ${theme.border}`,
-              borderRadius: 8,
-              overflow: 'hidden',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {previewUrl && isImage(selected) ? (
-              <img src={previewUrl} alt={selected.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-            ) : previewUrl && isPdf(selected) ? (
-              <iframe title={selected.name} src={previewUrl} style={{ width: '100%', height: '100%', border: 'none' }} />
-            ) : (
-              <div style={{ textAlign: 'center', padding: 24 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 6 }}>No preview for this file type</div>
-                <button onClick={() => void download(selected)} style={{ ...actionBtnStyle, margin: '0 auto' }}>
-                  Open {selected.name}
-                </button>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div
+              onClick={(e) => void addPin(e)}
+              style={{
+                position: 'relative',
+                flex: 1,
+                height: 540,
+                background: theme.panel,
+                border: `1px solid ${placing ? theme.accent : theme.border}`,
+                borderRadius: 8,
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: placing ? 'crosshair' : 'default',
+              }}
+            >
+              {previewUrl && isImage(selected) ? (
+                <img src={previewUrl} alt={selected.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              ) : previewUrl && isPdf(selected) ? (
+                <iframe title={selected.name} src={previewUrl} style={{ width: '100%', height: '100%', border: 'none', pointerEvents: placing ? 'none' : 'auto' }} />
+              ) : (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 6 }}>No preview for this file type</div>
+                  <button onClick={() => void download(selected)} style={{ ...actionBtnStyle, margin: '0 auto' }}>
+                    Open {selected.name}
+                  </button>
+                </div>
+              )}
+
+              {pins.map((pin, i) => (
+                <span
+                  key={pin.id}
+                  title={pin.label}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (window.confirm(`Remove the pin "${pin.label}"?`)) void removePin(pin)
+                  }}
+                  style={{
+                    position: 'absolute',
+                    left: `${Number(pin.x) * 100}%`,
+                    top: `${Number(pin.y) * 100}%`,
+                    transform: 'translate(-50%, -100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    padding: '3px 8px 3px 5px',
+                    borderRadius: 11,
+                    background: pin.kind === 'issue' ? theme.alert : theme.rail,
+                    color: '#fff',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 4px rgba(0,0,0,.35)',
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 15,
+                      height: 15,
+                      borderRadius: '50%',
+                      background: 'rgba(255,255,255,.25)',
+                    }}
+                  >
+                    {i + 1}
+                  </span>
+                  {pin.label}
+                </span>
+              ))}
+            </div>
+
+            {compareTo && (
+              <div
+                style={{
+                  flex: 1,
+                  height: 540,
+                  background: theme.panel,
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {compareUrl ? (
+                  isImage(rows.find((r) => r.id === compareTo) ?? null) ? (
+                    <img src={compareUrl} alt="Earlier revision" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  ) : (
+                    <iframe title="Earlier revision" src={compareUrl} style={{ width: '100%', height: '100%', border: 'none' }} />
+                  )
+                ) : (
+                  <span style={{ fontSize: 12.5, color: LABEL }}>Loading the earlier revision…</span>
+                )}
               </div>
             )}
           </div>
@@ -1722,7 +1921,7 @@ function TimeTab({ site, shifts, workers }: { site: JobSite; shifts: ShiftRow[];
       const d = new Date()
       d.setDate(d.getDate() - i)
       const key = d.toDateString()
-      out.push({ key, label: d.toLocaleDateString([], { weekday: 'narrow' }), hours: byDay.get(key) ?? 0 })
+      out.push({ key, label: d.toLocaleDateString('en-AU', { weekday: 'narrow' }), hours: byDay.get(key) ?? 0 })
     }
     const max = Math.max(...out.map((o) => o.hours), 1)
     return out.map((o) => ({ ...o, h: `${(o.hours / max) * 100}%` }))
@@ -1733,7 +1932,7 @@ function TimeTab({ site, shifts, workers }: { site: JobSite; shifts: ShiftRow[];
     const times = shifts.map((s) => new Date(s.started_at).getTime())
     const from = new Date(Math.min(...times))
     const to = new Date(Math.max(...times))
-    const f = (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+    const f = (d: Date) => d.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })
     return `${f(from)} – ${f(to)}`
   }, [shifts])
 
@@ -1858,7 +2057,8 @@ function TimeTab({ site, shifts, workers }: { site: JobSite; shifts: ShiftRow[];
 // Budget
 // ============================================================================
 
-const BUDGET_COLUMNS = '1.6fr 84px 84px 108px 108px 118px'
+// EST HRS / ACT HRS / EST COST / ACT COST / VARIANCE, as the design has it.
+const BUDGET_COLUMNS = '1.6fr 84px 84px 112px 112px 122px'
 
 function BudgetTab({
   site,
@@ -1867,6 +2067,7 @@ function BudgetTab({
   materials,
   expenses,
   workers,
+  estLines,
 }: {
   site: JobSite
   siteRow: JobSiteRow | null
@@ -1874,36 +2075,56 @@ function BudgetTab({
   materials: MaterialRow[]
   expenses: ExpenseRow[]
   workers: Worker[]
+  estLines: EstimateLineRow[]
 }) {
   const rateOf = useCallback((id: string) => workers.find((w) => w.id === id)?.rate ?? 0, [workers])
   const spend = useMemo(() => siteSpend(shifts, materials, expenses, rateOf), [shifts, materials, expenses, rateOf])
 
   const budget = siteRow?.budget === null || siteRow?.budget === undefined ? site.budget : Number(siteRow.budget)
-  const remaining = budget === null ? null : budget - spend.total
+  const contract =
+    siteRow?.contract_value === null || siteRow?.contract_value === undefined
+      ? site.contractValue
+      : Number(siteRow.contract_value)
+
+  // Margin is contract minus cost. Comparing spend to `budget` only tells you
+  // whether the job beat its own cost target, which is a different question.
+  const margin = contract === null ? null : contract - spend.total
+  const marginPct = contract && contract > 0 && margin !== null ? (margin / contract) * 100 : null
   const spentPct = budget && budget > 0 ? (spend.total / budget) * 100 : 0
 
   /**
-   * Actuals by cost code. Labour comes from shifts that carry a code;
-   * materials and unlinked expenses from theirs. There is no per-code
-   * estimate in this screen's table scope, so the EST columns show what the
-   * data can support — hours actually booked — rather than an invented budget
-   * split.
+   * Estimate versus actual, per cost code. Estimated hours are only knowable
+   * for lines the estimate priced by the hour, so an EST HRS cell is blank
+   * rather than zero when the line was priced another way.
    */
   const byCode = useMemo(() => {
-    const map = new Map<string, { hours: number; labour: number; materials: number; other: number }>()
+    interface Row {
+      hours: number
+      labour: number
+      materials: number
+      other: number
+      estCost: number
+      estHours: number
+    }
+    const map = new Map<string, Row>()
     const get = (code: string) => {
       let e = map.get(code)
       if (!e) {
-        e = { hours: 0, labour: 0, materials: 0, other: 0 }
+        e = { hours: 0, labour: 0, materials: 0, other: 0, estCost: 0, estHours: 0 }
         map.set(code, e)
       }
       return e
     }
-    for (const s of shifts) {
-      const e = get(s.cost_code ?? 'Uncoded')
-      const h = hoursOf(s)
+    for (const l of estLines) {
+      const e = get(l.cost_code ?? 'Uncoded')
+      e.estCost += Number(l.line_total)
+      if (/^(hr|hour|hrs)$/i.test(l.unit)) e.estHours += Number(l.qty)
+    }
+    for (const sh of shifts) {
+      const e = get(sh.cost_code ?? 'Uncoded')
+      const h = hoursOf(sh)
       e.hours += h
-      e.labour += h * rateOf(s.worker_id)
+      e.labour += h * rateOf(sh.worker_id)
     }
     for (const m of materials) {
       if (m.status === 'returned') continue
@@ -1915,48 +2136,80 @@ function BudgetTab({
       get(x.cost_code ?? 'Uncoded').other += Number(x.amount)
     }
     return [...map.entries()]
-      .map(([code, v]) => ({
-        code,
-        name: costCodes.find((c) => c.code === code)?.name ?? (code === 'Uncoded' ? 'Not coded' : '—'),
-        hours: v.hours,
-        actual: v.labour + v.materials + v.other,
-        labour: v.labour,
-        materials: v.materials,
-        other: v.other,
-      }))
+      .map(([code, v]) => {
+        const actual = v.labour + v.materials + v.other
+        return {
+          code,
+          name: costCodes.find((c) => c.code === code)?.name ?? (code === 'Uncoded' ? 'Not coded' : '—'),
+          estHours: v.estHours,
+          hours: v.hours,
+          estCost: v.estCost,
+          actual,
+          // Positive is money left on that line; negative is an overrun.
+          variance: v.estCost > 0 ? v.estCost - actual : null,
+        }
+      })
       .sort((a, b) => b.actual - a.actual)
-  }, [shifts, materials, expenses, rateOf])
+  }, [estLines, shifts, materials, expenses, rateOf])
 
-  const totalHours = byCode.reduce((s, r) => s + r.hours, 0)
+  const totals = byCode.reduce(
+    (t, r) => ({
+      estHours: t.estHours + r.estHours,
+      hours: t.hours + r.hours,
+      estCost: t.estCost + r.estCost,
+      actual: t.actual + r.actual,
+    }),
+    { estHours: 0, hours: 0, estCost: 0, actual: 0 },
+  )
+  const totalVariance = totals.estCost > 0 ? totals.estCost - totals.actual : null
+  const overruns = byCode.filter((r) => r.variance !== null && r.variance < 0)
   const uncoded = byCode.find((r) => r.code === 'Uncoded')
+
+  const varianceColour = (v: number | null) =>
+    v === null ? theme.inkFaint : v < 0 ? theme.alert : '#1B7A2C'
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: TAB_PAD }}>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <StatCard
-          label="BUDGET"
-          value={budget === null ? '—' : money(budget)}
-          note={budget === null ? 'Set a budget on the job site' : 'Internal cost target, not the contract price'}
+          label="CONTRACT VALUE"
+          value={contract === null ? '—' : money(contract)}
+          note={contract === null ? 'Set the agreed price on the job site' : 'What the client is paying'}
         />
-        <StatCard label="COST TO DATE" value={money(spend.total)} note={budget ? `${Math.round(spentPct)}% of budget spent` : `${money(spend.labour)} labour`} />
         <StatCard
-          label="REMAINING"
-          value={remaining === null ? '—' : money(remaining)}
+          label="COST TO DATE"
+          value={money(spend.total)}
           note={`${money(spend.labour)} labour · ${money(spend.materials)} materials · ${money(spend.other)} other`}
         />
-        {uncoded && uncoded.actual > 0 ? (
+        <StatCard
+          label="PROJECTED MARGIN"
+          value={margin === null ? '—' : money(margin)}
+          note={
+            marginPct === null
+              ? 'Needs a contract value'
+              : `${marginPct.toFixed(1)}% of contract · ${budget ? `${Math.round(spentPct)}% of cost budget spent` : 'no cost budget set'}`
+          }
+          tone={margin !== null && margin < 0 ? 'watch' : undefined}
+        />
+        {overruns.length > 0 ? (
+          <StatCard
+            label="WATCH"
+            value={money(overruns.reduce((t, r) => t + Math.abs(r.variance ?? 0), 0))}
+            note={`${overruns.length} cost ${overruns.length === 1 ? 'code is' : 'codes are'} over the estimate`}
+            tone="watch"
+          />
+        ) : uncoded && uncoded.actual > 0 ? (
           <StatCard
             label="WATCH"
             value={money(uncoded.actual)}
-            note="Spend with no cost code — it will not show against any line"
+            note="Spend with no cost code — it lands on no line"
             tone="watch"
           />
         ) : (
           <StatCard
-            label="OVER BUDGET"
-            value={remaining !== null && remaining < 0 ? money(-remaining) : money(0)}
-            note={remaining !== null && remaining < 0 ? 'Costs have passed the budget' : 'Still inside the budget'}
-            tone={remaining !== null && remaining < 0 ? 'watch' : undefined}
+            label="VARIANCE"
+            value={totalVariance === null ? '—' : money(totalVariance)}
+            note={totalVariance === null ? 'No approved estimate for this job' : 'Estimate less actual, all codes'}
           />
         )}
       </div>
@@ -1965,17 +2218,21 @@ function BudgetTab({
         <div style={cardHead}>
           <span style={{ fontSize: 15, fontWeight: 600 }}>Job costing by cost code</span>
           <span style={{ flex: 1 }} />
-          <span style={{ fontSize: 12.5, color: LABEL }}>Actuals from recorded shifts, materials and expenses</span>
+          <span style={{ fontSize: 12.5, color: LABEL }}>
+            {estLines.length > 0
+              ? 'Estimate from the approved quote · actuals from shifts, materials and expenses'
+              : 'Actuals from shifts, materials and expenses — no approved estimate to compare against'}
+          </span>
         </div>
 
         <div style={{ overflowX: 'auto' }}>
-          <div style={{ ...gridHead, gridTemplateColumns: BUDGET_COLUMNS, minWidth: 740 }}>
+          <div style={{ ...gridHead, gridTemplateColumns: BUDGET_COLUMNS, minWidth: 760 }}>
             <span style={thStyle}>COST CODE</span>
-            <span style={{ ...thStyle, textAlign: 'right' }}>HOURS</span>
-            <span style={{ ...thStyle, textAlign: 'right' }}>LABOUR</span>
-            <span style={{ ...thStyle, textAlign: 'right' }}>MATERIALS</span>
-            <span style={{ ...thStyle, textAlign: 'right' }}>OTHER</span>
-            <span style={{ ...thStyle, textAlign: 'right' }}>ACTUAL</span>
+            <span style={{ ...thStyle, textAlign: 'right' }}>EST HRS</span>
+            <span style={{ ...thStyle, textAlign: 'right' }}>ACT HRS</span>
+            <span style={{ ...thStyle, textAlign: 'right' }}>EST COST</span>
+            <span style={{ ...thStyle, textAlign: 'right' }}>ACT COST</span>
+            <span style={{ ...thStyle, textAlign: 'right' }}>VARIANCE</span>
           </div>
 
           {byCode.length === 0 && (
@@ -1985,7 +2242,7 @@ function BudgetTab({
           )}
 
           {byCode.map((b) => (
-            <div key={b.code} style={{ ...gridRow, gridTemplateColumns: BUDGET_COLUMNS, minWidth: 740 }}>
+            <div key={b.code} style={{ ...gridRow, gridTemplateColumns: BUDGET_COLUMNS, minWidth: 760 }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: LABEL }}>{b.code}</span>
                 <span style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1993,47 +2250,39 @@ function BudgetTab({
                 </span>
               </span>
               <span style={{ fontSize: 13, color: MUTED, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                {b.estHours > 0 ? b.estHours.toFixed(1) : '—'}
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                 {b.hours > 0 ? b.hours.toFixed(1) : '—'}
               </span>
               <span style={{ fontSize: 13, color: MUTED, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {b.labour > 0 ? money(b.labour) : '—'}
+                {b.estCost > 0 ? money(b.estCost) : '—'}
               </span>
-              <span style={{ fontSize: 13, color: MUTED, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {b.materials > 0 ? money(b.materials) : '—'}
-              </span>
-              <span style={{ fontSize: 13, color: MUTED, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {b.other > 0 ? money(b.other) : '—'}
-              </span>
-              <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                 {money(b.actual)}
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: varianceColour(b.variance) }}>
+                {b.variance === null ? '—' : `${b.variance < 0 ? '−' : '+'}${money(Math.abs(b.variance))}`}
               </span>
             </div>
           ))}
 
-          <div style={{ ...gridTotal, gridTemplateColumns: BUDGET_COLUMNS, minWidth: 740 }}>
+          <div style={{ ...gridTotal, gridTemplateColumns: BUDGET_COLUMNS, minWidth: 760 }}>
             <span style={{ fontSize: 13, fontWeight: 700 }}>Total</span>
             <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-              {totalHours.toFixed(1)}
+              {totals.estHours > 0 ? totals.estHours.toFixed(1) : '—'}
             </span>
             <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-              {money(spend.labour)}
+              {totals.hours.toFixed(1)}
             </span>
             <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-              {money(spend.materials)}
+              {totals.estCost > 0 ? money(totals.estCost) : '—'}
             </span>
             <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-              {money(spend.other)}
+              {money(totals.actual)}
             </span>
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 700,
-                textAlign: 'right',
-                fontVariantNumeric: 'tabular-nums',
-                color: remaining !== null && remaining < 0 ? theme.alert : theme.ink,
-              }}
-            >
-              {money(spend.total)}
+            <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: varianceColour(totalVariance) }}>
+              {totalVariance === null ? '—' : `${totalVariance < 0 ? '−' : '+'}${money(Math.abs(totalVariance))}`}
             </span>
           </div>
         </div>

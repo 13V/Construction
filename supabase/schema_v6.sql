@@ -227,3 +227,44 @@ drop trigger if exists shifts_worker_guard_t on shifts;
 create trigger shifts_worker_guard_t
   before update on shifts
   for each row execute function shifts_worker_guard();
+
+-- ------------------------------------- a subcontractor bills against a PO
+
+-- The sub portal shows "your PO" and, per the design, lets them submit an
+-- invoice against it. A sub's invoice is a payable, not a client invoice, so
+-- it lands in `expenses` where every other cost does — as needs_review, tied
+-- to the PO, never auto-approved.
+--
+-- The predicate is deliberately narrow: their own site, a PO that really
+-- belongs to that site, and no ability to mark it confirmed.
+drop policy if exists expenses_sub_submit on expenses;
+create policy expenses_sub_submit on expenses
+  for insert with check (
+    current_portal_kind() = 'sub'
+    and site_id = current_portal_site()
+    and status = 'needs_review'
+    and po_id is not null
+    and po_id in (select id from purchase_orders where site_id = current_portal_site())
+  );
+
+-- They see only what they filed themselves, never the builder's other costs.
+drop policy if exists expenses_sub_read_own on expenses;
+create policy expenses_sub_read_own on expenses
+  for select using (
+    current_portal_kind() = 'sub'
+    and site_id = current_portal_site()
+    and po_id is not null
+  );
+
+-- A sub needs to see the order they are billing against, and nothing else.
+drop policy if exists po_sub_read on purchase_orders;
+create policy po_sub_read on purchase_orders
+  for select using (
+    current_portal_kind() = 'sub'
+    and site_id = current_portal_site()
+    and status in ('sent','partially_received','received')
+  );
+
+drop policy if exists po_lines_sub_read on po_lines;
+create policy po_lines_sub_read on po_lines
+  for select using (po_id in (select id from purchase_orders));

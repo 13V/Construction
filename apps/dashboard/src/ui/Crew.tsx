@@ -55,10 +55,10 @@ const mondayOf = (d: Date) => {
 }
 const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1)
 const startOfNextMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 1)
-const hhmm = (d: Date) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-const monthDay = (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-const monthYear = (d: Date) => d.toLocaleDateString([], { month: 'short', year: 'numeric' })
-const weekday = (d: Date) => d.toLocaleDateString([], { weekday: 'short' })
+const hhmm = (d: Date) => d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
+const monthDay = (d: Date) => d.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })
+const monthYear = (d: Date) => d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
+const weekday = (d: Date) => d.toLocaleDateString('en-AU', { weekday: 'short' })
 
 const durationHrs = (row: ShiftRow, nowMs: number) =>
   Math.max(0, (row.ended_at ? new Date(row.ended_at).getTime() : nowMs) - new Date(row.started_at).getTime()) /

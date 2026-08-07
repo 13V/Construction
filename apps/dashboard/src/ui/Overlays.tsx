@@ -19,7 +19,7 @@ const panel = {
 } as const
 
 const hhmm = (t: number) =>
-  new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  new Date(t).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
 
 const hoursLabel = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 60_000))
@@ -525,16 +525,19 @@ export function EventLog({ snapshot }: { snapshot: CrewSnapshot }) {
 function RailButton({
   title,
   active,
+  onClick,
   children,
 }: {
   title: string
   active?: boolean
+  onClick?: () => void
   children: ReactNode
 }) {
   return (
     <button
       type="button"
       title={title}
+      onClick={onClick}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -553,7 +556,21 @@ function RailButton({
   )
 }
 
-export function ToolRail() {
+export function ToolRail({
+  onZoomIn,
+  onZoomOut,
+  onFitSites,
+  onFullscreen,
+  fencesOn,
+  onToggleFences,
+}: {
+  onZoomIn: () => void
+  onZoomOut: () => void
+  onFitSites: () => void
+  onFullscreen: () => void
+  fencesOn: boolean
+  onToggleFences: () => void
+}) {
   return (
     <div
       style={{
@@ -565,34 +582,34 @@ export function ToolRail() {
         boxShadow: '0 2px 8px rgba(0,0,0,.28)',
       }}
     >
-      <RailButton title="Fullscreen">
+      <RailButton title="Fullscreen" onClick={onFullscreen}>
         <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
           <path d="M2.5 5.8V2.5h3.3M10.2 2.5h3.3v3.3M13.5 10.2v3.3h-3.3M5.8 13.5H2.5v-3.3" />
         </svg>
       </RailButton>
-      <RailButton title="Zoom in">
+      <RailButton title="Zoom in" onClick={onZoomIn}>
         <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
           <path d="M8 3.2v9.6M3.2 8h9.6" />
         </svg>
       </RailButton>
-      <RailButton title="Zoom out">
+      <RailButton title="Zoom out" onClick={onZoomOut}>
         <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
           <path d="M3.2 8h9.6" />
         </svg>
       </RailButton>
       <div style={{ height: 1, background: '#454A50', margin: '4px 5px' }} />
-      <RailButton title="Filter by site">
+      <RailButton title="Show all job sites" onClick={onFitSites}>
         <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
           <path d="M2 4h12M4.2 8h7.6M6.4 12h3.2" />
         </svg>
       </RailButton>
-      <RailButton title="Layers" active>
+      <RailButton title={fencesOn ? 'Hide geofences' : 'Show geofences'} active={fencesOn} onClick={onToggleFences}>
         <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round">
           <path d="M8 2.2l5.6 3.1L8 8.4 2.4 5.3z" />
           <path d="M2.4 9.2L8 12.3l5.6-3.1" />
         </svg>
       </RailButton>
-      <RailButton title="Recenter">
+      <RailButton title="Recentre on your sites" onClick={onFitSites}>
         <svg width={15} height={15} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round">
           <circle cx={8} cy={8} r={4.4} />
           <path d="M8 1.4v2.2M8 12.4v2.2M1.4 8h2.2M12.4 8h2.2" />

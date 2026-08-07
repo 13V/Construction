@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { LiveMap } from './map/LiveMap'
-import { Sidebar, ToolbarButton, TopBar, type NavItem } from './ui/Chrome'
+import { LiveMap, type MapHandle } from './map/LiveMap'
+import { Sidebar, ToolbarButton, TopBar, type NavItem, type SearchHit } from './ui/Chrome'
 import { EventLog, RosterPanel, StatStrip, ToolRail } from './ui/Overlays'
 import { Timesheets } from './ui/Timesheets'
 import { JobSites, type JobSiteDraft } from './ui/JobSites'
@@ -32,11 +32,35 @@ export function Dashboard({ me }: { me: WorkerRow }) {
   // Drawing a geofence needs the map underneath, so site setup replaces the
   // folder rather than sitting beside it.
   const [siteSetup, setSiteSetup] = useState(false)
+  const [search, setSearch] = useState('')
+  const mapRef = useRef<MapHandle>(null)
+
+  /**
+   * Global search over what the dashboard already holds in memory — sites,
+   * crew and the open shifts behind them. It jumps to the screen that owns the
+   * thing rather than pretending to be a search results page.
+   */
+  const results = useMemo<SearchHit[]>(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return []
+    const hits: SearchHit[] = []
+    for (const s of live.sites) {
+      if (`${s.name} ${s.address} ${s.jobType} ${s.clientName ?? ''}`.toLowerCase().includes(q)) {
+        hits.push({ id: s.id, label: s.name, sub: s.address || s.jobType || 'Job site', nav: 'Job Sites' })
+      }
+    }
+    for (const w of live.workers) {
+      if (`${w.name} ${w.trade}`.toLowerCase().includes(q)) {
+        hits.push({ id: w.id, label: w.name, sub: w.trade, nav: 'Crew' })
+      }
+    }
+    return hits.slice(0, 12)
+  }, [search, live.sites, live.workers])
 
   const inSiteSetup = nav === 'Job Sites' && siteSetup
   const pickingOnMap = inSiteSetup && draft !== null
 
-  const today = new Date(live.now).toLocaleDateString([], {
+  const today = new Date(live.now).toLocaleDateString('en-AU', {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
@@ -90,6 +114,14 @@ export function Dashboard({ me }: { me: WorkerRow }) {
         company={live.companyName}
         userName={me.name}
         onSignOut={() => void supabase().auth.signOut()}
+        search={search}
+        onSearch={setSearch}
+        results={results}
+        onPickResult={(hit) => {
+          setNav(hit.nav)
+          if (hit.nav === 'Job Sites') setSiteSetup(false)
+          setSearch('')
+        }}
         toolbar={
           <>
             <ToolbarButton>{today}</ToolbarButton>
@@ -127,7 +159,7 @@ export function Dashboard({ me }: { me: WorkerRow }) {
         }
       />
 
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div data-shell="main" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <Sidebar active={nav} sites={live.sites} onNavigate={setNav} />
 
         {inSiteSetup && (
@@ -148,6 +180,7 @@ export function Dashboard({ me }: { me: WorkerRow }) {
           */}
           <div style={{ position: 'absolute', inset: 0 }}>
             <LiveMap
+              ref={mapRef}
               sites={live.sites}
               crew={live.crew}
               selectedId={selectedId}
@@ -178,7 +211,14 @@ export function Dashboard({ me }: { me: WorkerRow }) {
                   gap: 12,
                 }}
               >
-                <ToolRail />
+                <ToolRail
+                  onZoomIn={() => mapRef.current?.zoomIn()}
+                  onZoomOut={() => mapRef.current?.zoomOut()}
+                  onFitSites={() => mapRef.current?.fitSites()}
+                  onFullscreen={() => mapRef.current?.toggleFullscreen()}
+                  fencesOn={showFences}
+                  onToggleFences={() => setShowFences((v) => !v)}
+                />
                 <StatStrip snapshot={live} />
               </div>
 

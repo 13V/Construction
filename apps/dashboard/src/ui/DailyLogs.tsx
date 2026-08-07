@@ -54,7 +54,7 @@ function parseLocalDate(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00`)
 }
 function formatFullDate(dateStr: string): string {
-  return parseLocalDate(dateStr).toLocaleDateString([], {
+  return parseLocalDate(dateStr).toLocaleDateString('en-AU', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
@@ -62,18 +62,18 @@ function formatFullDate(dateStr: string): string {
   })
 }
 function formatShortDate(dateStr: string): string {
-  return parseLocalDate(dateStr).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+  return parseLocalDate(dateStr).toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 function formatMediumDate(dateStr: string): string {
-  return parseLocalDate(dateStr).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+  return parseLocalDate(dateStr).toLocaleDateString('en-AU', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 /** generated_at / confirmed_at are real timestamps, not bare dates — format
  *  them directly rather than through the local-midnight helper above. */
 function formatTimestampDate(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+  return new Date(iso).toLocaleDateString('en-AU', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
 }
 
 export function DailyLogs({ me, sites, workers, onChanged }: {
@@ -471,7 +471,7 @@ export function DailyLogs({ me, sites, workers, onChanged }: {
                       <div style={phoneScreen}>
                         <div style={phoneStatusBar}>
                           <span style={phoneTime}>
-                            {new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M$/i, '')}
+                            {new Date().toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M$/i, '')}
                           </span>
                           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <svg width="16" height="11" viewBox="0 0 16 11" fill="#1A1D21">
@@ -653,9 +653,8 @@ function DraftBand({ generatedAt }: { generatedAt: string | null }) {
         Nothing here was typed by hand. Every section came from data the app already had.
       </span>
       <div style={{ flex: 1 }} />
-      <a href="#" onClick={(e) => e.preventDefault()} style={sourceLink}>
-        See where each field came from
-      </a>
+      {/* Each section already carries its own "from your data" marker, so a
+          second link that opened nothing was noise. */}
     </div>
   )
 }
@@ -787,14 +786,6 @@ const confirmedBandStyle = {
   ...bandBase,
   background: '#EAF7EE',
   border: '1px solid #C3E6CB',
-} as const
-
-const sourceLink = {
-  fontSize: 12.5,
-  fontWeight: 500,
-  color: theme.accent,
-  textDecoration: 'none',
-  cursor: 'pointer',
 } as const
 
 const twoColRow = {

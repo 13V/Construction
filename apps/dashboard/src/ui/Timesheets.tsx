@@ -48,9 +48,9 @@ const pad2 = (n: number) => String(n).padStart(2, '0')
 const hours = (ms: number) => (ms / 3_600_000).toFixed(2)
 /** One-decimal hours for on-screen figures, matching the density of the design. */
 const fmtHrs1 = (ms: number) => (ms / 3_600_000).toFixed(1)
-const hhmm = (d: Date) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+const hhmm = (d: Date) => d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
 const shortDate = (d: Date) =>
-  `${d.toLocaleDateString([], { weekday: 'short' })} ${d.toLocaleDateString([], { month: 'short' })} ${d.getDate()}`
+  `${d.toLocaleDateString('en-AU', { weekday: 'short' })} ${d.toLocaleDateString('en-AU', { month: 'short' })} ${d.getDate()}`
 
 const startOfDay = (d: Date) => {
   const x = new Date(d)
@@ -77,7 +77,7 @@ const durationMs = (row: ShiftRow) =>
 
 const fmtApprovedStamp = (iso: string) => {
   const d = new Date(iso)
-  return `${d.toLocaleDateString([], { weekday: 'short' })} ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+  return `${d.toLocaleDateString('en-AU', { weekday: 'short' })} ${d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}`
 }
 
 // -------------------------------------------------------------------- icons
@@ -259,8 +259,8 @@ export function Timesheets({
         row,
         ini: worker?.initials ?? '??',
         name: worker?.name ?? row.worker_id,
-        what: `clocked in ${new Date(row.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} at ${site?.name ?? 'an unknown site'}, never clocked out`,
-        day: new Date(row.started_at).toLocaleDateString([], { weekday: 'short' }),
+        what: `clocked in ${new Date(row.started_at).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })} at ${site?.name ?? 'an unknown site'}, never clocked out`,
+        day: new Date(row.started_at).toLocaleDateString('en-AU', { weekday: 'short' }),
         canApprove: false,
       }
     }),
@@ -271,7 +271,7 @@ export function Timesheets({
         ini: worker?.initials ?? '??',
         name: worker?.name ?? row.worker_id,
         what: `${fmtHrs1(durationMs(row))} h in one shift — check for a missed clock-out`,
-        day: new Date(row.started_at).toLocaleDateString([], { weekday: 'short' }),
+        day: new Date(row.started_at).toLocaleDateString('en-AU', { weekday: 'short' }),
         canApprove: true,
       }
     }),
@@ -476,7 +476,7 @@ export function Timesheets({
       const end = row.ended_at ? new Date(row.ended_at) : null
       const fields = [
         worker?.name ?? row.worker_id,
-        start.toLocaleDateString(),
+        start.toLocaleDateString('en-AU'),
         site?.name ?? '',
         row.cost_code ?? defaultCostCode(worker?.trade),
         hhmm(start),
@@ -504,7 +504,7 @@ export function Timesheets({
   const todayMs = startOfDay(new Date()).getTime()
   const tsDays = weekDays.map((d) => ({
     date: d,
-    label: `${d.toLocaleDateString([], { weekday: 'short' }).toUpperCase()} ${d.getDate()}`,
+    label: `${d.toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase()} ${d.getDate()}`,
     fg: d.getTime() === todayMs ? theme.accent : theme.inkSoft,
   }))
 
@@ -1086,8 +1086,8 @@ function ExpandPanel({
   const note = allAuto
     ? `Split created automatically from GPS site changes.${gapMin > 0 ? ` Travel between sites (${gapMin} min) is unpaid per company policy.` : ''}`
     : 'Includes a manually entered or edited segment.'
-  const wd = day.toLocaleDateString([], { weekday: 'short' }).toUpperCase()
-  const mo = day.toLocaleDateString([], { month: 'short' }).toUpperCase()
+  const wd = day.toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase()
+  const mo = day.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase()
 
   return (
     <div style={{ borderBottom: `1px solid ${HAIRLINE}`, background: PANEL_ALT, padding: '2px 11px 10px 46px' }}>

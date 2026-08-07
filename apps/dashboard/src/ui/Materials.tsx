@@ -459,7 +459,7 @@ export function Materials({
                       </span>
                     </td>
                     <td style={{ ...td, color: theme.inkSoft }}>
-                      {r.delivered_on ? new Date(r.delivered_on).toLocaleDateString() : '—'}
+                      {r.delivered_on ? new Date(r.delivered_on).toLocaleDateString('en-AU') : '—'}
                     </td>
                     <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {canEdit && (

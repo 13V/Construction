@@ -295,7 +295,7 @@ export function Schedule({
     [workers, hoursByWorker],
   )
 
-  const rangeLabel = `${weekStart.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${addDays(weekStart, 6).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`
+  const rangeLabel = `${weekStart.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })} – ${addDays(weekStart, 6).toLocaleDateString('en-AU', { month: 'short', day: 'numeric', year: 'numeric' })}`
 
   const today = new Date()
 
@@ -409,7 +409,7 @@ export function Schedule({
           <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8, padding: 14, marginBottom: 12 }}>
             <div style={{ fontSize: 11.5, color: '#8B9096', marginBottom: 8 }}>
               {workers.find((w) => w.id === edit.workerId)?.name ?? 'Worker'} ·{' '}
-              {edit.day.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
+              {edit.day.toLocaleDateString('en-AU', { weekday: 'long', month: 'short', day: 'numeric' })}
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <label style={fieldLabelStyle}>
@@ -474,10 +474,10 @@ export function Schedule({
                       style={{ padding: '8px 10px', borderLeft: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', gap: 1 }}
                     >
                       <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em', color: fg }}>
-                        {day.toLocaleDateString([], { weekday: 'short' }).toUpperCase()}
+                        {day.toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase()}
                       </span>
                       <span style={{ fontSize: 12.5, fontWeight: 600, color: fg, fontVariantNumeric: 'tabular-nums' }}>
-                        {day.toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        {day.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })}
                       </span>
                     </div>
                   )

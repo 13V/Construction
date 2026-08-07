@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { supabase, type ChannelRow, type MessageRow, type WorkerRow } from '../data/supabase'
+import {
+  supabase,
+  type ChannelRow,
+  type MessageRow,
+  type SiteFileRow,
+  type WorkerRow,
+} from '../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../data/storage'
 import { theme } from '../theme'
 import type { JobSite, Worker } from '../types'
@@ -85,7 +91,7 @@ function saveLastRead(workerId: string, map: Record<string, string>) {
   }
 }
 
-const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
 const firstNameOf = (name: string) => name.split(' ')[0] || name
 const memberCountLabel = (n: number) => `${n} member${n === 1 ? '' : 's'}`
 
@@ -108,6 +114,8 @@ export function Chat({ me, sites, workers, onChanged }: {
   const [channelsError, setChannelsError] = useState<string | null>(null)
 
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [headerPanel, setHeaderPanel] = useState<'files' | 'members' | null>(null)
+  const [channelFiles, setChannelFiles] = useState<SiteFileRow[]>([])
   const [messages, setMessages] = useState<MessageRow[]>([])
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [messagesError, setMessagesError] = useState<string | null>(null)
@@ -233,6 +241,24 @@ export function Chat({ me, sites, workers, onChanged }: {
   const otherPersonId = activeChannel ? otherIdOf(activeChannel) : null
   const otherPerson = otherPersonId ? peopleById.get(otherPersonId) : undefined
   const channelSite = activeChannel?.site_id ? sitesById.get(activeChannel.site_id) : undefined
+
+  // Files shared on this job, loaded only when the Files panel is opened.
+  useEffect(() => {
+    if (headerPanel !== 'files' || !activeChannel?.site_id) return
+    let cancelled = false
+    void supabase()
+      .from('site_files')
+      .select('*')
+      .eq('site_id', activeChannel.site_id)
+      .order('created_at', { ascending: false })
+      .limit(40)
+      .then(({ data }) => {
+        if (!cancelled) setChannelFiles((data ?? []) as SiteFileRow[])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [headerPanel, activeChannel?.site_id])
 
   // -------------------------------------------------------------- messages
 
@@ -520,9 +546,49 @@ export function Chat({ me, sites, workers, onChanged }: {
               </span>
             </div>
             <div style={{ flex: 'none', display: 'flex', gap: 6 }}>
-              <button style={headerBtnStyle}>Files</button>
-              <button style={{ ...headerBtnStyle, whiteSpace: 'nowrap' }}>Members</button>
+              <button
+                onClick={() => setHeaderPanel((p) => (p === 'files' ? null : 'files'))}
+                style={{ ...headerBtnStyle, ...(headerPanel === 'files' ? activeHeaderBtn : null) }}
+              >
+                Files
+              </button>
+              <button
+                onClick={() => setHeaderPanel((p) => (p === 'members' ? null : 'members'))}
+                style={{ ...headerBtnStyle, whiteSpace: 'nowrap', ...(headerPanel === 'members' ? activeHeaderBtn : null) }}
+              >
+                Members
+              </button>
             </div>
+          </div>
+
+          {headerPanel && (
+            <div style={{ flex: 'none', maxHeight: 210, overflowY: 'auto', borderBottom: `1px solid ${theme.border}`, background: '#FAFBFC' }}>
+              {headerPanel === 'files' ? (
+                channelFiles.length === 0 ? (
+                  <div style={{ padding: '12px 15px', fontSize: 12.5, color: CHAT_SOFT }}>
+                    Nothing shared on this job yet. Photos and documents uploaded to the site folder show up here.
+                  </div>
+                ) : (
+                  channelFiles.map((f) => (
+                    <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 15px', borderBottom: '1px solid #EDEFF1' }}>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {f.name}
+                      </span>
+                      <span style={{ fontSize: 11, color: CHAT_SOFT }}>{f.kind === 'photo' ? 'Photo' : 'Document'}</span>
+                    </div>
+                  ))
+                )
+              ) : (
+                workers.map((w) => (
+                  <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 15px', borderBottom: '1px solid #EDEFF1' }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 500 }}>{w.name}</span>
+                    <span style={{ fontSize: 11.5, color: CHAT_SOFT }}>{w.trade}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          <div style={{ display: 'none' }}>
           </div>
 
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 15px 6px', display: 'flex', flexDirection: 'column', gap: 2, background: theme.appBg }}>
@@ -888,6 +954,13 @@ function railButtonStyle(active: boolean, disabled?: boolean) {
     opacity: disabled ? 0.5 : 1,
   } as const
 }
+
+const activeHeaderBtn = {
+  background: theme.accentFill,
+  borderColor: theme.accent,
+  color: theme.accent,
+  fontWeight: 600,
+} as const
 
 const headerBtnStyle = {
   height: 27,

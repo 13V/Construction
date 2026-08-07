@@ -552,7 +552,7 @@ export function Safety({ me, sites, workers, onChanged }: {
                           <td style={{ ...td, fontWeight: 500 }}>{row.title}</td>
                           <td style={{ ...td, color: theme.inkSoft }}>{siteName(row.site_id)}</td>
                           <td style={{ ...td, color: theme.inkSoft }}>{workerName(row.worker_id)}</td>
-                          <td style={td}>{new Date(row.occurred_at).toLocaleDateString()}</td>
+                          <td style={td}>{new Date(row.occurred_at).toLocaleDateString('en-AU')}</td>
                           <td style={td}>
                             {sev ? (
                               <span style={{ ...pill, color: sev.color, background: sev.bg }}>
@@ -618,7 +618,7 @@ export function Safety({ me, sites, workers, onChanged }: {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                           {row.signatures.map((s, i) => (
                                             <div key={i} style={{ fontSize: 12.5, color: theme.inkSoft }}>
-                                              {s.name} — {new Date(s.signed_at).toLocaleString()}
+                                              {s.name} — {new Date(s.signed_at).toLocaleString('en-AU')}
                                             </div>
                                           ))}
                                         </div>
@@ -789,7 +789,7 @@ export function Safety({ me, sites, workers, onChanged }: {
                         <td style={{ ...td, fontWeight: 500 }}>{workerName(c.worker_id)}</td>
                         <td style={td}>{c.name}</td>
                         <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>
-                          {c.expires_on ? new Date(c.expires_on).toLocaleDateString() : '—'}
+                          {c.expires_on ? new Date(c.expires_on).toLocaleDateString('en-AU') : '—'}
                         </td>
                         <td style={td}>
                           <span style={{ ...pill, color: status.color, background: status.bg }}>

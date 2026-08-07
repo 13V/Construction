@@ -1036,7 +1036,7 @@ function CelebrationScreen({
   onDismiss: () => void
   onFixPunch: () => void
 }) {
-  const time = new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const time = new Date(at).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
   const dwellMin = Math.round(DWELL_IN_MS / 60_000)
 
   return (
@@ -1125,7 +1125,7 @@ function OnClockScreen({
 }) {
   const h = Math.floor(elapsedMs / 3_600_000)
   const m = String(Math.floor((elapsedMs % 3_600_000) / 60_000)).padStart(2, '0')
-  const sinceLabel = new Date(since).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const sinceLabel = new Date(since).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
   const hrsSoFar = (elapsedMs / 3_600_000).toFixed(1)
 
   return (
@@ -1418,7 +1418,7 @@ function PhotoScreen({
                   }}
                 >
                   <PinIcon />
-                  {site.name} · {new Date(capturedAt ?? Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  {site.name} · {new Date(capturedAt ?? Date.now()).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}
                 </span>
               )}
             </div>
@@ -1467,7 +1467,7 @@ function PhotoScreen({
 
             <div style={{ borderTop: `1px solid ${design.hairline}` }}>
               <MetaRow label="Site" value={site?.name ?? '—'} />
-              <MetaRow label="Taken" value={new Date(capturedAt ?? Date.now()).toLocaleString([], { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' })} />
+              <MetaRow label="Taken" value={new Date(capturedAt ?? Date.now()).toLocaleString('en-AU', { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' })} />
               <MetaRow label="GPS" value={capturedFix ? `±${Math.round(capturedFix.accuracyM)} m` : 'No fix yet'} />
             </div>
 
@@ -2040,7 +2040,7 @@ function ChatScreen({
               m.kind === 'system' ? (
                 <div key={m.id} style={{ textAlign: 'center', margin: '10px 0' }}>
                   <span style={{ fontSize: 12, color: design.faint }}>
-                    {m.body} · {new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    {m.body} · {new Date(m.created_at).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}
                   </span>
                 </div>
               ) : (
@@ -2048,7 +2048,7 @@ function ChatScreen({
                   <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
                     <span style={{ fontSize: 13, fontWeight: 600 }}>{m.author_id === me.id ? 'You' : authors[m.author_id ?? '']?.name ?? 'Crew'}</span>
                     <span style={{ fontSize: 11.5, color: design.faint }}>
-                      {new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                      {new Date(m.created_at).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}
                     </span>
                   </div>
                   <div style={{ fontSize: 14.5, lineHeight: 1.45, whiteSpace: 'pre-wrap', marginTop: 2 }}>{m.body}</div>

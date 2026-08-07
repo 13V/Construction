@@ -166,6 +166,7 @@ export function JobSites({ sites, draft, onDraftChange, onSaved, canEdit }: JobS
 
   return (
     <div
+      data-panel="sites"
       style={{
         width: 340,
         height: '100%',

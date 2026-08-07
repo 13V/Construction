@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   supabase,
+  type ExpenseRow,
   type PoLineRow,
   type PurchaseOrderRow,
   type WorkerRow,
@@ -61,7 +62,7 @@ function suggestPoNo(rows: PurchaseOrderRow[]): string {
   return `PO-${max + 1}`
 }
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' })
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })
 
 /** Green once every unit ordered has landed, amber mid-delivery, neutral before anything has. */
 function lineProgress(received: number, ordered: number): { dot: string; fg: string } {
@@ -137,6 +138,7 @@ export function PurchaseOrders({
   const [lines, setLines] = useState<PoLineRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [linked, setLinked] = useState<ExpenseRow[]>([])
 
   const [groupMode, setGroupMode] = useState<'site' | 'date'>('site')
   const [vendorFilter, setVendorFilter] = useState('')
@@ -179,6 +181,11 @@ export function PurchaseOrders({
     const { data: lineData, error: lineErr } = ids.length
       ? await client.from('po_lines').select('*').in('po_id', ids).order('sort', { ascending: true })
       : { data: [] as PoLineRow[], error: null }
+    const { data: expData } = ids.length
+      ? await client.from('expenses').select('*').in('po_id', ids)
+      : { data: [] as ExpenseRow[] }
+    setLinked((expData ?? []) as ExpenseRow[])
+
     if (lineErr) {
       setError(lineErr.message)
       setLoading(false)
@@ -1033,6 +1040,40 @@ export function PurchaseOrders({
                         )}
                       </div>
                     </div>
+
+                    {(() => {
+                      // What has actually been invoiced against this order.
+                      // Ordered value alone hides the fact that a receipt has
+                      // landed and the money is already gone.
+                      const against = linked.filter((e) => e.po_id === po.id)
+                      if (against.length === 0) return null
+                      const invoiced = against.reduce((t, e) => t + Number(e.amount), 0)
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 15px', background: '#F7F9FB', borderBottom: `1px solid ${theme.border}` }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.05em', color: theme.inkSoft }}>
+                            INVOICED AGAINST THIS PO
+                          </span>
+                          {against.map((e) => (
+                            <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ flex: 1, fontSize: 12.5 }}>
+                                {e.vendor || 'Receipt'} · {fmtDate(e.spent_on)}
+                              </span>
+                              <span style={{ fontSize: 12.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                {money2(Number(e.amount))}
+                              </span>
+                            </div>
+                          ))}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, borderTop: `1px solid ${theme.border}` }}>
+                            <span style={{ flex: 1, fontSize: 12, color: theme.inkSoft }}>
+                              {invoiced >= (poTotals.get(po.id)?.ordered ?? 0) ? 'Fully invoiced' : `${money(Math.max(0, (poTotals.get(po.id)?.ordered ?? 0) - invoiced))} of the order not yet invoiced`}
+                            </span>
+                            <span style={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                              {money2(invoiced)}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })()}
 
                     {detailError && (
                       <div style={{ padding: '8px 15px', fontSize: 12, color: theme.alert, borderBottom: `1px solid ${theme.border}` }}>

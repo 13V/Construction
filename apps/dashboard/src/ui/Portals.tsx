@@ -6,6 +6,7 @@ import {
   type InvoiceRow,
   type MilestoneRow,
   type PortalContactRow,
+  type PurchaseOrderRow,
   type SelectionRow,
   type SiteFileRow,
   type WorkerRow,
@@ -47,9 +48,9 @@ const todayStr = () => new Date().toISOString().slice(0, 10)
 
 /** Date-only columns are 'YYYY-MM-DD' — parse at local midnight, not UTC. */
 const shortDate = (iso: string | null) =>
-  iso ? new Date(`${iso}T00:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' }) : null
+  iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' }) : null
 
-const weekdayOf = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString([], { weekday: 'long' })
+const weekdayOf = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-AU', { weekday: 'long' })
 
 function truncate(s: string, max: number) {
   const t = s.trim()
@@ -103,7 +104,7 @@ function docMeta(d: SiteFileRow) {
   const parts = [
     d.category ? d.category.charAt(0).toUpperCase() + d.category.slice(1) : null,
     formatSize(d.size_bytes),
-    new Date(d.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+    new Date(d.created_at).toLocaleDateString('en-AU', { month: 'short', day: 'numeric' }),
   ].filter((p): p is string => Boolean(p))
   return parts.join(' · ')
 }
@@ -289,6 +290,8 @@ export function Portals({
   onChanged: () => void
 }) {
   const [contacts, setContacts] = useState<PortalContactRow[]>([])
+  const [subPosAll, setSubPosAll] = useState<PurchaseOrderRow[]>([])
+  const [subBilled, setSubBilled] = useState<Map<string, number>>(new Map())
   const [milestones, setMilestones] = useState<MilestoneRow[]>([])
   const [selections, setSelections] = useState<SelectionRow[]>([])
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
@@ -328,7 +331,7 @@ export function Portals({
     setLoading(true)
     setError(null)
     const client = supabase()
-    const [contactsRes, milestonesRes, selectionsRes, invoicesRes, changeOrdersRes, filesRes, logsRes, companyRes, siteExtraRes] =
+    const [contactsRes, milestonesRes, selectionsRes, invoicesRes, changeOrdersRes, filesRes, logsRes, companyRes, siteExtraRes, posRes, subExpRes] =
       await Promise.all([
         client.from('portal_contacts').select('*'),
         client.from('milestones').select('*'),
@@ -339,7 +342,17 @@ export function Portals({
         client.from('daily_logs').select('*').eq('status', 'confirmed').order('log_date', { ascending: false }),
         client.from('companies').select('name').maybeSingle(),
         client.from('job_sites').select('id, progress_pct, schedule_note, client_name'),
+        client.from('purchase_orders').select('*').in('status', ['sent', 'partially_received', 'received']),
+        // What subs have already billed against those orders.
+        client.from('expenses').select('id, po_id, amount').not('po_id', 'is', null),
       ])
+
+    setSubPosAll((posRes.data ?? []) as PurchaseOrderRow[])
+    const billed = new Map<string, number>()
+    for (const e of (subExpRes.data ?? []) as Array<{ po_id: string | null; amount: number }>) {
+      if (e.po_id) billed.set(e.po_id, (billed.get(e.po_id) ?? 0) + Number(e.amount))
+    }
+    setSubBilled(billed)
 
     const firstError =
       contactsRes.error ??
@@ -392,6 +405,13 @@ export function Portals({
     }
     if (!subContacts.some((c) => c.id === subContactId)) setSubContactId(subContacts[0].id)
   }, [subContacts, subContactId])
+
+  /** Orders on the previewed sub's job — what they would be billing against. */
+  const subPos = useMemo(() => {
+    const contact = subContacts.find((c) => c.id === subContactId)
+    if (!contact?.site_id) return []
+    return subPosAll.filter((p) => p.site_id === contact.site_id)
+  }, [subContacts, subContactId, subPosAll])
 
   const sortedContacts = useMemo(
     () => [...contacts].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)),
@@ -929,7 +949,13 @@ export function Portals({
                                 </span>
                                 <span style={{ fontSize: 11.5, color: theme.inkSoft }}>{coDetail(co)}</span>
                               </span>
-                              <button style={reviewBtn}>REVIEW</button>
+                              <a
+                                href={`mailto:?subject=${encodeURIComponent(`${co.co_no} — ${co.description}`)}&body=${encodeURIComponent(coDetail(co))}`}
+                                style={{ ...reviewBtn, display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
+                                title="Send this change order to the client for sign-off"
+                              >
+                                SEND
+                              </a>
                             </div>
                           ))}
 
@@ -1095,7 +1121,31 @@ export function Portals({
 
                         <div style={poBlock}>
                           <span style={labelInline}>YOUR PO</span>
-                          <span style={{ fontSize: 12.5, color: theme.inkSoft }}>No purchase order on file yet.</span>
+                          {subPos.length === 0 ? (
+                            <span style={{ fontSize: 12.5, color: theme.inkSoft }}>
+                              No purchase order raised to this trade yet. Once the office issues one it shows here,
+                              and they can bill against it.
+                            </span>
+                          ) : (
+                            subPos.map((po) => {
+                              const billed = subBilled.get(po.id) ?? 0
+                              return (
+                                <div key={po.id} style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 6 }}>
+                                  <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ fontSize: 13, fontWeight: 600 }}>
+                                      {po.po_no} · {po.vendor}
+                                    </span>
+                                    <span style={{ fontSize: 11.5, color: theme.inkSoft }}>
+                                      {billed > 0 ? `${money(billed)} submitted against it` : 'Nothing submitted yet'}
+                                    </span>
+                                  </span>
+                                  <span style={{ fontSize: 12, color: theme.inkFaint }}>
+                                    Submitted from the sub's own login
+                                  </span>
+                                </div>
+                              )
+                            })
+                          )}
                         </div>
 
                         <div style={lockFooter}>
