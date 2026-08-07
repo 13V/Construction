@@ -88,6 +88,7 @@ async function user(email) {
     get: (t, q) => fetch(`${SB}/rest/v1/${t}?${q}`, { headers: H }).then(body),
     post: (t, b) => fetch(`${SB}/rest/v1/${t}`, { method: 'POST', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b) }),
     patch: (t, q, b) => fetch(`${SB}/rest/v1/${t}?${q}`, { method: 'PATCH', headers: { ...H, Prefer: 'return=representation' }, body: JSON.stringify(b) }),
+    del: (t, q) => fetch(`${SB}/rest/v1/${t}?${q}`, { method: 'DELETE', headers: H }),
   }
 }
 
@@ -200,11 +201,46 @@ try {
   await boss.post('invoices', { company_id: companyId, site_id: site.id, invoice_no: `INV-${stamp}`, client_name: 'A Client', issued_on: day(-10), due_on: day(-3), amount: 5000, status: 'sent' })
   ok('a stranger reads no invoices', (await stranger.get('invoices', 'select=id')).length === 0)
   ok('a stranger reads no invoice_status_v (the view honours RLS)', (await stranger.get('invoice_status_v', 'select=id')).length === 0)
+  ok('a stranger reads no invoice_payments', (await stranger.get('invoice_payments', 'select=id')).length === 0)
   ok('a stranger reads no notifications', (await stranger.get('notifications', 'select=id')).length === 0)
 
   // ---------------------------------------------------------- money maths
-  const v = (await boss.get('invoice_status_v', `select=invoice_no,overdue,outstanding&company_id=eq.${companyId}`))[0]
+  const v = (await boss.get('invoice_status_v', `select=id,invoice_no,overdue,outstanding&company_id=eq.${companyId}`))[0]
   ok('overdue is derived, not stored', v.overdue === true && Number(v.outstanding) === 5000)
+
+  // paid_amount and status follow the payment ledger. A part payment is the
+  // ordinary case on a progress claim, and it has to leave the invoice open.
+  const invId = v.id
+  const paidNow = async () => (await boss.get('invoices', `select=paid_amount,status&id=eq.${invId}`))[0]
+  const pay = await body(await boss.post('invoice_payments', {
+    company_id: companyId, invoice_id: invId, amount: 2000, received_on: day(-1), method: 'bank', reference: 'EFT 1', created_by: bossId,
+  }))
+  let inv = await paidNow()
+  ok('a part payment leaves the invoice open', Number(inv.paid_amount) === 2000 && inv.status === 'sent',
+    `paid ${inv.paid_amount}, ${inv.status}`)
+
+  await boss.post('invoice_payments', {
+    company_id: companyId, invoice_id: invId, amount: 3000, received_on: day(0), method: 'bank', reference: 'EFT 2', created_by: bossId,
+  })
+  inv = await paidNow()
+  ok('the balance marks it paid without anyone setting it', Number(inv.paid_amount) === 5000 && inv.status === 'paid')
+
+  const stillOverdue = (await boss.get('invoice_status_v', `select=overdue,outstanding&id=eq.${invId}`))[0]
+  ok('paying a late invoice clears overdue', stillOverdue.overdue === false && Number(stillOverdue.outstanding) === 0)
+
+  await boss.del('invoice_payments', `id=eq.${pay[0].id}`)
+  inv = await paidNow()
+  ok('reversing a payment reopens the invoice', Number(inv.paid_amount) === 3000 && inv.status === 'sent')
+
+  // The ledger is the system of record — a hand-written paid_amount must not
+  // survive the next payment, or the two disagree silently.
+  await boss.patch('invoices', `id=eq.${invId}`, { paid_amount: 4999 })
+  await boss.post('invoice_payments', { company_id: companyId, invoice_id: invId, amount: 1, received_on: day(0), method: 'other' })
+  inv = await paidNow()
+  ok('a hand-written paid_amount is overwritten by the ledger', Number(inv.paid_amount) === 3001, `paid_amount ${inv.paid_amount}`)
+
+  ok('a field worker cannot record a payment',
+    (await field.post('invoice_payments', { company_id: companyId, invoice_id: invId, amount: 500, received_on: day(0), method: 'cash' })).status === 403)
 
   const mats = await body(await boss.post('materials', [
     { company_id: companyId, site_id: site.id, name: '90x45 MGP10', quantity: 126.5, unit: 'lm', unit_cost: '8.42', cost_code: '06-110', supplier: 'Bowens', status: 'delivered', created_by: bossId },

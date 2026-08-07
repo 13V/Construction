@@ -283,6 +283,25 @@ export interface InvoiceRow {
   status: 'draft' | 'sent' | 'paid' | 'void'
   note: string | null
   retention_pct: number
+  retention_amount: number
+}
+
+/**
+ * A payment against an invoice. `invoices.paid_amount` and `status` are
+ * derived from these rows by trigger (schema_v9.sql), so this ledger is the
+ * only thing that should ever be written — patching paid_amount directly is
+ * overwritten the next time a payment moves.
+ */
+export interface InvoicePaymentRow {
+  id: string
+  company_id: string
+  invoice_id: string
+  amount: number
+  received_on: string
+  method: 'bank' | 'card' | 'cash' | 'cheque' | 'other'
+  reference: string | null
+  note: string | null
+  created_at: string
 }
 
 export interface InvoiceLineRow {

@@ -5,6 +5,7 @@ import {
   type EstimateRow,
   type ExpenseRow,
   type InvoiceLineRow,
+  type InvoicePaymentRow,
   type InvoiceRow,
   type PoLineRow,
   type PurchaseOrderRow,
@@ -24,7 +25,10 @@ import type { JobSite, Worker } from '../types'
  * "overdue" is computed against today on every render.
  */
 
-const LIST_COLUMNS = '104px 1fr 148px 100px 104px 112px 140px'
+// The last column carries the row actions alongside the status chip, and
+// "Record payment" next to an "Overdue" pill is the widest that gets: at 140px
+// the amount column was being clipped to "$3".
+const LIST_COLUMNS = '104px 1fr 148px 100px 104px 112px 214px'
 const CLAIM_COLUMNS = '1fr 116px 104px 130px 118px 118px'
 
 const STATUS_META: Record<InvoiceRow['status'], { label: string; bg: string; fg: string }> = {
@@ -35,6 +39,14 @@ const STATUS_META: Record<InvoiceRow['status'], { label: string; bg: string; fg:
 }
 
 const OVERDUE_META = { label: 'Overdue', bg: theme.alertFill, fg: theme.alertInk }
+
+const PAYMENT_METHODS: Array<[InvoicePaymentRow['method'], string]> = [
+  ['bank', 'Bank transfer'],
+  ['card', 'Card'],
+  ['cash', 'Cash'],
+  ['cheque', 'Cheque'],
+  ['other', 'Other'],
+]
 
 const SITE_PALETTE = ['#4E7FB0', '#8A6FCB', '#4E9E78', '#C08A3E', '#B15D87', '#5C8F99', '#8C8F52', '#B15F5F']
 
@@ -104,7 +116,17 @@ const blankClaimLine = (): ClaimLineDraft => ({
   amount: '',
 })
 
+interface PaymentDraft {
+  amount: string
+  receivedOn: string
+  method: InvoicePaymentRow['method']
+  reference: string
+  note: string
+}
+
 interface ClaimForm {
+  /** Set when reopening an existing draft, null when raising a new one. */
+  editingId: string | null
   invoiceNo: string
   siteId: string
   clientName: string
@@ -133,6 +155,7 @@ export function Invoices({
 
   const [rows, setRows] = useState<InvoiceRow[]>([])
   const [lines, setLines] = useState<InvoiceLineRow[]>([])
+  const [payments, setPayments] = useState<InvoicePaymentRow[]>([])
   const [pos, setPos] = useState<PurchaseOrderRow[]>([])
   const [poLines, setPoLines] = useState<PoLineRow[]>([])
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
@@ -146,6 +169,8 @@ export function Invoices({
   const [grouping, setGrouping] = useState<Grouping>('site')
   const [openId, setOpenId] = useState<string | null>(null)
   const [form, setForm] = useState<ClaimForm | null>(null)
+  const [payFor, setPayFor] = useState<InvoiceRow | null>(null)
+  const [confirm, setConfirm] = useState<{ inv: InvoiceRow; action: 'void' | 'delete' } | null>(null)
 
   // Recomputed per load rather than per render so a long-lived tab doesn't
   // shift rows between overdue and not while the user is reading them.
@@ -154,20 +179,22 @@ export function Invoices({
   const load = useCallback(async () => {
     setLoading(true)
     const client = supabase()
-    const [inv, il, po, pl, ex, es, el] = await Promise.all([
+    const [inv, il, ip, po, pl, ex, es, el] = await Promise.all([
       client.from('invoices').select('*').order('issued_on', { ascending: false }),
       client.from('invoice_lines').select('*').order('sort'),
+      client.from('invoice_payments').select('*').order('received_on'),
       client.from('purchase_orders').select('*'),
       client.from('po_lines').select('*'),
       client.from('expenses').select('*'),
       client.from('estimates').select('*').eq('status', 'approved'),
       client.from('estimate_lines').select('*'),
     ])
-    const failed = [inv, il, po, pl, ex, es, el].find((r) => r.error)
+    const failed = [inv, il, ip, po, pl, ex, es, el].find((r) => r.error)
     if (failed?.error) setError(failed.error.message)
     else setError(null)
     setRows((inv.data ?? []) as InvoiceRow[])
     setLines((il.data ?? []) as InvoiceLineRow[])
+    setPayments((ip.data ?? []) as InvoicePaymentRow[])
     setPos((po.data ?? []) as PurchaseOrderRow[])
     setPoLines((pl.data ?? []) as PoLineRow[])
     setExpenses((ex.data ?? []) as ExpenseRow[])
@@ -207,6 +234,31 @@ export function Invoices({
     }
     return { outstanding, overdue }
   }, [rows, today])
+
+  /**
+   * Retention held, per job. This is money the builder has earned and not
+   * billed — it falls due at practical completion, and a builder who does not
+   * track it simply never invoices for it. Drafts and voids are excluded:
+   * nothing is being held back on a claim that was never issued.
+   */
+  const retention = useMemo(() => {
+    const bySite = new Map<string, number>()
+    let total = 0
+    for (const r of rows) {
+      if (r.status === 'draft' || r.status === 'void') continue
+      const held = Number(r.retention_amount)
+      if (held <= 0) continue
+      const key = r.site_id ?? 'none'
+      bySite.set(key, (bySite.get(key) ?? 0) + held)
+      total += held
+    }
+    return {
+      total,
+      sites: [...bySite.entries()]
+        .map(([id, amt]) => ({ id, name: siteName(id === 'none' ? null : id), amt }))
+        .sort((a, b) => b.amt - a.amt),
+    }
+  }, [rows, siteName])
 
   /**
    * Four buckets rather than three: money that hasn't fallen due yet is not
@@ -320,6 +372,11 @@ export function Invoices({
 
   const open = useMemo(() => rows.find((r) => r.id === openId) ?? null, [rows, openId])
 
+  const openPayments = useMemo(
+    () => (open ? payments.filter((p) => p.invoice_id === open.id) : []),
+    [payments, open],
+  )
+
   /**
    * The claim breakdown. Contract value per cost code comes from the site's
    * approved estimate — the only place in the schema that says what a line
@@ -382,15 +439,84 @@ export function Invoices({
 
   // ------------------------------------------------------------- mutations
 
-  const setStatus = async (inv: InvoiceRow, status: InvoiceRow['status']) => {
+  /**
+   * Status moves that are a decision rather than a consequence: issuing a
+   * draft, or voiding. 'paid' is deliberately not reachable here — it is
+   * derived from the payment ledger by trigger, and setting it by hand would
+   * be overwritten the next time a payment moved.
+   */
+  const setStatus = async (inv: InvoiceRow, status: 'draft' | 'sent' | 'void') => {
     if (!canEdit || busy) return
     setBusy(true)
-    const patch: Partial<InvoiceRow> =
-      status === 'paid' ? { status, paid_amount: Number(inv.amount) } : { status }
-    const { error: err } = await supabase().from('invoices').update(patch).eq('id', inv.id)
+    const { error: err } = await supabase().from('invoices').update({ status }).eq('id', inv.id)
     setBusy(false)
     if (err) setError(err.message)
     else {
+      await load()
+      onChanged()
+    }
+  }
+
+  /**
+   * Record money arriving. Partial is the normal case — a client paying part
+   * of a claim is not an edge case — so the amount is editable and only
+   * defaults to what is outstanding. The trigger behind `invoice_payments`
+   * moves paid_amount and status, so nothing here writes either.
+   */
+  const recordPayment = async (inv: InvoiceRow, p: PaymentDraft) => {
+    if (!canEdit || busy) return
+    const amount = Number(p.amount)
+    if (!Number.isFinite(amount) || amount === 0) {
+      setError('Enter the amount that was received.')
+      return
+    }
+    setBusy(true)
+    const { error: err } = await supabase().from('invoice_payments').insert({
+      company_id: inv.company_id,
+      invoice_id: inv.id,
+      amount,
+      received_on: p.receivedOn,
+      method: p.method,
+      reference: p.reference.trim() || null,
+      note: p.note.trim() || null,
+      created_by: me.id,
+    })
+    setBusy(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    setPayFor(null)
+    await load()
+    onChanged()
+  }
+
+  const removePayment = async (id: string) => {
+    if (!canEdit || busy) return
+    setBusy(true)
+    const { error: err } = await supabase().from('invoice_payments').delete().eq('id', id)
+    setBusy(false)
+    if (err) setError(err.message)
+    else {
+      await load()
+      onChanged()
+    }
+  }
+
+  /**
+   * A draft has never been seen by the client, so it can be deleted outright.
+   * Anything issued is voided instead — the number stays used, which is what
+   * an auditor expects of an invoice sequence.
+   */
+  const deleteDraft = async (inv: InvoiceRow) => {
+    if (!canEdit || busy || inv.status !== 'draft') return
+    setBusy(true)
+    const { error: err } = await supabase().from('invoices').delete().eq('id', inv.id)
+    setBusy(false)
+    if (err) setError(err.message)
+    else {
+      if (openId === inv.id) setOpenId(null)
+      setConfirm(null)
       await load()
       onChanged()
     }
@@ -424,6 +550,7 @@ export function Invoices({
     const due = new Date()
     due.setDate(due.getDate() + 14)
     setForm({
+      editingId: null,
       invoiceNo: suggestInvoiceNo(rows),
       siteId: site?.id ?? '',
       clientName: site?.clientName ?? '',
@@ -433,6 +560,36 @@ export function Invoices({
       retentionPct: '5',
       note: '',
       lines: [blankClaimLine()],
+    })
+  }
+
+  /**
+   * Reopen a draft. Only drafts: once a claim has been issued the client is
+   * holding a copy, and quietly changing the amounts underneath it is how the
+   * builder's records and the client's stop matching.
+   */
+  const editDraft = (inv: InvoiceRow) => {
+    if (!canEdit || inv.status !== 'draft') return
+    const mine = lines
+      .filter((l) => l.invoice_id === inv.id)
+      .map((l) => ({
+        key: l.id,
+        costCode: l.cost_code ?? '',
+        description: l.description,
+        pctComplete: l.pct_complete === null ? '' : String(Number(l.pct_complete)),
+        amount: String(Number(l.amount)),
+      }))
+    setForm({
+      editingId: inv.id,
+      invoiceNo: inv.invoice_no,
+      siteId: inv.site_id ?? '',
+      clientName: inv.client_name,
+      period: inv.period ?? '',
+      issuedOn: inv.issued_on,
+      dueOn: inv.due_on ?? '',
+      retentionPct: String(Number(inv.retention_pct)),
+      note: inv.note ?? '',
+      lines: mine.length > 0 ? mine : [blankClaimLine()],
     })
   }
 
@@ -461,24 +618,26 @@ export function Invoices({
     }
     setBusy(true)
     const client = supabase()
-    const { data, error: err } = await client
-      .from('invoices')
-      .insert({
-        company_id: me.company_id,
-        site_id: form.siteId || null,
-        invoice_no: form.invoiceNo.trim(),
-        client_name: form.clientName.trim(),
-        period: form.period.trim() || null,
-        issued_on: form.issuedOn,
-        due_on: form.dueOn || null,
-        amount: claimTotal,
-        paid_amount: 0,
-        retention_pct: Number(form.retentionPct) || 0,
-        status: 'draft',
-        note: form.note.trim() || null,
-      })
-      .select()
-      .single()
+    const header = {
+      site_id: form.siteId || null,
+      invoice_no: form.invoiceNo.trim(),
+      client_name: form.clientName.trim(),
+      period: form.period.trim() || null,
+      issued_on: form.issuedOn,
+      due_on: form.dueOn || null,
+      amount: claimTotal,
+      retention_pct: Number(form.retentionPct) || 0,
+      retention_amount: claimRetained,
+      note: form.note.trim() || null,
+    }
+
+    const { data, error: err } = form.editingId
+      ? await client.from('invoices').update(header).eq('id', form.editingId).select().single()
+      : await client
+          .from('invoices')
+          .insert({ ...header, company_id: me.company_id, paid_amount: 0, status: 'draft' })
+          .select()
+          .single()
 
     if (err) {
       setBusy(false)
@@ -492,10 +651,24 @@ export function Invoices({
       return
     }
 
+    const invoiceId = (data as InvoiceRow).id
+
+    // Lines are replaced rather than diffed. A claim has a handful of them and
+    // they are only editable while the invoice is a draft, so the simpler path
+    // cannot lose anything a user would miss.
+    if (form.editingId) {
+      const { error: wipeErr } = await client.from('invoice_lines').delete().eq('invoice_id', invoiceId)
+      if (wipeErr) {
+        setBusy(false)
+        setError(wipeErr.message)
+        return
+      }
+    }
+
     if (usable.length > 0) {
       const { error: lineErr } = await client.from('invoice_lines').insert(
         usable.map((l, i) => ({
-          invoice_id: (data as InvoiceRow).id,
+          invoice_id: invoiceId,
           cost_code: l.costCode || null,
           description: l.description.trim(),
           pct_complete: l.pctComplete === '' ? null : Number(l.pctComplete),
@@ -508,7 +681,7 @@ export function Invoices({
 
     setBusy(false)
     setForm(null)
-    setOpenId((data as InvoiceRow).id)
+    setOpenId(invoiceId)
     await load()
     onChanged()
   }
@@ -667,6 +840,29 @@ export function Invoices({
                 : 'No week in the window goes negative on what is currently committed.'}
             </span>
           </div>
+
+          {retention.total > 0 && (
+            <div style={{ ...card, flex: '1 1 240px', minWidth: 230, gap: 9, padding: '14px 15px' }}>
+              <span style={{ fontSize: 15, fontWeight: 600 }}>Retention held</span>
+              <span style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                {money(retention.total)}
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {retention.sites.slice(0, 4).map((s) => (
+                  <span key={s.id} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12 }}>
+                    <span style={{ flex: 1, minWidth: 0, color: theme.inkMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.name}
+                    </span>
+                    <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{money(s.amt)}</span>
+                  </span>
+                ))}
+              </div>
+              <span style={{ fontSize: 11.5, lineHeight: 1.45, color: theme.inkFaint }}>
+                Withheld from claims already issued. It falls due at practical completion — it will not
+                be invoiced unless you raise it.
+              </span>
+            </div>
+          )}
         </div>
 
         <div style={{ ...card, padding: 0, overflowX: 'auto', marginBottom: 14 }}>
@@ -690,7 +886,7 @@ export function Invoices({
 
           {groups.map((g) => (
             <Fragment key={g.key}>
-              <div style={{ ...groupRow, minWidth: 920 }}>
+              <div style={{ ...groupRow, minWidth: 995 }}>
                 <span style={{ flex: 'none', width: 9, height: 9, borderRadius: 2, background: g.color }} />
                 <span style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{g.site}</span>
                 <span style={{ fontSize: 11.5, color: theme.inkFaint, whiteSpace: 'nowrap' }}>
@@ -748,13 +944,18 @@ export function Invoices({
                     </span>
                     <span style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
                       {canEdit && v.status === 'draft' && (
-                        <button onClick={(e) => { e.stopPropagation(); void setStatus(v, 'sent') }} style={miniBtn}>
-                          Send
-                        </button>
+                        <>
+                          <button onClick={(e) => { e.stopPropagation(); editDraft(v) }} style={miniBtn}>
+                            Edit
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); void setStatus(v, 'sent') }} style={miniBtn}>
+                            Send
+                          </button>
+                        </>
                       )}
                       {canEdit && v.status === 'sent' && (
-                        <button onClick={(e) => { e.stopPropagation(); void setStatus(v, 'paid') }} style={miniBtn}>
-                          Paid
+                        <button onClick={(e) => { e.stopPropagation(); setPayFor(v) }} style={miniBtn}>
+                          Record payment
                         </button>
                       )}
                       <span style={{ ...chip, background: meta.bg, color: meta.fg }}>
@@ -769,7 +970,7 @@ export function Invoices({
           ))}
         </div>
 
-        {open && claim && (
+        {open && (
           <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
             <div style={claimHead}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -789,18 +990,39 @@ export function Invoices({
                   </span>
                 </span>
                 <span style={{ fontSize: 12.5, color: theme.inkSoft }}>
-                  Issued {fmtDate(open.issued_on)} · due {fmtDate(open.due_on)} · % complete drawn from the
-                  approved estimate for this job
+                  Issued {fmtDate(open.issued_on)} · due {fmtDate(open.due_on)}
+                  {claim ? ' · % complete drawn from the approved estimate for this job' : ''}
                 </span>
               </div>
-              {canEdit && open.status === 'draft' && (
-                <button onClick={() => void setStatus(open, 'sent')} style={{ ...cta, fontSize: 11.5, padding: '0 13px' }}>
-                  ISSUE CLAIM · {money(Number(open.amount))}
-                </button>
-              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                {canEdit && open.status === 'draft' && (
+                  <>
+                    <button onClick={() => setConfirm({ inv: open, action: 'delete' })} style={ghost}>
+                      Delete
+                    </button>
+                    <button onClick={() => editDraft(open)} style={ghost}>
+                      Edit
+                    </button>
+                    <button onClick={() => void setStatus(open, 'sent')} style={{ ...cta, fontSize: 11.5, padding: '0 13px' }}>
+                      ISSUE CLAIM · {money(Number(open.amount))}
+                    </button>
+                  </>
+                )}
+                {canEdit && (open.status === 'sent' || open.status === 'paid') && (
+                  <>
+                    <button onClick={() => setConfirm({ inv: open, action: 'void' })} style={ghost}>
+                      Void
+                    </button>
+                    <button onClick={() => setPayFor(open)} style={{ ...cta, fontSize: 11.5, padding: '0 13px' }}>
+                      RECORD PAYMENT
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
+            {claim && <div style={{ overflowX: 'auto' }}>
               <div style={{ ...listHead, minWidth: 820, gridTemplateColumns: CLAIM_COLUMNS, padding: '7px 15px' }}>
                 <span style={th}>COST CODE</span>
                 <span style={{ ...th, textAlign: 'right' }}>CONTRACT</span>
@@ -862,7 +1084,22 @@ export function Invoices({
                   {money(claim.sum.now)}
                 </span>
               </div>
-            </div>
+            </div>}
+
+            {!claim && (
+              <div style={{ padding: '16px 15px', fontSize: 12.5, color: theme.inkFaint, borderBottom: `1px solid ${theme.border}` }}>
+                {open.invoice_no} has no line breakdown — it was billed as a single amount of{' '}
+                {money(Number(open.amount))}.
+              </div>
+            )}
+
+            <PaymentLedger
+              invoice={open}
+              payments={openPayments}
+              canEdit={canEdit}
+              busy={busy}
+              onRemove={(id) => void removePayment(id)}
+            />
 
             {open.note && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 15px', borderTop: `1px solid ${theme.border}` }}>
@@ -875,14 +1112,38 @@ export function Invoices({
             )}
           </div>
         )}
-
-        {open && !claim && (
-          <div style={{ ...card, padding: '20px 15px', fontSize: 12.5, color: theme.inkFaint }}>
-            {open.invoice_no} has no line breakdown — it was billed as a single amount of{' '}
-            {money(Number(open.amount))}.
-          </div>
-        )}
       </div>
+
+      {payFor && (
+        <PaymentDialog
+          invoice={payFor}
+          outstanding={outstandingOf(payFor)}
+          busy={busy}
+          onCancel={() => setPayFor(null)}
+          onSave={(p) => void recordPayment(payFor, p)}
+        />
+      )}
+
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.action === 'delete' ? `Delete ${confirm.inv.invoice_no}?` : `Void ${confirm.inv.invoice_no}?`}
+          body={
+            confirm.action === 'delete'
+              ? 'This draft has never been issued, so it can go entirely. The invoice number becomes free again.'
+              : 'The invoice stays on the books at zero — the number is not reused, which is what an auditor expects of an invoice sequence. Any payments recorded against it are left alone.'
+          }
+          confirmLabel={confirm.action === 'delete' ? 'DELETE DRAFT' : 'VOID INVOICE'}
+          busy={busy}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            if (confirm.action === 'delete') void deleteDraft(confirm.inv)
+            else {
+              void setStatus(confirm.inv, 'void')
+              setConfirm(null)
+            }
+          }}
+        />
+      )}
 
       {form && (
         <ClaimEditor
@@ -897,6 +1158,253 @@ export function Invoices({
           onSave={() => void saveClaim()}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * What has been received against one invoice, and what is still held back.
+ *
+ * Shown even when nothing has been paid, because the two figures a builder
+ * chases — outstanding, and retention that falls due at practical completion —
+ * are the reason to open an invoice at all.
+ */
+function PaymentLedger({
+  invoice,
+  payments,
+  canEdit,
+  busy,
+  onRemove,
+}: {
+  invoice: InvoiceRow
+  payments: InvoicePaymentRow[]
+  canEdit: boolean
+  busy: boolean
+  onRemove: (id: string) => void
+}) {
+  const paid = payments.reduce((s, p) => s + Number(p.amount), 0)
+  const owing = outstandingOf(invoice)
+  const held = Number(invoice.retention_amount)
+
+  return (
+    <div style={{ borderTop: `1px solid ${theme.border}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '11px 15px', flexWrap: 'wrap' }}>
+        <Stat label="Invoiced" value={money2(Number(invoice.amount))} />
+        <Stat label="Received" value={money2(paid)} fg={paid > 0 ? theme.successInk : undefined} />
+        <Stat
+          label="Outstanding"
+          value={money2(owing)}
+          fg={owing > 0 ? (invoice.status === 'sent' ? theme.alertInk : theme.ink) : theme.successInk}
+          strong
+        />
+        {held > 0 && (
+          <Stat
+            label={`Retention held (${Number(invoice.retention_pct)}%)`}
+            value={money2(held)}
+            hint="Falls due at practical completion"
+          />
+        )}
+      </div>
+
+      {payments.length > 0 && (
+        <div style={{ borderTop: `1px solid ${theme.fill}` }}>
+          {payments.map((p) => (
+            <div
+              key={p.id}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 15px', borderBottom: `1px solid ${theme.fill}` }}
+            >
+              <span style={{ fontSize: 12.5, color: theme.inkMid, width: 74, flex: 'none', fontVariantNumeric: 'tabular-nums' }}>
+                {fmtDate(p.received_on)}
+              </span>
+              <span style={{ fontSize: 12.5, color: theme.inkMid, width: 96, flex: 'none' }}>
+                {PAYMENT_METHODS.find(([k]) => k === p.method)?.[1] ?? p.method}
+              </span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: theme.inkFaint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {p.reference ?? p.note ?? ''}
+              </span>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontVariantNumeric: 'tabular-nums',
+                  color: Number(p.amount) < 0 ? theme.alertInk : theme.ink,
+                }}
+              >
+                {money2(Number(p.amount))}
+              </span>
+              {canEdit && (
+                <button
+                  onClick={() => onRemove(p.id)}
+                  disabled={busy}
+                  title="Remove this payment"
+                  style={{ ...ghost, height: 22, padding: '0 7px', fontSize: 11.5, flex: 'none' }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Stat({
+  label,
+  value,
+  fg,
+  strong,
+  hint,
+}: {
+  label: string
+  value: string
+  fg?: string
+  strong?: boolean
+  hint?: string
+}) {
+  return (
+    <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }} title={hint}>
+      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', color: theme.inkSoft }}>
+        {label.toUpperCase()}
+      </span>
+      <span style={{ fontSize: strong ? 15 : 13.5, fontWeight: strong ? 700 : 600, color: fg ?? theme.ink, fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </span>
+    </span>
+  )
+}
+
+function PaymentDialog({
+  invoice,
+  outstanding,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  invoice: InvoiceRow
+  outstanding: number
+  busy: boolean
+  onCancel: () => void
+  onSave: (p: PaymentDraft) => void
+}) {
+  const [draft, setDraft] = useState<PaymentDraft>({
+    // Defaults to what is owing, but stays editable — part payment is the
+    // ordinary case on a progress claim.
+    amount: outstanding > 0 ? String(outstanding) : '',
+    receivedOn: new Date().toISOString().slice(0, 10),
+    method: 'bank',
+    reference: '',
+    note: '',
+  })
+  const set = <K extends keyof PaymentDraft>(k: K, v: PaymentDraft[K]) => setDraft({ ...draft, [k]: v })
+
+  const amount = Number(draft.amount) || 0
+  const left = outstanding - amount
+
+  return (
+    <div style={scrim} onClick={onCancel}>
+      <div style={{ ...modal, width: 'min(520px, 100%)' }} onClick={(e) => e.stopPropagation()}>
+        <div style={modalHead}>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>Record a payment</span>
+          <span style={{ fontSize: 12, color: theme.inkFaint }}>
+            {invoice.invoice_no} · {money2(outstanding)} outstanding
+          </span>
+        </div>
+
+        <div style={{ padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 11 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Field label="Amount received">
+              <input
+                value={draft.amount}
+                onChange={(e) => set('amount', e.target.value)}
+                inputMode="decimal"
+                autoFocus
+                style={{ ...input, width: 130, textAlign: 'right', fontWeight: 600 }}
+              />
+            </Field>
+            <Field label="Received on">
+              <input type="date" value={draft.receivedOn} onChange={(e) => set('receivedOn', e.target.value)} style={input} />
+            </Field>
+            <Field label="Method" grow>
+              <select
+                value={draft.method}
+                onChange={(e) => set('method', e.target.value as InvoicePaymentRow['method'])}
+                style={input}
+              >
+                {PAYMENT_METHODS.map(([k, label]) => (
+                  <option key={k} value={k}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Reference">
+            <input
+              value={draft.reference}
+              onChange={(e) => set('reference', e.target.value)}
+              placeholder="What appears on the bank statement"
+              style={input}
+            />
+          </Field>
+
+          <span style={{ fontSize: 12, lineHeight: 1.5, color: left > 0.005 ? theme.inkSoft : theme.successInk }}>
+            {amount === 0
+              ? 'Enter the amount that landed.'
+              : left > 0.005
+                ? `Leaves ${money2(left)} outstanding — the invoice stays open.`
+                : left < -0.005
+                  ? `That is ${money2(-left)} more than owing. The invoice will be marked paid and the excess sits as a credit.`
+                  : 'Settles the invoice in full — it will be marked paid.'}
+          </span>
+        </div>
+
+        <div style={modalFoot}>
+          <button onClick={onCancel} style={ghost}>
+            Cancel
+          </button>
+          <button onClick={() => onSave(draft)} disabled={busy} style={{ ...cta, opacity: busy ? 0.6 : 1 }}>
+            {busy ? 'SAVING…' : 'RECORD PAYMENT'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ConfirmDialog({
+  title,
+  body,
+  confirmLabel,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  title: string
+  body: string
+  confirmLabel: string
+  busy: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div style={scrim} onClick={onCancel}>
+      <div style={{ ...modal, width: 'min(430px, 100%)' }} onClick={(e) => e.stopPropagation()}>
+        <div style={modalHead}>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>{title}</span>
+        </div>
+        <div style={{ padding: '13px 15px', fontSize: 12.5, lineHeight: 1.55, color: theme.inkSoft }}>{body}</div>
+        <div style={modalFoot}>
+          <button onClick={onCancel} style={ghost}>
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={busy} style={{ ...cta, opacity: busy ? 0.6 : 1 }}>
+            {busy ? 'WORKING…' : confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -930,8 +1438,14 @@ function ClaimEditor({
     <div style={scrim} onClick={onCancel}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <div style={modalHead}>
-          <span style={{ fontSize: 15, fontWeight: 600 }}>New progress claim</span>
-          <span style={{ fontSize: 12, color: theme.inkFaint }}>Saved as a draft — nothing is sent yet.</span>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>
+            {form.editingId ? `Edit ${form.invoiceNo}` : 'New progress claim'}
+          </span>
+          <span style={{ fontSize: 12, color: theme.inkFaint }}>
+            {form.editingId
+              ? 'Still a draft — nothing has been sent to the client.'
+              : 'Saved as a draft — nothing is sent yet.'}
+          </span>
         </div>
 
         <div style={{ padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 11, overflow: 'auto' }}>
@@ -1055,7 +1569,7 @@ function ClaimEditor({
             Cancel
           </button>
           <button onClick={onSave} disabled={busy} style={{ ...cta, opacity: busy ? 0.6 : 1 }}>
-            {busy ? 'SAVING…' : 'SAVE DRAFT'}
+            {busy ? 'SAVING…' : form.editingId ? 'SAVE CHANGES' : 'SAVE DRAFT'}
           </button>
         </div>
       </div>
@@ -1174,7 +1688,7 @@ const listHead = {
   padding: '7px 14px',
   background: theme.rowFill,
   borderBottom: `1px solid ${theme.border}`,
-  minWidth: 920,
+  minWidth: 995,
 } as const
 
 const th = {
@@ -1200,7 +1714,7 @@ const listRow = {
   padding: '9px 14px',
   borderBottom: `1px solid ${theme.fill}`,
   cursor: 'pointer',
-  minWidth: 920,
+  minWidth: 995,
 } as const
 
 const claimHead = {

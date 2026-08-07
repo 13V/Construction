@@ -20,7 +20,11 @@ Create a project, then run these in the SQL editor, in order:
    value, invoice retention, and the expense↔purchase-order link
 7. `supabase/schema_v7.sql` — in-app notifications, raised by trigger
 8. `supabase/schema_v8.sql` — stops one worker holding two overlapping shifts
-9. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+9. `supabase/schema_v9.sql` — the invoice payment ledger. `paid_amount` and
+   `status` become derived from it by trigger, so a client paying part of a
+   claim is finally expressible. It backfills an opening balance for anything
+   already part paid — run it before recording any payment by hand
+10. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
 
 Grab three values from Settings → API: the project URL, the `anon` key, and the
 `service_role` key.
@@ -154,6 +158,10 @@ Two things worth knowing if you add to this schema:
   declared `security_invoker`, so a view over a protected table silently hands out
   every row. That is exactly how `invoice_status_v` leaked; `schema_v5.sql` fixes
   it. Any new view over an RLS table needs `security_invoker = on`.
+- **`invoices.paid_amount` and `invoices.status` are derived.** A trigger
+  recomputes both from `invoice_payments` whenever a payment row moves, so
+  writing either by hand looks like it worked and is then silently overwritten.
+  Record a payment; don't patch the balance.
 - **A policy that looks the caller up must use a `security definer` function.** A
   bare subquery against another protected table is filtered by that table's own
   RLS, and the predicate quietly collapses to null — which is how portal clients
