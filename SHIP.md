@@ -33,19 +33,29 @@ a clock-in still lands before you walk away.
 The `anon` key does not need rotating — it is public by design and does nothing
 without a valid user session behind it.
 
-### Turn demo mode off
+### Turn demo mode off — done
 
-The production bundle currently has `demo@crewline.app` compiled into it and
-signs that account in automatically. Anyone with the link is Ray Whitcomb. That
-is the point of a demo link and it is fatal for a real deployment.
+`VITE_DEMO_EMAIL` and `VITE_DEMO_PASSWORD` have been removed from the Vercel
+project and production rebuilt. `demo@crewline.app` is no longer compiled into
+the bundle, and the site asks for a login instead of signing visitors in as Ray
+Whitcomb. Confirmed against the live URL.
 
-Clear `VITE_DEMO_EMAIL` and `VITE_DEMO_PASSWORD` in Vercel and redeploy. The
-login screen comes back on its own. Verify by opening the site in a private
-window — you should see a sign-in form, not a dashboard.
+To put it back — for a demo on a **separate** project — set both variables again
+and redeploy. They are build-time variables, so a plain redeploy of the existing
+build will not pick them up; it has to rebuild.
 
-If you want to keep a demo link alive, put it on a **separate Vercel project
-against a separate Supabase project**. Sharing a database between the demo and
-real jobs means the demo account is one RLS mistake away from your books.
+Never run a demo against the same Supabase project as real jobs. Sharing a
+database means the demo account is one RLS mistake away from your books.
+
+### Retire the old demo account
+
+Turning off auto-sign-in does not invalidate anything. `demo@crewline.app` is
+still a real, confirmed account, and its password shipped inside a public
+JavaScript bundle for as long as demo mode was on — anyone who saved that file
+can still sign in as Ray Whitcomb.
+
+Either delete the demo company (everything cascades) or change that account's
+password. Doing neither leaves a working login with a published credential.
 
 ### Configure SMTP
 
@@ -99,9 +109,11 @@ is not consent.
   drafting return 501 and the UI falls back to manual entry. Nothing breaks; you
   just type it in yourself. Set it if you want the extraction.
 - **Clear the demo data.** The production database still holds Whitcomb
-  Builders with its sites, crew, invoices and photos. RLS keeps a real company
-  from seeing it, but it inflates your row counts and it is one bad query from
-  being confusing. Delete the company row — everything cascades.
+  Builders with its sites, crew, invoices and photos, and its six accounts are
+  the only users in the project. RLS keeps a real company from seeing it, but it
+  inflates your row counts and it is one bad query from being confusing. Delete
+  the company row — everything cascades. See the note above about the published
+  password if you keep it.
 - **Error monitoring.** There is none. An unhandled render error now shows a
   recovery screen instead of a white page (`src/ui/Crash.tsx`), and it logs the
   component stack to the console — but nobody is reading that console. Sentry or
