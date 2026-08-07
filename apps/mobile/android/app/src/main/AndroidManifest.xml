@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      The background-geolocation plugin's own manifest already merges in
+      ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION, FOREGROUND_SERVICE,
+      FOREGROUND_SERVICE_LOCATION, POST_NOTIFICATIONS and the service itself.
+
+      It deliberately does not declare ACCESS_BACKGROUND_LOCATION, because that
+      one triggers a Play Store review and has to be a decision the app makes on
+      purpose. This is that decision: without it Android stops delivering fixes
+      the moment the app leaves the foreground, which is the entire failure this
+      native shell exists to fix. A worker would put their phone in their pocket
+      and stop being on the clock.
+
+      For the Play listing, the declared use is automatic timesheet clock-in at
+      the employer's own job sites, only while the worker has switched tracking
+      on, with a persistent notification showing the whole time. Have the crew's
+      written consent on file before you submit — see SHIP.md.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- Keeps the location service alive through Doze between fixes. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+</manifest>

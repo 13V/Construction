@@ -1,0 +1,7 @@
+node_modules/
+
+# Capacitor copies the built web assets in on sync; they are a build product of
+# apps/dashboard, not source. android/ and ios/ carry their own .gitignore for
+# the rest of the generated output.
+android/app/src/main/assets/public/
+ios/App/App/public/
