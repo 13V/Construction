@@ -61,8 +61,12 @@ const monthYear = (d: Date) => d.toLocaleDateString('en-AU', { month: 'short', y
 const weekday = (d: Date) => d.toLocaleDateString('en-AU', { weekday: 'short' })
 
 const durationHrs = (row: ShiftRow, nowMs: number) =>
-  Math.max(0, (row.ended_at ? new Date(row.ended_at).getTime() : nowMs) - new Date(row.started_at).getTime()) /
-  3_600_000
+  Math.max(
+    0,
+    (row.ended_at ? new Date(row.ended_at).getTime() : nowMs) -
+      new Date(row.started_at).getTime() -
+      (row.break_minutes ?? 0) * 60_000,
+  ) / 3_600_000
 
 const initialsFor = (name: string) =>
   name

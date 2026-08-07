@@ -152,12 +152,14 @@ extraction. Nothing else in the app depends on it.
 Being explicit, because a missing feature that looks present is worse than a
 gap you know about.
 
-- **No notifications.** There is no email, SMS or push transport anywhere in
-  the app. Publishing a roster makes it visible under **My Jobs** in the
-  worker app; it does not text anybody. "Send reminders" on Invoices composes
-  the overdue list into your own mail client. Wiring a provider is a
-  self-contained job — the places that would call it are the `publish()` in
-  `Schedule.tsx` and `sendReminders()` in `Invoices.tsx`.
+- **Notifications are in-app only.** Publishing a roster, deciding leave and
+  ruling on a punch correction all raise a notice (`notifications`, written by
+  trigger so it happens whatever the client), and it shows on the bell in the
+  dashboard and as a banner in the worker app. There is still no email, SMS or
+  push transport, so someone who never opens the app never finds out. Wiring a
+  provider means reading `notifications` and sending — the table is the seam.
+  "Send reminders" on Invoices composes the overdue list into your own mail
+  client.
 - **The geofence does not consult the roster.** `api/ping.ts` clocks a worker
   in wherever they dwell inside a fence, scheduled there or not. That is
   deliberate for now — crew get moved at short notice — but it means a

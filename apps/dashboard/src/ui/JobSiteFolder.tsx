@@ -104,7 +104,9 @@ function formatSize(bytes: number | null): string {
 /** Shift length in hours, counting an open shift as running to now. */
 function hoursOf(row: ShiftRow): number {
   const end = row.ended_at ? new Date(row.ended_at).getTime() : Date.now()
-  return Math.max(0, (end - new Date(row.started_at).getTime()) / 3_600_000)
+  // Net of the unpaid break, so this matches Timesheets and payroll.
+  const gross = end - new Date(row.started_at).getTime() - (row.break_minutes ?? 0) * 60_000
+  return Math.max(0, gross / 3_600_000)
 }
 
 /**

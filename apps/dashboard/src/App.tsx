@@ -1,5 +1,6 @@
 import { AuthScreen } from './auth/AuthScreen'
 import { useSession } from './auth/useSession'
+import { FinishSetup } from './auth/FinishSetup'
 import { supabaseConfigured } from './data/supabase'
 import { demoMode } from './data/demo'
 import { Dashboard } from './Dashboard'
@@ -27,7 +28,7 @@ function Centered({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { loading, session, me, error } = useSession()
+  const { loading, session, me, error, reload } = useSession()
 
   if (!supabaseConfigured) return <SetupNotice />
   if (loading) return <Centered>Loading…</Centered>
@@ -43,33 +44,10 @@ export default function App() {
     )
   }
 
-  // Signed in, but no workers row — every RLS policy keys off that row, so the
-  // dashboard would be silently empty. Say so instead.
+  // Signed in with no workers row. Every RLS policy keys off that row, so the
+  // dashboard would be silently empty — this finishes the job instead.
   if (!me) {
-    return (
-      <Centered>
-        <strong style={{ color: theme.ink }}>This login isn't linked to a company yet</strong>
-        <p>
-          Ask whoever set up your company to add you, or run this against your
-          Supabase database:
-        </p>
-        <pre
-          style={{
-            textAlign: 'left',
-            background: theme.panel,
-            border: `1px solid ${theme.border}`,
-            borderRadius: 4,
-            padding: 12,
-            fontSize: 12,
-            overflowX: 'auto',
-          }}
-        >
-{`update workers
-   set auth_user_id = '${session.user.id}'
- where name = 'Your Name';`}
-        </pre>
-      </Centered>
-    )
+    return <FinishSetup session={session} onDone={reload} />
   }
 
   return <Dashboard me={me} />

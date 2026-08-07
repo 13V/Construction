@@ -721,7 +721,7 @@ export function Schedule({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   <span style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.45, color: '#4A5057', fontVariantNumeric: 'tabular-nums' }}>
                     <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>
-                    The week appears under My Jobs for {notifyCount} crew, next time they open the app
+                    {notifyCount} crew get a notice, and the week appears under My Jobs
                   </span>
                   <span style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.45, color: '#4A5057' }}>
                     <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>
@@ -738,8 +738,8 @@ export function Schedule({
                 */}
                 <div style={{ display: 'flex', gap: 9, padding: '9px 11px', background: '#FFF9E8', border: '1px solid #F0DCA8', borderRadius: 4 }}>
                   <span style={{ fontSize: 12, lineHeight: 1.45, color: '#8A6100' }}>
-                    Crew are not texted or pushed — nothing sends yet. Tell them to check the app, or send the week
-                    round yourself.
+                    The notice is in-app only — nobody is texted or emailed. Someone who does not open the app will
+                    not know.
                   </span>
                 </div>
                 <div style={{ height: 1, background: '#EDEFF1', margin: '2px 0' }} />

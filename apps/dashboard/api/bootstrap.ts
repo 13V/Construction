@@ -58,8 +58,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ok: true, workerId: existing.id, existing: true })
   }
 
-  // Someone the office already added claims their row rather than starting a
-  // new company. This is how crew join — no invite tokens to manage.
+  /*
+   * Someone the office already added claims their row rather than starting a
+   * new company. This is how crew join — no invite tokens to manage.
+   *
+   * The claim is on the email alone, so it MUST NOT happen until Supabase has
+   * confirmed the address. Otherwise anyone who knows a crew member's email
+   * can sign up as them and take the row — with their pay rate, their
+   * timesheets, and the ability to file corrections in their name.
+   *
+   * This is checked here rather than relying on the project's autoconfirm
+   * setting, because that setting is one toggle away from being wrong and
+   * this endpoint is the thing that actually hands over the record.
+   */
+  if (user.email && !user.email_confirmed_at) {
+    return res.status(403).json({
+      error: 'Confirm your email address first — check your inbox for the link.',
+    })
+  }
+
   if (user.email) {
     const { data: invited } = await db
       .from('workers')

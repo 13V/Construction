@@ -41,7 +41,13 @@ const SITE_DOT_COLORS = ['#4C7FB8', '#5C8A63', '#B8864C', '#8A6FB0', '#4CA0A6', 
 const DAY_MS = 86_400_000
 const NO_CLOCKOUT_MS = 12 * 3_600_000
 const LONG_SHIFT_MS = 14 * 3_600_000
-const OVERTIME_MS = 40 * 3_600_000
+/**
+ * Ordinary hours in an Australian working week. The NES caps ordinary hours at
+ * 38 and the on-site construction award follows it — 40 is the US week, and
+ * using it silently underpays overtime by two hours.
+ */
+const ORDINARY_WEEKLY_HRS = 38
+const OVERTIME_MS = ORDINARY_WEEKLY_HRS * 3_600_000
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 /** Two-decimal hours, kept only for the CSV export — payroll wants the precision. */
@@ -62,7 +68,6 @@ const mondayOf = (d: Date) => {
   const s = startOfDay(d)
   return addDays(s, -((s.getDay() + 6) % 7))
 }
-const ymd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 const toLocalInput = (d: Date) =>
   `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 
@@ -72,8 +77,14 @@ const defaultCostCode = (trade?: string) => {
   return costCodes[2].code
 }
 
-const durationMs = (row: ShiftRow) =>
-  Math.max(0, (row.ended_at ? new Date(row.ended_at).getTime() : Date.now()) - new Date(row.started_at).getTime())
+/** Paid time: clock-to-clock, less any unpaid break the worker recorded. */
+const durationMs = (row: ShiftRow) => {
+  const gross = Math.max(
+    0,
+    (row.ended_at ? new Date(row.ended_at).getTime() : Date.now()) - new Date(row.started_at).getTime(),
+  )
+  return Math.max(0, gross - (row.break_minutes ?? 0) * 60_000)
+}
 
 const fmtApprovedStamp = (iso: string) => {
   const d = new Date(iso)
@@ -465,38 +476,121 @@ export function Timesheets({
     onChanged()
   }
 
-  function exportCsv() {
-    const csvField = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
-    const header = ['Worker', 'Date', 'Site', 'Cost code', 'Start', 'End', 'Hours', 'Source', 'Approved']
-    const lines = [header.join(',')]
+  /**
+   * Payroll export.
+   *
+   * Three shapes, because a builder's bookkeeper uses one of two packages and
+   * an auditor wants the third:
+   *  - Detailed  every shift, with GPS-or-edited provenance. The audit trail.
+   *  - Xero      one line per employee per earnings rate per day.
+   *  - MYOB      AccountRight timesheet shape, activity + job per day.
+   *
+   * Ordinary and overtime are split at 38 hours in the week, per the NES.
+   * Earnings-rate and activity names have to match what is set up in the
+   * payroll package — they are named conventionally here and surfaced in the
+   * UI so a mismatch is obvious before import rather than after.
+   */
+  const csvField = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+
+  function download(name: string, lines: string[][]) {
+    const body = lines.map((l) => l.map((f) => csvField(String(f))).join(',')).join('\r\n')
+    const blob = new Blob([body], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  /** ISO date, which both packages accept unambiguously. */
+  const isoDay = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+  /**
+   * Split each worker's visible shifts into ordinary and overtime, walking the
+   * week in order so the 38th hour is the boundary — not a per-day guess.
+   */
+  function splitOrdinaryOvertime() {
+    const byWorkerWeek = new Map<string, ShiftRow[]>()
+    for (const row of visibleRows) {
+      const key = `${row.worker_id}|${mondayOf(new Date(row.started_at)).getTime()}`
+      const list = byWorkerWeek.get(key)
+      if (list) list.push(row)
+      else byWorkerWeek.set(key, [row])
+    }
+    const out: Array<{ row: ShiftRow; ordinaryHrs: number; overtimeHrs: number }> = []
+    for (const list of byWorkerWeek.values()) {
+      list.sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime())
+      let running = 0
+      for (const row of list) {
+        const hrs = durationMs(row) / 3_600_000
+        const roomLeft = Math.max(0, ORDINARY_WEEKLY_HRS - running)
+        const ordinaryHrs = Math.min(hrs, roomLeft)
+        out.push({ row, ordinaryHrs, overtimeHrs: hrs - ordinaryHrs })
+        running += hrs
+      }
+    }
+    return out
+  }
+
+  function exportDetailed() {
+    const lines: string[][] = [
+      ['Worker', 'Date', 'Site', 'Cost code', 'Start', 'End', 'Break (min)', 'Paid hours', 'Source', 'Approved'],
+    ]
     for (const row of visibleRows) {
       const worker = workerById.get(row.worker_id)
       const site = row.site_id ? siteById.get(row.site_id) : undefined
       const start = new Date(row.started_at)
       const end = row.ended_at ? new Date(row.ended_at) : null
-      const fields = [
+      lines.push([
         worker?.name ?? row.worker_id,
-        start.toLocaleDateString('en-AU'),
+        isoDay(start),
         site?.name ?? '',
         row.cost_code ?? defaultCostCode(worker?.trade),
         hhmm(start),
         end ? hhmm(end) : 'Open',
+        String(row.break_minutes ?? 0),
         hours(durationMs(row)),
         row.source === 'auto' && !row.edited ? 'GPS' : 'Manual',
         row.approved_at ? 'Yes' : 'No',
-      ]
-      lines.push(fields.map((f) => csvField(String(f))).join(','))
+      ])
     }
-    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const label = view === 'day' ? ymd(rangeStart) : `${ymd(rangeStart)}_to_${ymd(addDays(rangeEnd, -1))}`
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `timesheets-${label}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    download('timesheet-detailed.csv', lines)
+  }
+
+  function exportXero() {
+    const lines: string[][] = [['Employee', 'Earnings Rate', 'Tracking Option', 'Date', 'Units']]
+    for (const { row, ordinaryHrs, overtimeHrs } of splitOrdinaryOvertime()) {
+      const worker = workerById.get(row.worker_id)
+      const site = row.site_id ? siteById.get(row.site_id) : undefined
+      const day = isoDay(new Date(row.started_at))
+      if (ordinaryHrs > 0) {
+        lines.push([worker?.name ?? row.worker_id, 'Ordinary Hours', site?.name ?? '', day, ordinaryHrs.toFixed(2)])
+      }
+      if (overtimeHrs > 0) {
+        lines.push([worker?.name ?? row.worker_id, 'Overtime Hours', site?.name ?? '', day, overtimeHrs.toFixed(2)])
+      }
+    }
+    download('timesheet-xero.csv', lines)
+  }
+
+  function exportMyob() {
+    const lines: string[][] = [['Last Name', 'First Name', 'Activity', 'Job', 'Date', 'Units', 'Notes']]
+    for (const { row, ordinaryHrs, overtimeHrs } of splitOrdinaryOvertime()) {
+      const worker = workerById.get(row.worker_id)
+      const parts = (worker?.name ?? '').split(/\s+/)
+      const first = parts.shift() ?? ''
+      const last = parts.join(' ') || first
+      const site = row.site_id ? siteById.get(row.site_id) : undefined
+      const day = isoDay(new Date(row.started_at))
+      const note = row.source === 'auto' && !row.edited ? 'GPS verified' : 'Office edit'
+      if (ordinaryHrs > 0) lines.push([last, first, 'Ordinary Hours', site?.name ?? '', day, ordinaryHrs.toFixed(2), note])
+      if (overtimeHrs > 0) lines.push([last, first, 'Overtime Hours', site?.name ?? '', day, overtimeHrs.toFixed(2), note])
+    }
+    download('timesheet-myob.csv', lines)
   }
 
   // ---------------------------------------------------------------- week grid
@@ -653,12 +747,31 @@ export function Timesheets({
           )}
           <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
             <span style={{ fontSize: 11, color: MUTED, whiteSpace: 'nowrap' }}>
-              {canEdit ? 'Syncs to QuickBooks · ADP · Gusto · Paychex' : 'Showing your own hours — read only.'}
+              {canEdit
+                ? `Ordinary hours split at ${ORDINARY_WEEKLY_HRS}/week · breaks deducted`
+                : 'Showing your own hours — read only.'}
             </span>
           </div>
-          <button onClick={exportCsv} disabled={visibleRows.length === 0} style={cta}>
-            EXPORT TO PAYROLL
-          </button>
+          {canEdit && (
+            <select
+              value=""
+              disabled={visibleRows.length === 0}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === 'xero') exportXero()
+                else if (v === 'myob') exportMyob()
+                else if (v === 'detailed') exportDetailed()
+                e.currentTarget.value = ''
+              }}
+              style={{ ...cta, appearance: 'none', paddingRight: 22 }}
+              title="Downloads a CSV — earnings rate names must match your payroll setup"
+            >
+              <option value="">EXPORT TO PAYROLL ▾</option>
+              <option value="xero">Xero timesheet</option>
+              <option value="myob">MYOB timesheet</option>
+              <option value="detailed">Detailed (audit trail)</option>
+            </select>
+          )}
         </div>
       </div>
 

@@ -104,7 +104,9 @@ export function Materials({
   const cost = useMemo(() => {
     const labour = shifts.reduce((sum, s) => {
       const end = s.ended_at ? new Date(s.ended_at).getTime() : Date.now()
-      const hours = Math.max(0, (end - new Date(s.started_at).getTime()) / 3_600_000)
+      // Paid time excludes the unpaid break the worker recorded.
+      const gross = end - new Date(s.started_at).getTime() - (s.break_minutes ?? 0) * 60_000
+      const hours = Math.max(0, gross / 3_600_000)
       return sum + hours * rateOf(s.worker_id)
     }, 0)
     // Returned stock is money back on the shelf, not money spent.

@@ -7,6 +7,7 @@ import type {
   AssignmentRow,
   ChannelRow,
   MessageRow,
+  NotificationRow,
   ShiftCorrectionRow,
   ShiftRow,
   TimeOffRow,
@@ -628,6 +629,71 @@ function ActionGrid({ onOpen }: { onOpen: (screen: PanelScreen) => void }) {
   )
 }
 
+/** Unread notices, shown wherever the worker is. */
+function NoticeBanner({ me, onOpen }: { me: WorkerRow; onOpen: () => void }) {
+  const [rows, setRows] = useState<NotificationRow[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const { data } = await supabase()
+        .from('notifications')
+        .select('*')
+        .is('read_at', null)
+        .order('created_at', { ascending: false })
+        .limit(5)
+      if (!cancelled) setRows((data ?? []) as NotificationRow[])
+    }
+    void load()
+    const ch = supabase()
+      .channel('worker-notices')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => void load())
+      .subscribe()
+    return () => {
+      cancelled = true
+      void supabase().removeChannel(ch)
+    }
+  }, [me.id])
+
+  if (rows.length === 0) return null
+
+  const dismiss = async () => {
+    const stamp = new Date().toISOString()
+    const ids = rows.map((r) => r.id)
+    setRows([])
+    await supabase().from('notifications').update({ read_at: stamp }).in('id', ids)
+    onOpen()
+  }
+
+  return (
+    <button
+      onClick={() => void dismiss()}
+      style={{
+        flex: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+        margin: '0 20px 12px',
+        padding: '11px 13px',
+        background: theme.accentFill,
+        border: `1px solid ${theme.accent}`,
+        borderRadius: 4,
+        font: 'inherit',
+        textAlign: 'left',
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0A4E9E' }}>{rows[0].title}</span>
+      {rows[0].body && <span style={{ fontSize: 12.5, color: '#0A4E9E' }}>{rows[0].body}</span>}
+      {rows.length > 1 && (
+        <span style={{ fontSize: 11.5, color: '#0A4E9E', opacity: 0.8 }}>
+          and {rows.length - 1} more — tap to clear
+        </span>
+      )}
+    </button>
+  )
+}
+
 function CalendarIcon({ color = theme.ink, size = 24 }: { color?: string; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.6}>
@@ -873,7 +939,10 @@ function GateScreen({
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <TrackerHeader me={me} tone="off" label="Off the clock" onAvatarTap={onShowAccount} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 20, overflowY: 'auto' }}>
+      <div style={{ paddingTop: 14 }}>
+        <NoticeBanner me={me} onOpen={() => onOpenPanel('schedule')} />
+      </div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 20px 20px', overflowY: 'auto' }}>
         <Callout>
           Turn on tracking and you'll be clocked in <b style={{ fontWeight: 700 }}>automatically</b> when you reach a
           job site.

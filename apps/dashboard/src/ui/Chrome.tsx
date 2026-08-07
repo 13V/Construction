@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { theme } from '../theme'
 import type { JobSite } from '../types'
 import { demoMode } from '../data/demo'
+import type { NotificationRow } from '../data/supabase'
 
 const NAV = [
   'Map',
@@ -22,6 +23,9 @@ const NAV = [
 ] as const
 
 export type NavItem = (typeof NAV)[number]
+
+/** Runtime copy of the nav list, for validating a stored nav name. */
+export const NAV_ITEMS: readonly string[] = NAV
 
 /** One row in the global search dropdown. */
 export interface SearchHit {
@@ -101,6 +105,11 @@ export function TopBar({
   onSearch,
   results,
   onPickResult,
+  notices,
+  unread,
+  onOpenNotices,
+  noticesOpen,
+  onPickNotice,
 }: {
   toolbar?: ReactNode
   company: string
@@ -110,6 +119,11 @@ export function TopBar({
   onSearch: (q: string) => void
   results: SearchHit[]
   onPickResult: (hit: SearchHit) => void
+  notices: NotificationRow[]
+  unread: number
+  onOpenNotices: () => void
+  noticesOpen: boolean
+  onPickNotice: (n: NotificationRow) => void
 }) {
   const mark =
     company
@@ -253,6 +267,97 @@ export function TopBar({
             color: theme.inkSoft,
           }}
         >
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={onOpenNotices}
+              title="Notices"
+              style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                border: `1px solid ${noticesOpen ? theme.accent : theme.border}`,
+                borderRadius: 3,
+                background: noticesOpen ? theme.accentFill : theme.panel,
+                cursor: 'pointer',
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke={noticesOpen ? theme.accent : theme.ink} strokeWidth={1.3}>
+                <path d="M4 6.6a4 4 0 018 0c0 3 1 4.2 1 4.2H3s1-1.2 1-4.2z" strokeLinejoin="round" />
+                <path d="M6.6 13a1.6 1.6 0 002.8 0" strokeLinecap="round" />
+              </svg>
+              {unread > 0 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: -5,
+                    right: -5,
+                    minWidth: 15,
+                    height: 15,
+                    padding: '0 4px',
+                    borderRadius: 8,
+                    background: theme.alert,
+                    color: '#fff',
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    lineHeight: '15px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
+            </button>
+            {noticesOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 34,
+                  right: 0,
+                  zIndex: 60,
+                  width: 320,
+                  maxHeight: 380,
+                  overflowY: 'auto',
+                  background: theme.panel,
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: 4,
+                  boxShadow: '0 6px 20px rgba(26,29,33,.16)',
+                }}
+              >
+                {notices.length === 0 ? (
+                  <div style={{ padding: '14px 13px', fontSize: 12.5, color: theme.inkFaint }}>
+                    Nothing yet. Rostering someone on, or deciding a leave request, tells them here.
+                  </div>
+                ) : (
+                  notices.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => onPickNotice(n)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                        width: '100%',
+                        padding: '9px 13px',
+                        border: 'none',
+                        borderBottom: `1px solid ${theme.borderSoft}`,
+                        borderLeft: `3px solid ${n.read_at ? 'transparent' : theme.accent}`,
+                        background: n.read_at ? 'transparent' : theme.accentFill,
+                        font: 'inherit',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>{n.title}</span>
+                      {n.body && <span style={{ fontSize: 11.5, color: theme.inkSoft }}>{n.body}</span>}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
           <span style={{ color: theme.ink, fontWeight: 500 }}>{userName}</span>
           <button
             onClick={onSignOut}

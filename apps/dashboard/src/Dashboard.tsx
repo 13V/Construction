@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { LiveMap, type MapHandle } from './map/LiveMap'
-import { Sidebar, ToolbarButton, TopBar, type NavItem, type SearchHit } from './ui/Chrome'
+import { NAV_ITEMS, Sidebar, ToolbarButton, TopBar, type NavItem, type SearchHit } from './ui/Chrome'
 import { EventLog, RosterPanel, StatStrip, ToolRail } from './ui/Overlays'
 import { Timesheets } from './ui/Timesheets'
 import { JobSites, type JobSiteDraft } from './ui/JobSites'
@@ -19,6 +19,7 @@ import { Invoices } from './ui/Invoices'
 import { ChangeOrders } from './ui/ChangeOrders'
 import { Portals } from './ui/Portals'
 import { useLive } from './data/useLive'
+import { useNotifications } from './data/useNotifications'
 import { supabase, type WorkerRow } from './data/supabase'
 import { theme } from './theme'
 
@@ -34,6 +35,8 @@ export function Dashboard({ me }: { me: WorkerRow }) {
   const [siteSetup, setSiteSetup] = useState(false)
   const [search, setSearch] = useState('')
   const mapRef = useRef<MapHandle>(null)
+  const notices = useNotifications()
+  const [noticesOpen, setNoticesOpen] = useState(false)
 
   /**
    * Global search over what the dashboard already holds in memory — sites,
@@ -117,6 +120,19 @@ export function Dashboard({ me }: { me: WorkerRow }) {
         search={search}
         onSearch={setSearch}
         results={results}
+        notices={notices.rows}
+        unread={notices.unread}
+        noticesOpen={noticesOpen}
+        onOpenNotices={() => {
+          const next = !noticesOpen
+          setNoticesOpen(next)
+          // Opening is the acknowledgement; the badge should not outlive it.
+          if (next) void notices.markAllRead()
+        }}
+        onPickNotice={(n) => {
+          if (n.link_nav && NAV_ITEMS.includes(n.link_nav as NavItem)) setNav(n.link_nav as NavItem)
+          setNoticesOpen(false)
+        }}
         onPickResult={(hit) => {
           setNav(hit.nav)
           if (hit.nav === 'Job Sites') setSiteSetup(false)

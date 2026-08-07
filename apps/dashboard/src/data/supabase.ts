@@ -398,3 +398,21 @@ export interface PlanPinRow {
   created_by: string | null
   created_at: string
 }
+
+export interface NotificationRow {
+  id: string
+  company_id: string
+  worker_id: string | null
+  kind:
+    | 'roster_published'
+    | 'leave_decided'
+    | 'correction_raised'
+    | 'correction_decided'
+    | 'timeoff_requested'
+    | 'shift_flagged'
+  title: string
+  body: string | null
+  link_nav: string | null
+  read_at: string | null
+  created_at: string
+}
