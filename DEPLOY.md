@@ -63,6 +63,19 @@ Google was dropped and how to self-host tiles later.
 Import the repo, then set **Root Directory** to `apps/dashboard`. The Vite preset and
 `vercel.json` handle the rest.
 
+Two things in `vercel.json` are load-bearing, and JSON has nowhere to say so — Vercel
+rejects the file outright if you add a `comment` key, so the reasoning lives here:
+
+- **`/assets/(.*)` is `immutable` for a year.** Vite puts a content hash in every
+  filename under `assets/`, so a changed file is a different URL and these can never
+  go stale. Vercel's default of `max-age=0, must-revalidate` cost a blocking
+  conditional request for the entry bundle, the 468 kB MapLibre worker, the
+  stylesheet and every lazy chunk on *each* page load before any of it could run. The
+  bytes come back 304, so it is invisible in transfer size while still putting
+  several round trips in front of the map on every refresh.
+- **`/` keeps `must-revalidate`.** `index.html` is the one URL that never changes.
+  Cache it and nobody ever sees a new deploy.
+
 | Name | Scope | Value |
 |---|---|---|
 | `VITE_SUPABASE_URL` | build | Supabase project URL |

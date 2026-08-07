@@ -8,14 +8,12 @@
   ],
   "headers": [
     {
-      "comment": "Vite puts a content hash in every filename under /assets, so a changed file is a different URL and these can never go stale. Without this they were served max-age=0, must-revalidate, which cost a blocking conditional request for the entry bundle, the MapLibre worker and each lazy chunk on every single page load before any of it could run — the map cannot start until that round trip finishes.",
       "source": "/assets/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "comment": "index.html is the one file whose URL never changes, so it must be revalidated or a deploy would never reach anyone.",
       "source": "/",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
