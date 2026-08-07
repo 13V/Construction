@@ -99,6 +99,18 @@ allowed to see. Clear both variables to restore the normal login screen.
 
 Timesheets fill in on their own as people arrive and leave.
 
+## Checking a deploy
+
+```bash
+SUPABASE_ANON_KEY=... SUPABASE_PAT=sbp_... node scripts/smoke.mjs
+```
+
+Creates a throwaway company against the live database and the deployed
+functions, asserts, and deletes it. It covers the things a unit test cannot:
+RLS policies, database constraints, and the trigger-driven notices. The PAT is
+needed to read the `service_role` key (for minting confirmed test users, since
+signup now needs a real email) and to clean up afterwards.
+
 ## How the pieces fit
 
 ```
