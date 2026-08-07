@@ -54,8 +54,13 @@ button { font-family: inherit; }
     flex-direction: column !important;
   }
   nav[data-nav='sidebar'] {
+    /* The rail is a block by default, so the row direction needs the display
+       switch too — without it the buttons keep stacking. */
+    display: flex !important;
+    align-items: center;
     width: 100% !important;
     height: 46px;
+    min-height: 46px;
     flex-direction: row !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
@@ -64,9 +69,14 @@ button { font-family: inherit; }
     padding: 0 !important;
   }
   nav[data-nav='sidebar'] button {
-    flex: none !important;
+    flex: 0 0 46px !important;
     width: 46px !important;
     height: 46px !important;
+    justify-content: center !important;
+    padding: 0 !important;
+  }
+  nav[data-nav='sidebar'] [data-nav-label] {
+    display: none !important;
   }
   [data-topbar='search'] {
     display: none !important;
