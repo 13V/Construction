@@ -204,6 +204,29 @@ try {
   ok('a stranger reads no invoice_payments', (await stranger.get('invoice_payments', 'select=id')).length === 0)
   ok('a stranger reads no notifications', (await stranger.get('notifications', 'select=id')).length === 0)
 
+  // ----------------------------------------------------------------- chat
+  // Realtime delivery is not asserted here — it needs the client library and a
+  // subscription handshake, and racing that produces flaky failures that mean
+  // nothing. Verified separately; what matters below is that the channel
+  // exists without being asked for and that RLS holds on both sides.
+  const chans = await boss.get('channels', `select=id,name,site_id&company_id=eq.${companyId}`)
+  const siteChan = chans.find((c) => c.site_id === site.id)
+  ok('a new job site gets its own chat channel automatically', Boolean(siteChan), siteChan?.name)
+
+  if (siteChan) {
+    ok('a field worker can post to the site channel',
+      (await field.post('messages', { company_id: companyId, channel_id: siteChan.id, author_id: fieldRow.id, body: 'Slab pour done.' })).ok)
+    ok('the office can reply',
+      (await boss.post('messages', { company_id: companyId, channel_id: siteChan.id, author_id: bossId, body: 'Sparky booked Tuesday.' })).ok)
+    ok('the worker sees both sides of the thread',
+      (await field.get('messages', `select=id&channel_id=eq.${siteChan.id}`)).length === 2)
+    // Authorship is identity, not a form field.
+    ok('a worker cannot post as somebody else',
+      (await field.post('messages', { company_id: companyId, channel_id: siteChan.id, author_id: bossId, body: 'Everyone gets a raise' })).status === 403)
+    ok('a stranger reads no messages and no channels',
+      (await stranger.get('messages', 'select=id')).length === 0 && (await stranger.get('channels', 'select=id')).length === 0)
+  }
+
   // ---------------------------------------------------------- money maths
   const v = (await boss.get('invoice_status_v', `select=id,invoice_no,overdue,outstanding&company_id=eq.${companyId}`))[0]
   ok('overdue is derived, not stored', v.overdue === true && Number(v.outstanding) === 5000)
