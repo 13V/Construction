@@ -18,6 +18,12 @@ export interface JobSite {
    * client. Null when not set.
    */
   budget: number | null
+  /**
+   * The price agreed with the client. Margin is contract value minus cost;
+   * comparing spend to `budget` alone tells you whether you beat your own
+   * cost target, not whether the job made money.
+   */
+  contractValue: number | null
   /** Who the job is for. Shown in the client portal. */
   clientName: string | null
   /** Headline progress the client sees, 0–100. Null when not tracked. */

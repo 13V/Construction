@@ -90,15 +90,6 @@ interface EditState {
  * so there is currently no way to persist one; this stays real (and empty)
  * rather than faking rows, ready to fill in once the data model can hold one.
  */
-interface UnassignedShift {
-  id: string
-  site: string
-  day: string
-  time: string
-  trade: string
-  costCode: string
-}
-
 export function Schedule({
   me,
   sites,
@@ -285,7 +276,6 @@ export function Schedule({
 
   // No row in `assignments` can exist without a worker (schema requires worker_id),
   // so this stays empty until the product grows a real open-shift concept.
-  const unassignedShifts: UnassignedShift[] = []
 
   const atRisk = useMemo(
     () =>
@@ -464,62 +454,6 @@ export function Schedule({
 
         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {unassignedShifts.length > 0 && (
-              <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8, overflow: 'hidden' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 14,
-                    flexWrap: 'wrap',
-                    padding: '10px 13px',
-                    borderBottom: `1px solid ${theme.border}`,
-                    background: '#FFF9E8',
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: theme.warning }} />
-                    Unassigned shifts — {unassignedShifts.length} open
-                  </span>
-                  <span style={{ fontSize: 12, color: '#8B9096' }}>Drag onto a crew row to assign. Geofence arms itself once assigned.</span>
-                </div>
-                <div style={{ display: 'flex', gap: 10, padding: '11px 13px' }}>
-                  {unassignedShifts.map((u) => (
-                    <div
-                      key={u.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 9,
-                        padding: '8px 11px',
-                        border: '1px dashed #C9A227',
-                        borderRadius: 4,
-                        background: '#FFFDF5',
-                        cursor: 'grab',
-                      }}
-                    >
-                      <svg width="9" height="14" viewBox="0 0 9 14" fill="#B08A1E">
-                        <circle cx="2" cy="2" r="1.3" />
-                        <circle cx="7" cy="2" r="1.3" />
-                        <circle cx="2" cy="7" r="1.3" />
-                        <circle cx="7" cy="7" r="1.3" />
-                        <circle cx="2" cy="12" r="1.3" />
-                        <circle cx="7" cy="12" r="1.3" />
-                      </svg>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 600 }}>
-                          {u.site} · {u.time}
-                        </span>
-                        <span style={{ fontSize: 11.5, color: '#8B9096' }}>
-                          {u.day} · {u.trade} · {u.costCode}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8, overflowX: 'auto' }}>
               <div
@@ -681,7 +615,8 @@ export function Schedule({
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 13px', background: '#FAFBFC' }}>
                 <span style={{ fontSize: 12.5, color: theme.inkSoft, fontVariantNumeric: 'tabular-nums' }}>
-                  {visibleAssignments.length} shift{visibleAssignments.length === 1 ? '' : 's'} scheduled · {unassignedShifts.length} unassigned
+                  {visibleAssignments.length} shift{visibleAssignments.length === 1 ? '' : 's'} scheduled ·{' '}
+                  {visibleAssignments.filter((a) => !a.published).length} not yet published
                 </span>
                 <span style={{ fontSize: 12.5, color: theme.inkSoft }}>
                   Projected labour{' '}
@@ -785,13 +720,26 @@ export function Schedule({
                 <span style={{ fontSize: 14, fontWeight: 600 }}>When you publish</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   <span style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.45, color: '#4A5057', fontVariantNumeric: 'tabular-nums' }}>
-                    <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>Notifies {notifyCount} crew by push + SMS
+                    <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>
+                    The week appears under My Jobs for {notifyCount} crew, next time they open the app
                   </span>
                   <span style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.45, color: '#4A5057' }}>
-                    <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>Arms each site geofence for the assigned hours only
+                    <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>
+                    Unpublished shifts stay yours — nobody sees a draft roster
                   </span>
-                  <span style={{ display: 'flex', gap: 8, fontSize: 12.5, lineHeight: 1.45, color: '#4A5057' }}>
-                    <span style={{ color: theme.accent, fontWeight: 700 }}>→</span>Locks cost codes so hours land on the right job
+                </div>
+                {/*
+                  This panel used to promise "notifies N crew by push + SMS",
+                  "arms each site geofence for the assigned hours only" and
+                  "locks cost codes". None of the three were true: there is no
+                  notification transport in the app, api/ping.ts never reads
+                  assignments, and the table has no cost_code column. A roster
+                  the owner believes was texted out is worse than no roster.
+                */}
+                <div style={{ display: 'flex', gap: 9, padding: '9px 11px', background: '#FFF9E8', border: '1px solid #F0DCA8', borderRadius: 4 }}>
+                  <span style={{ fontSize: 12, lineHeight: 1.45, color: '#8A6100' }}>
+                    Crew are not texted or pushed — nothing sends yet. Tell them to check the app, or send the week
+                    round yourself.
                   </span>
                 </div>
                 <div style={{ height: 1, background: '#EDEFF1', margin: '2px 0' }} />

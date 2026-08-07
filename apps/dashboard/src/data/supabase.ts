@@ -46,6 +46,7 @@ export interface JobSiteRow {
   client_name: string | null
   progress_pct: number | null
   schedule_note: string | null
+  contract_value: number | null
 }
 
 export interface PositionRow {
@@ -66,6 +67,8 @@ export interface ShiftRow {
   source: 'auto' | 'manual'
   edited: boolean
   approved_at: string | null
+  /** Unpaid break the worker recorded on their own shift. */
+  break_minutes: number
 }
 
 export interface EventRow {
@@ -122,6 +125,7 @@ export interface ExpenseRow {
   category: string | null
   cost_code: string | null
   receipt_path: string | null
+  po_id: string | null
   status: 'needs_review' | 'confirmed' | 'flagged'
   ai_note: string | null
   ai_confidence: number | null
@@ -278,6 +282,7 @@ export interface InvoiceRow {
   paid_amount: number
   status: 'draft' | 'sent' | 'paid' | 'void'
   note: string | null
+  retention_pct: number
 }
 
 export interface InvoiceLineRow {
@@ -346,4 +351,50 @@ export interface PortalContactRow {
   org: string | null
   invite_email: string | null
   active: boolean
+}
+
+export interface TimeOffRow {
+  id: string
+  company_id: string
+  worker_id: string
+  kind: 'annual' | 'personal' | 'unpaid' | 'other'
+  starts_on: string
+  ends_on: string
+  hours: number | null
+  reason: string | null
+  status: 'pending' | 'approved' | 'declined' | 'cancelled'
+  decided_by: string | null
+  decided_at: string | null
+  decision_note: string | null
+  created_at: string
+}
+
+export interface ShiftCorrectionRow {
+  id: string
+  company_id: string
+  shift_id: string | null
+  worker_id: string
+  reason_code: 'parked_offsite' | 'access_changed' | 'blocked' | 'forgot' | 'other'
+  detail: string | null
+  requested_start: string | null
+  requested_end: string | null
+  status: 'open' | 'accepted' | 'rejected'
+  resolved_by: string | null
+  resolved_at: string | null
+  resolution_note: string | null
+  created_at: string
+}
+
+export interface PlanPinRow {
+  id: string
+  company_id: string
+  site_id: string
+  file_id: string
+  x: number
+  y: number
+  kind: 'issue' | 'photo' | 'note'
+  label: string
+  photo_id: string | null
+  created_by: string | null
+  created_at: string
 }

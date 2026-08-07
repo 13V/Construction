@@ -81,6 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // The geofence engine only needs geometry; the commercial columns are
     // not selected above and must not be invented here.
     budget: null,
+    contractValue: null,
     clientName: null,
     progressPct: null,
     scheduleNote: null,

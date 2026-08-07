@@ -108,7 +108,7 @@ function siteMarkerEl(site: JobSite, onSite: number, selected: boolean) {
     <span style="width:8px;height:8px;border-radius:50%;background:${dim ? theme.inkFaint : theme.accent}"></span>
     <span style="display:flex;flex-direction:column">
       <span style="font-weight:600;color:${theme.ink}">${escapeHtml(site.name)}</span>
-      <span style="font-size:10.5px;color:${theme.inkSoft}">${Math.round(site.radiusM * 3.28084)} ft · ${
+      <span style="font-size:10.5px;color:${theme.inkSoft}">${site.radiusM} m · ${
         dim ? 'starts soon' : `${onSite} on site`
       }</span>
     </span>`

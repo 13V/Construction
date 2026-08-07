@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
-import { supabase, type CertificationRow, type ShiftRow, type WorkerRow } from '../data/supabase'
+import {
+  supabase,
+  type CertificationRow,
+  type ShiftCorrectionRow,
+  type ShiftRow,
+  type TimeOffRow,
+  type WorkerRow,
+} from '../data/supabase'
 import { theme } from '../theme'
-import { money2 } from '../format'
+import { money2, shortDate } from '../format'
 import type { JobSite, Worker } from '../types'
 
 /**
- * Crew roster plus a per-person detail/time view, ported pixel-for-pixel from
- * design/screens/isCrew.html and design/screens/isCrewTime.html.
+ * Crew roster plus a per-person detail view, ported from
+ * design/screens/isCrew.html.
  *
  * Data comes from three tables:
  *  - workers        the roster itself (also handed down, pre-filtered to
@@ -22,17 +28,13 @@ import type { JobSite, Worker } from '../types'
  *                    so status is a shift/sign-in read rather than the map's
  *                    geofence engine
  *
- * The design's "PHONE" column and the whole "time off request" card have no
- * backing table in this schema (no phone number on `workers`, no time-off
- * table anywhere in supabase/schema*.sql) — those stay illustrative, exactly
- * as drawn, rather than fabricating data that would look real. Everything
- * else — add / deactivate, invite state, certifications, hours worked, sites
- * worked, overtime — is real and reads straight from Supabase.
+ * The design's "PHONE" column has no backing table (no phone number on
+ * `workers`), so that column is left out rather than filled with something
+ * that looks real. Everything else on this screen reads from Supabase.
  *
- * isCrewTime.html is a worker-app walkthrough, not a live incident feed: its
- * four phone mockups keep the design's own illustrative scenario copy, with
- * the selected crew member's name substituted in wherever the design names a
- * specific person — that's what makes it "their" detail view.
+ * Time off and punch corrections are real (schema_v6): the crew raise them
+ * from the worker app, the office decides here, and the decision is stamped
+ * with who made it.
  */
 
 const DAY_MS = 86_400_000
@@ -146,506 +148,20 @@ function WarningIcon({ size = 15 }: { size?: number }) {
   )
 }
 
-function BackChevron() {
-  return (
-    <svg width="19" height="19" viewBox="0 0 10 10" style={{ flex: 'none', transform: 'rotate(90deg)' }}>
-      <path d="M1.5 3.5L5 7l3.5-3.5" fill="none" stroke="#007BFF" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-  )
-}
+// The design ships isCrewTime/isCrewMobile as phone frames. A previous pass
+// reproduced them here as static pictures inside the OFFICE app, with
+// hardcoded distances in miles, a California meal-break rule, and an approver
+// who is not a user of this system. They are worker flows, so they are now
+// built for real in src/worker/WorkerApp.tsx against shift_corrections and
+// time_off_requests, and this screen shows the office side of them.
 
-function SmallChevron() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none' }}>
-      <path d="M1.5 3.5L5 7l3.5-3.5" fill="none" stroke="#007BFF" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-// -------------------------------------------------------------- phone shell
-
-/** The status-bar + rounded-bezel chrome shared by all four isCrewTime.html mockups. */
-function PhoneMock({ time, batteryWidth, children }: { time: string; batteryWidth: number; children: ReactNode }) {
-  return (
-    <div style={{ width: 390, height: 844, background: '#2B2F33', borderRadius: 42, padding: 9, boxShadow: '0 8px 26px rgba(26,29,33,.18)' }}>
-      <div style={{ position: 'relative', width: '100%', height: '100%', background: '#F5F6F7', borderRadius: 34, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 'none', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: 46, padding: '0 24px 6px', background: '#fff' }}>
-          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{time}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <svg width="16" height="11" viewBox="0 0 16 11" fill="#1A1D21">
-              <rect x="0" y="7" width="2.6" height="4" rx=".6" />
-              <rect x="4" y="5" width="2.6" height="6" rx=".6" />
-              <rect x="8" y="2.6" width="2.6" height="8.4" rx=".6" />
-              <rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3" />
-            </svg>
-            <svg width="22" height="11" viewBox="0 0 24 12" fill="none">
-              <rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" strokeOpacity=".4" />
-              <rect x="2.5" y="2.5" width={batteryWidth} height="7" rx="1.8" fill="#1A1D21" />
-            </svg>
-          </span>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function StepHeader({ n, title }: { n: number; title: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-      <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 19, height: 19, borderRadius: '50%', background: '#1A1D21', color: '#fff', fontSize: 10.5, fontWeight: 700 }}>
-        {n}
-      </span>
-      <span style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap' }}>{title}</span>
-    </div>
-  )
-}
-
-// --------------------------------------------------------- detail columns
-
-const FIX_REASONS = [
-  { label: 'Truck or equipment was blocking my usual spot', on: false },
-  { label: 'Parked off-site and walked in', on: true },
-  { label: 'Site access point had changed that day', on: false },
-  { label: "Something else — I'll explain below", on: false },
-] as const
-
-function FixPunchColumn({ name }: { name: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 390 }}>
-      <StepHeader n={1} title={`Fix my punch — ${name}'s side of it`} />
-      <PhoneMock time="7:21" batteryWidth={14}>
-        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '2px 18px 12px', background: '#fff', borderBottom: '1px solid #DCE0E6' }}>
-          <BackChevron />
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.15 }}>Fix this punch</span>
-            <span style={{ fontSize: 12, color: '#8B9096' }}>{name} · today, in at 7:18 AM</span>
-          </span>
-        </div>
-
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 11, padding: '15px 18px', background: '#FDECEE', borderBottom: '1px solid #F3C4CB' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#A00417' }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#D2051E' }} />
-              HELD FOR REVIEW
-            </span>
-            <span style={{ fontSize: 15, lineHeight: 1.45, color: '#6E3B41' }}>
-              You clocked in <b style={{ fontWeight: 700, color: '#A00417' }}>0.4 mi outside</b> the Maple Ridge fence. Your
-              hours are recorded, but Dale has to approve them before payroll.
-            </span>
-            <div style={{ position: 'relative', height: 124, border: '1px solid #E9BFC6', borderRadius: 4, overflow: 'hidden', background: '#fff' }}>
-              <svg viewBox="0 0 336 124" preserveAspectRatio="xMidYMid slice" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-                <rect width="336" height="124" fill="#fff" />
-                <g fill="#E2E6EA">
-                  <rect x="0" y="0" width="138" height="50" />
-                  <rect x="150" y="0" width="186" height="50" />
-                  <rect x="0" y="62" width="138" height="62" />
-                  <rect x="150" y="62" width="186" height="62" />
-                </g>
-                <circle cx="96" cy="56" r="44" fill="#007BFF" fillOpacity=".12" stroke="#007BFF" />
-                <path d="M96 56 c-7-10-10-13-10-18a10 10 0 1 1 20 0c0 5-3 8-10 18z" transform="translate(0,-5)" fill="#007BFF" stroke="#fff" strokeWidth="2" />
-                <path d="M110 60 L196 74" fill="none" stroke="#D2051E" strokeWidth="1.6" strokeDasharray="4 4" />
-                <g>
-                  <circle cx="196" cy="74" r="14" fill="#fff" />
-                  <circle cx="196" cy="74" r="12.4" fill="#D2051E" />
-                  <circle cx="196" cy="74" r="9.6" fill="#3F454B" />
-                  <text x="196" y="77" fontSize="9" fontWeight="700" fill="#fff" textAnchor="middle" fontFamily="-apple-system,Helvetica,Arial,sans-serif">
-                    AM
-                  </text>
-                </g>
-                <text x="136" y="104" fontSize="10" fontWeight="700" fill="#D2051E" fontFamily="-apple-system,Helvetica,Arial,sans-serif">
-                  0.4 mi outside
-                </text>
-              </svg>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '16px 18px', background: '#fff', borderBottom: '1px solid #DCE0E6' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#8B9096' }}>WHAT HAPPENED?</span>
-            {FIX_REASONS.map((r) => (
-              <span
-                key={r.label}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 11,
-                  padding: 14,
-                  border: r.on ? '2px solid #007BFF' : '1px solid #DCE0E6',
-                  borderRadius: 4,
-                  background: r.on ? '#F2F8FF' : '#fff',
-                }}
-              >
-                <span
-                  style={{
-                    flex: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
-                    border: r.on ? '2px solid #007BFF' : '1.5px solid #C7CCD2',
-                    background: r.on ? '#007BFF' : '#fff',
-                  }}
-                >
-                  {r.on && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />}
-                </span>
-                <span style={{ flex: 1, fontSize: 15, fontWeight: r.on ? 600 : 400 }}>{r.label}</span>
-              </span>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px', background: '#fff' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#8B9096' }}>TELL DALE WHAT TO FIX</span>
-            <div style={{ minHeight: 76, padding: 12, border: '1px solid #DCE0E6', borderRadius: 4 }}>
-              <span style={{ fontSize: 14.5, lineHeight: 1.45, color: '#1A1D21' }}>
-                Concrete truck had the driveway so I parked down on Maple Ridge Dr and walked in. On site at 7:18 like
-                it says.
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, padding: '12px 13px', border: '1px solid #DCE0E6', borderRadius: 4, background: '#fff' }}>
-              <svg width="19" height="19" viewBox="0 0 16 16" fill="none" stroke="#007BFF" strokeWidth="1.4" style={{ flex: 'none' }}>
-                <path d="M2 5.6h2.6L6 3.8h4l1.4 1.8H14v7.6H2z" strokeLinejoin="round" />
-                <circle cx="8" cy="9.2" r="2.6" />
-              </svg>
-              <span style={{ flex: 1, fontSize: 14.5, fontWeight: 600, color: '#007BFF' }}>Add a photo as proof</span>
-              <span style={{ flex: 'none', fontSize: 13, color: '#8B9096' }}>1 attached</span>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 18px 22px', background: '#fff', borderTop: '1px solid #DCE0E6' }}>
-          <button style={phoneCta}>SEND CORRECTION REQUEST</button>
-          <span style={{ fontSize: 12.5, lineHeight: 1.4, color: '#8B9096', textAlign: 'center' }}>
-            Your note lands on the exception in Dale's timesheet. You can't change the time yourself — that's the
-            point.
-          </span>
-        </div>
-      </PhoneMock>
-    </div>
-  )
-}
-
+/** One row of the weekly sign-off table — a real day of a real worker's week. */
 interface SignoffDay {
   day: string
   site: string
   times: string
   hrs: string
   auto: boolean
-}
-
-function SignOffColumn({ name, weekLabel, totalHrs, regularHrs, overtimeHrs, days }: {
-  name: string
-  weekLabel: string
-  totalHrs: number
-  regularHrs: number
-  overtimeHrs: number
-  days: SignoffDay[]
-}) {
-  const hasOt = overtimeHrs > 0
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 390 }}>
-      <StepHeader n={2} title="Weekly sign-off" />
-      <PhoneMock time="3:32" batteryWidth={13}>
-        <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 3, padding: '2px 18px 12px', background: '#fff', borderBottom: '1px solid #DCE0E6' }}>
-          <span style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.15 }}>Sign off on your week</span>
-          <span style={{ fontSize: 12, color: '#8B9096' }}>{name} · {weekLabel}</span>
-        </div>
-
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '20px 18px 16px', background: '#fff', borderBottom: '1px solid #DCE0E6' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#8B9096' }}>TOTAL FOR THE WEEK</span>
-            <span style={{ fontSize: 52, fontWeight: 600, letterSpacing: '-.03em', lineHeight: 1.05, fontVariantNumeric: 'tabular-nums' }}>
-              {totalHrs.toFixed(1)}
-            </span>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '4px 11px',
-                borderRadius: 13,
-                background: hasOt ? '#FDECEE' : '#EAF7EC',
-                color: hasOt ? '#A00417' : '#1B7A2C',
-                fontSize: 12.5,
-                fontWeight: 700,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {regularHrs.toFixed(1)} regular · {overtimeHrs.toFixed(1)} overtime
-            </span>
-          </div>
-
-          {days.map((d) => (
-            <div key={d.day} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 18px', background: '#fff', borderBottom: '1px solid #EDEFF1' }}>
-              <span style={{ flex: 'none', width: 58, fontSize: 13.5, fontWeight: 600, color: '#4A5057' }}>{d.day}</span>
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.site}</span>
-                <span style={{ fontSize: 12.5, color: '#8B9096' }}>{d.times}</span>
-              </div>
-              <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7 }}>
-                {d.auto && (
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9AA0A6" strokeWidth="1.6" style={{ flex: 'none' }}>
-                    <path d="M8 14.2s4.6-4.4 4.6-7.6a4.6 4.6 0 10-9.2 0C3.4 9.8 8 14.2 8 14.2z" strokeLinejoin="round" />
-                    <circle cx="8" cy="6.4" r="1.6" />
-                  </svg>
-                )}
-                <span style={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{d.hrs}</span>
-              </span>
-            </div>
-          ))}
-
-          <div style={{ display: 'flex', gap: 10, margin: '14px 18px', padding: '13px 14px', background: '#fff', border: '1px solid #DCE0E6', borderRadius: 8 }}>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#8B9096" strokeWidth="1.4" style={{ flex: 'none', marginTop: 1 }}>
-              <circle cx="8" cy="8" r="6" />
-              <path d="M8 5.1v.01M8 7.3v3.5" strokeLinecap="round" strokeWidth="1.7" />
-            </svg>
-            <span style={{ fontSize: 13, lineHeight: 1.45, color: '#696D74' }}>
-              Every one of these came from GPS. Nothing was typed in the office. If a day looks wrong, fix it before
-              you sign.
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 18px', background: '#fff', borderTop: '1px solid #EDEFF1', borderBottom: '1px solid #EDEFF1' }}>
-            <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 3, border: '2px solid #007BFF', background: '#007BFF' }}>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 8.4l3.2 3.2L13 4.8" />
-              </svg>
-            </span>
-            <span style={{ flex: 1, fontSize: 14, lineHeight: 1.4 }}>I took my meal breaks as recorded, or I was paid for them.</span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 18px' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#8B9096' }}>SIGNATURE</span>
-            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, height: 88, padding: '12px 14px', background: '#fff', border: '1px solid #DCE0E6', borderRadius: 4 }}>
-              <svg width="180" height="52" viewBox="0 0 180 52" style={{ flex: 'none' }}>
-                <path
-                  d="M6 40 C18 12 26 10 32 26 C38 42 44 42 52 24 C58 10 64 14 68 30 C72 44 82 42 92 26 C100 14 106 18 112 28 C118 38 128 34 140 20 C148 10 158 12 166 22"
-                  fill="none"
-                  stroke="#1A1D21"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span style={{ fontSize: 12, color: '#8B9096', whiteSpace: 'nowrap' }}>Tap to redo</span>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 18px 22px', background: '#fff', borderTop: '1px solid #DCE0E6' }}>
-          <button style={phoneCta}>SIGN OFF ON {totalHrs.toFixed(1)} HRS</button>
-          <span style={{ fontSize: 12.5, lineHeight: 1.4, color: '#8B9096', textAlign: 'center' }}>
-            Puts "Signed off 3:34 PM" on your row. This is what makes the week defensible if anyone ever asks.
-          </span>
-        </div>
-      </PhoneMock>
-    </div>
-  )
-}
-
-const BREAK_LOG = [
-  { dot: '#28A745', what: 'Clocked in at Maple Ridge', when: '6:51 AM' },
-  { dot: '#FFC107', what: 'Meal-break reminder sent', when: '11:56 AM' },
-] as const
-
-function BreakColumn() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 390 }}>
-      <StepHeader n={3} title="Break — the compliance flag, solved" />
-      <PhoneMock time="11:58" batteryWidth={14}>
-        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 18px 12px', background: '#fff', borderBottom: '1px solid #DCE0E6' }}>
-          <span style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.15 }}>On the clock</span>
-            <span style={{ fontSize: 12, color: '#8B9096' }}>Maple Ridge · since 6:51 AM</span>
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: 13, background: '#EAF7EC', fontSize: 12.5, fontWeight: 700, color: '#1B7A2C' }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#28A745' }} />
-            5:07
-          </span>
-        </div>
-
-        <div style={{ flex: 'none', display: 'flex', gap: 11, padding: '14px 18px', background: '#FFF9E8', borderBottom: '1px solid #F0DCA8' }}>
-          <WarningIcon size={19} />
-          <span style={{ flex: 1, fontSize: 14, lineHeight: 1.45, color: '#8A6100' }}>
-            <b style={{ fontWeight: 700 }}>Take your meal break in the next 2 minutes.</b> California requires 30
-            unpaid minutes before hour six. We'll remind Miguel too.
-          </span>
-        </div>
-
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '26px 22px 18px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, width: '100%' }}>
-            <button style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, width: 186, height: 186, borderRadius: '50%', background: '#fff', border: '3px solid #1A1D21', font: 'inherit', cursor: 'pointer' }}>
-              <svg width="38" height="38" viewBox="0 0 16 16" fill="none" stroke="#1A1D21" strokeWidth="1.5">
-                <rect x="5" y="3.4" width="2.6" height="9.2" rx="1" />
-                <rect x="9.4" y="3.4" width="2.6" height="9.2" rx="1" />
-              </svg>
-              <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: '.03em' }}>START BREAK</span>
-              <span style={{ fontSize: 13, color: '#696D74' }}>30 min · unpaid</span>
-            </button>
-            <span style={{ marginTop: 12, fontSize: 13.5, lineHeight: 1.45, color: '#696D74', textAlign: 'center', maxWidth: 280 }}>
-              The clock keeps your place. Come back and hit the same button to end it.
-            </span>
-          </div>
-
-          <div style={{ width: '100%', marginTop: 22, display: 'flex', flexDirection: 'column', gap: 0, border: '1px solid #DCE0E6', borderRadius: 8, background: '#fff', overflow: 'hidden' }}>
-            <span style={{ padding: '12px 14px 8px', fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: '#8B9096' }}>TODAY</span>
-            {BREAK_LOG.map((b) => (
-              <div key={b.what} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px', borderTop: '1px solid #F1F3F5' }}>
-                <span style={{ flex: 'none', width: 9, height: 9, borderRadius: '50%', background: b.dot }} />
-                <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600 }}>{b.what}</span>
-                <span style={{ flex: 'none', fontSize: 13, color: '#696D74', whiteSpace: 'nowrap' }}>{b.when}</span>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 12.5, lineHeight: 1.45, color: '#8B9096', textAlign: 'center' }}>
-            Breaks you take here are the reason the compliance column on the timesheet stays green.
-          </span>
-        </div>
-      </PhoneMock>
-    </div>
-  )
-}
-
-const SWITCH_SITES = [
-  { name: 'Northgate Plaza', meta: '0.1 mi away · GPS confirmed', on: true, here: true },
-  { name: 'Maple Ridge', meta: '2.4 mi away — where you clocked in this morning', on: false, here: false },
-  { name: 'Sunrise Terrace', meta: '3.8 mi away', on: false, here: false },
-] as const
-
-function SwitchJobColumn({ name }: { name: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 390 }}>
-      <StepHeader n={4} title="Switch job mid-day" />
-      <PhoneMock time="12:44" batteryWidth={12}>
-        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '2px 18px 12px', background: '#fff', borderBottom: '1px solid #DCE0E6' }}>
-          <BackChevron />
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.15 }}>Switch job</span>
-            <span style={{ fontSize: 12, color: '#8B9096' }}>{name} · 5.0 hrs so far today</span>
-          </span>
-        </div>
-
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '16px 18px', background: '#fff', borderBottom: '1px solid #DCE0E6' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#8B9096' }}>CLOSING OUT</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', border: '1px solid #DCE0E6', borderRadius: 4, background: '#FAFBFC' }}>
-              <span style={{ flex: 'none', width: 9, height: 9, borderRadius: 2, background: '#4C7FB8' }} />
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <span style={{ fontSize: 15, fontWeight: 600 }}>Maple Ridge</span>
-                <span style={{ fontSize: 12.5, color: '#696D74' }}>06-100 Rough Carpentry · 6:42 AM – 12:10 PM</span>
-              </div>
-              <span style={{ flex: 'none', fontSize: 17, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>5.0</span>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '16px 18px', background: '#fff', borderBottom: '1px solid #DCE0E6' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#8B9096' }}>MOVING TO — YOU'RE AT NORTHGATE NOW</span>
-            {SWITCH_SITES.map((s) => (
-              <span
-                key={s.name}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 11,
-                  padding: '13px 14px',
-                  border: s.on ? '2px solid #007BFF' : '1px solid #DCE0E6',
-                  borderRadius: 4,
-                  background: s.on ? '#F2F8FF' : '#fff',
-                }}
-              >
-                <span
-                  style={{
-                    flex: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
-                    border: s.on ? '2px solid #007BFF' : '1.5px solid #C7CCD2',
-                    background: s.on ? '#007BFF' : '#fff',
-                  }}
-                >
-                  {s.on && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />}
-                </span>
-                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <span style={{ fontSize: 15, fontWeight: s.on ? 600 : 400 }}>{s.name}</span>
-                  <span style={{ fontSize: 12.5, color: '#8B9096' }}>{s.meta}</span>
-                </span>
-                {s.here && (
-                  <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 11, background: '#EAF7EC', color: '#1B7A2C', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                    GPS HERE
-                  </span>
-                )}
-              </span>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '16px 18px', background: '#fff', borderBottom: '1px solid #DCE0E6' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', color: '#8B9096' }}>WHAT ARE YOU DOING THERE?</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 52, padding: '0 14px', border: '2px solid #007BFF', borderRadius: 4, background: '#F2F8FF' }}>
-              <span style={{ flex: 1, fontSize: 15, fontWeight: 600 }}>16-100 Electrical</span>
-              <SmallChevron />
-            </div>
-            <span style={{ fontSize: 12.5, lineHeight: 1.45, color: '#8B9096' }}>
-              Helping Sam pull wire. Codes come from what's scheduled on that job.
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: 10, margin: '16px 18px', padding: '13px 14px', background: '#E7F1FF', borderRadius: 8 }}>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#007BFF" strokeWidth="1.4" style={{ flex: 'none', marginTop: 1 }}>
-              <path d="M2 8h12M9.6 4.2L13.8 8l-4.2 3.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span style={{ fontSize: 13.5, lineHeight: 1.45, color: '#0A4E9E' }}>
-              Your day will show as <b style={{ fontWeight: 700 }}>two lines</b> — 5.0 hrs Maple Ridge and the rest at
-              Northgate. The 34 minutes of driving is unpaid per company policy.
-            </span>
-          </div>
-        </div>
-
-        <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 18px 22px', background: '#fff', borderTop: '1px solid #DCE0E6' }}>
-          <button style={phoneCta}>SWITCH TO NORTHGATE PLAZA</button>
-          <span style={{ fontSize: 12.5, color: '#8B9096', textAlign: 'center' }}>This is what creates the split row on the timesheet.</span>
-        </div>
-      </PhoneMock>
-    </div>
-  )
-}
-
-const LOOP_MAP = [
-  { n: 1, name: 'Fix my punch', lands: 'Shows up as an exception on the timesheet, held until the office approves it.' },
-  { n: 2, name: 'Weekly sign-off', lands: 'Adds the "Signed off HH:MM" badge to their row once they attest to the week.' },
-  { n: 3, name: 'Break', lands: 'Keeps the meal-break compliance column green instead of flagging a violation.' },
-  { n: 4, name: 'Switch job', lands: 'Splits the day into two shift rows, each against its own site and cost code.' },
-] as const
-
-function LandingColumn() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 330 }}>
-      <StepHeader n={5} title="Where each one lands" />
-      <div style={{ display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #DCE0E6', borderRadius: 8, overflow: 'hidden' }}>
-        {LOOP_MAP.map((l) => (
-          <div key={l.n} style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: '13px 14px', borderBottom: '1px solid #F1F3F5' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17, borderRadius: '50%', background: '#E7F1FF', color: '#007BFF', fontSize: 10, fontWeight: 700 }}>
-                {l.n}
-              </span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{l.name}</span>
-            </span>
-            <span style={{ fontSize: 12.5, lineHeight: 1.45, color: '#4A5057' }}>{l.lands}</span>
-          </div>
-        ))}
-        <div style={{ padding: '12px 14px', background: '#FAFBFC' }}>
-          <span style={{ fontSize: 12, lineHeight: 1.5, color: '#8B9096' }}>
-            Nothing on these four screens lets a worker change a recorded time. They request, attest, or start a new
-            segment — the record itself only ever grows.
-          </span>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // ------------------------------------------------------------------ forms
@@ -671,6 +187,8 @@ export function Crew({ me, sites, workers, onChanged }: {
 
   const [adminRows, setAdminRows] = useState<Array<{ id: string; auth_user_id: string | null; is_office: boolean; created_at: string }>>([])
   const [certs, setCerts] = useState<CertificationRow[]>([])
+  const [corrections, setCorrections] = useState<ShiftCorrectionRow[]>([])
+  const [timeOff, setTimeOff] = useState<TimeOffRow[]>([])
   const [shiftsInRange, setShiftsInRange] = useState<ShiftRow[]>([])
   const [openShifts, setOpenShifts] = useState<ShiftRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -684,7 +202,6 @@ export function Crew({ me, sites, workers, onChanged }: {
   const [certBusy, setCertBusy] = useState(false)
   const [certError, setCertError] = useState<string | null>(null)
 
-  const [timeOffDismissed, setTimeOffDismissed] = useState(false)
   const [inviteHint, setInviteHint] = useState(false)
 
   const now = new Date()
@@ -707,7 +224,7 @@ export function Crew({ me, sites, workers, onChanged }: {
     const rangeStart = mondayOf(monthStart)
     const rangeEnd = addDays(todayStart, 1)
 
-    const [admin, certRes, rangeRes, openRes] = await Promise.all([
+    const [admin, certRes, rangeRes, openRes, corrRes, leaveRes] = await Promise.all([
       client
         .from('workers')
         .select('id, auth_user_id, is_office, created_at')
@@ -720,6 +237,8 @@ export function Crew({ me, sites, workers, onChanged }: {
         .gte('started_at', rangeStart.toISOString())
         .lt('started_at', rangeEnd.toISOString()),
       client.from('shifts').select('*').is('ended_at', null).limit(200),
+      client.from('shift_corrections').select('*').order('created_at', { ascending: false }),
+      client.from('time_off_requests').select('*').order('starts_on', { ascending: false }),
     ])
 
     const firstError = admin.error ?? certRes.error ?? rangeRes.error ?? openRes.error
@@ -731,6 +250,8 @@ export function Crew({ me, sites, workers, onChanged }: {
 
     setAdminRows((admin.data ?? []) as typeof adminRows)
     setCerts((certRes.data ?? []) as CertificationRow[])
+    setCorrections((corrRes.data ?? []) as ShiftCorrectionRow[])
+    setTimeOff((leaveRes.data ?? []) as TimeOffRow[])
     setShiftsInRange((rangeRes.data ?? []) as ShiftRow[])
     setOpenShifts((openRes.data ?? []) as ShiftRow[])
     setLoading(false)
@@ -768,6 +289,8 @@ export function Crew({ me, sites, workers, onChanged }: {
     }
     return m
   }, [openShifts])
+
+  const pendingLeave = useMemo(() => timeOff.filter((t) => t.status === 'pending'), [timeOff])
 
   const certsByWorker = useMemo(() => {
     const m = new Map<string, CertificationRow[]>()
@@ -949,6 +472,48 @@ export function Crew({ me, sites, workers, onChanged }: {
     onChanged()
   }
 
+  /**
+   * Accepting a correction applies the worker's requested times and stamps the
+   * shift as an office edit, so the audit trail shows a human decided it — the
+   * GPS record is never silently rewritten.
+   */
+  async function resolveCorrection(row: ShiftCorrectionRow, status: 'accepted' | 'rejected') {
+    if (!canEdit) return
+    const client = supabase()
+    if (status === 'accepted' && row.shift_id && (row.requested_start || row.requested_end)) {
+      const patch: Record<string, unknown> = { source: 'manual', edited: true }
+      if (row.requested_start) patch.started_at = row.requested_start
+      if (row.requested_end) patch.ended_at = row.requested_end
+      const { error: shiftErr } = await client.from('shifts').update(patch).eq('id', row.shift_id)
+      if (shiftErr) {
+        setError(shiftErr.message)
+        return
+      }
+    }
+    const { error: err } = await client
+      .from('shift_corrections')
+      .update({ status, resolved_by: me.id, resolved_at: new Date().toISOString() })
+      .eq('id', row.id)
+    if (err) setError(err.message)
+    else {
+      await load()
+      onChanged()
+    }
+  }
+
+  async function decideLeave(row: TimeOffRow, status: 'approved' | 'declined') {
+    if (!canEdit) return
+    const { error: err } = await supabase()
+      .from('time_off_requests')
+      .update({ status, decided_by: me.id, decided_at: new Date().toISOString() })
+      .eq('id', row.id)
+    if (err) setError(err.message)
+    else {
+      await load()
+      onChanged()
+    }
+  }
+
   function openDetail(id: string) {
     setSelectedId(id)
     setView('detail')
@@ -1015,44 +580,176 @@ export function Crew({ me, sites, workers, onChanged }: {
     })
     const weekLabel = `${weekday(weekStart)} ${monthDay(weekStart)} – ${weekday(addDays(weekStart, 6))} ${monthDay(addDays(weekStart, 6))}`
 
+    const openCorrections = corrections.filter((c) => c.worker_id === selected.id && c.status === 'open')
+    const workerLeave = timeOff.filter((t) => t.worker_id === selected.id)
+    const certs = certsByWorker.get(selected.id) ?? []
+    const siteHours = new Map<string, number>()
+    for (const sh of shiftsInRange) {
+      if (sh.worker_id !== selected.id || !sh.site_id) continue
+      siteHours.set(sh.site_id, (siteHours.get(sh.site_id) ?? 0) + durationHrs(sh, nowMs))
+    }
+
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: theme.appBg, overflow: 'hidden' }}>
         <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px', background: '#fff', borderBottom: '1px solid #DCE0E6', overflowX: 'auto' }}>
-          <button onClick={closeDetail} style={navBtn}>← Back to map</button>
+          <button onClick={closeDetail} style={navBtn}>← Back to crew</button>
           <div style={{ flex: 'none', width: 1, height: 20, background: '#DCE0E6', margin: '0 4px' }} />
           <span style={{ flex: 'none', fontSize: 12.5, color: '#696D74', whiteSpace: 'nowrap' }}>
-            Worker app · the four things that feed the office screens
+            {selected.name} · {selected.trade}
           </span>
           <div style={{ flex: 1 }} />
-          <button onClick={closeDetail} style={navBtn}>See the office side →</button>
+          {openCorrections.length > 0 && (
+            <span style={{ ...pill, background: '#FDECEE', color: '#A00417' }}>
+              {openCorrections.length} correction{openCorrections.length === 1 ? '' : 's'} to review
+            </span>
+          )}
         </div>
 
-        <div style={{ flex: 1, overflow: 'auto', padding: '24px 26px 44px' }}>
-          <div style={{ maxWidth: 1560, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 22 }}>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-.01em' }}>
-              Crew — corrections, sign-off, breaks, switching jobs
-            </h1>
-            <p style={{ margin: 0, maxWidth: 840, fontSize: 13.5, lineHeight: 1.5, color: '#696D74' }}>
-              Four loops the office screens already show the end of. {selected.name}'s geofence exception, the "Signed
-              off 3:34 PM" badge on {selected.name}'s row, the "Meal break not taken — CA rule" flag, and{' '}
-              {selected.name}'s Tuesday split across two sites and two cost codes all start here. Without these, the
-              numbers on the timesheet arrive from nowhere.
-            </p>
-          </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px 22px 44px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-start' }}>
+            <div style={{ flex: '1 1 620px', minWidth: 460, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={detailCard}>
+                <div style={detailHead}>
+                  <span style={{ fontSize: 15, fontWeight: 600 }}>Week of {weekLabel}</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: 12.5, color: '#8B9096' }}>
+                    {regularHrs.toFixed(1)} regular
+                    {overtimeHrs > 0 && ` · ${overtimeHrs.toFixed(1)} overtime`}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '14px 15px 10px' }}>
+                  <span style={{ fontSize: 30, fontWeight: 600, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                    {weekHrs.toFixed(1)}
+                  </span>
+                  <span style={{ fontSize: 13, color: '#696D74' }}>hours this week</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                    {money2(weekHrs * selected.rate)}
+                  </span>
+                </div>
+                {days.map((d) => (
+                  <div key={d.day} style={dayRow}>
+                    <span style={{ width: 42, fontSize: 12.5, fontWeight: 600, color: '#4A5057' }}>{d.day}</span>
+                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: 13, fontWeight: d.times ? 600 : 400, color: d.times ? theme.ink : '#B7BCC2' }}>
+                        {d.times ? d.site : '—'}
+                      </span>
+                      {d.times && <span style={{ fontSize: 11.5, color: '#8B9096' }}>{d.times}</span>}
+                    </span>
+                    {d.times && (
+                      <span style={{ ...pill, background: d.auto ? '#EAF7EC' : '#FFF6DE', color: d.auto ? '#1B7A2C' : '#8A6100' }}>
+                        {d.auto ? 'GPS' : 'Edited'}
+                      </span>
+                    )}
+                    <span style={{ width: 52, textAlign: 'right', fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: d.times ? theme.ink : '#B7BCC2' }}>
+                      {d.hrs}
+                    </span>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 15px', borderTop: '1px solid #DCE0E6' }}>
+                  <LockIcon size={14} stroke="#8B9096" />
+                  <span style={{ flex: 1, fontSize: 11.5, lineHeight: 1.45, color: '#696D74' }}>
+                    Every one of these came from a GPS punch or a named office edit. Change a time in Timesheets and it
+                    is stamped with who changed it.
+                  </span>
+                </div>
+              </div>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22, alignItems: 'flex-start' }}>
-            <FixPunchColumn name={selected.name} />
-            <SignOffColumn
-              name={selected.name}
-              weekLabel={weekLabel}
-              totalHrs={weekHrs}
-              regularHrs={regularHrs}
-              overtimeHrs={overtimeHrs}
-              days={days}
-            />
-            <BreakColumn />
-            <SwitchJobColumn name={selected.name} />
-            <LandingColumn />
+              <div style={detailCard}>
+                <div style={detailHead}>
+                  <span style={{ fontSize: 15, fontWeight: 600 }}>Correction requests</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: 12.5, color: '#8B9096' }}>Raised from the worker app</span>
+                </div>
+                {corrections.filter((c) => c.worker_id === selected.id).length === 0 && (
+                  <div style={{ padding: '18px 15px', fontSize: 12.5, color: '#8B9096' }}>
+                    {selected.name} has not disputed any punch.
+                  </div>
+                )}
+                {corrections
+                  .filter((c) => c.worker_id === selected.id)
+                  .map((c) => (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '11px 15px', borderTop: '1px solid #F1F3F5' }}>
+                      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>{CORRECTION_REASON[c.reason_code]}</span>
+                        {c.detail && <span style={{ fontSize: 12, color: '#4A5057', lineHeight: 1.45 }}>{c.detail}</span>}
+                        <span style={{ fontSize: 11.5, color: '#8B9096' }}>Raised {shortDate(c.created_at)}</span>
+                      </span>
+                      {c.status === 'open' && canEdit ? (
+                        <span style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => void resolveCorrection(c, 'rejected')} style={smallGhost}>Reject</button>
+                          <button onClick={() => void resolveCorrection(c, 'accepted')} style={smallCta}>Accept</button>
+                        </span>
+                      ) : (
+                        <span style={{ ...pill, background: c.status === 'accepted' ? '#EAF7EC' : c.status === 'rejected' ? '#FDECEE' : '#FFF6DE', color: c.status === 'accepted' ? '#1B7A2C' : c.status === 'rejected' ? '#A00417' : '#8A6100' }}>
+                          {c.status === 'open' ? 'Open' : c.status === 'accepted' ? 'Accepted' : 'Rejected'}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <div style={{ flex: '1 1 340px', minWidth: 300, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={detailCard}>
+                <div style={detailHead}><span style={{ fontSize: 15, fontWeight: 600 }}>Sites this month</span></div>
+                {siteHours.size === 0 && (
+                  <div style={{ padding: '16px 15px', fontSize: 12.5, color: '#8B9096' }}>No hours logged yet.</div>
+                )}
+                {[...siteHours.entries()].sort((a, b) => b[1] - a[1]).map(([id, hrs]) => (
+                  <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 15px', borderTop: '1px solid #F1F3F5' }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 2, background: siteSwatch(id), flex: 'none' }} />
+                    <span style={{ flex: 1, fontSize: 13 }}>{sites.find((s) => s.id === id)?.name ?? 'Unassigned'}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{hrs.toFixed(1)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={detailCard}>
+                <div style={detailHead}><span style={{ fontSize: 15, fontWeight: 600 }}>Documents on file</span></div>
+                {certs.length === 0 && (
+                  <div style={{ padding: '16px 15px', fontSize: 12.5, color: '#8B9096' }}>Nothing on file.</div>
+                )}
+                {certs.map((c) => {
+                  const meta = certStatus(c.expires_on, nowMs)
+                  return (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 15px', borderTop: '1px solid #F1F3F5' }}>
+                      <DocIcon />
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 13 }}>{c.name}</span>
+                      <span style={{ ...pill, background: meta.bg, color: meta.fg }}>{meta.label}</span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div style={detailCard}>
+                <div style={detailHead}><span style={{ fontSize: 15, fontWeight: 600 }}>Time off</span></div>
+                {workerLeave.length === 0 && (
+                  <div style={{ padding: '16px 15px', fontSize: 12.5, color: '#8B9096' }}>
+                    No requests. {selected.name} raises these from the worker app.
+                  </div>
+                )}
+                {workerLeave.map((t) => (
+                  <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '11px 15px', borderTop: '1px solid #F1F3F5' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>
+                        {shortDate(t.starts_on)} – {shortDate(t.ends_on)}
+                      </span>
+                      <span style={{ ...pill, background: LEAVE_META[t.status].bg, color: LEAVE_META[t.status].fg }}>
+                        {LEAVE_META[t.status].label}
+                      </span>
+                    </div>
+                    {t.reason && <span style={{ fontSize: 12, color: '#4A5057' }}>{t.reason}</span>}
+                    {t.status === 'pending' && canEdit && (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => void decideLeave(t, 'declined')} style={smallGhost}>Decline</button>
+                        <button onClick={() => void decideLeave(t, 'approved')} style={smallCta}>Approve</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1201,8 +898,15 @@ export function Crew({ me, sites, workers, onChanged }: {
               />
               <StatTile
                 label="TIME OFF PENDING"
-                value={timeOffDismissed ? '0' : '1'}
-                sub={timeOffDismissed ? 'Nothing pending' : 'Miguel · Aug 21–22'}
+                value={String(pendingLeave.length)}
+                sub={
+                  pendingLeave.length === 0
+                    ? 'Nothing pending'
+                    : pendingLeave
+                        .slice(0, 2)
+                        .map((t) => `${roster.find((r) => r.id === t.worker_id)?.name.split(' ')[0] ?? 'Crew'} · ${shortDate(t.starts_on)}`)
+                        .join(', ')
+                }
               />
             </div>
 
@@ -1392,7 +1096,7 @@ export function Crew({ me, sites, workers, onChanged }: {
                         {certForm ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                              <FormField label="Certification" value={certForm.name} onChange={(v) => setCertForm({ ...certForm, name: v })} placeholder="OSHA 30" width={150} />
+                              <FormField label="Certification" value={certForm.name} onChange={(v) => setCertForm({ ...certForm, name: v })} placeholder="White Card" width={150} />
                               <label style={fieldLabel}>
                                 Expires
                                 <input
@@ -1423,44 +1127,80 @@ export function Crew({ me, sites, workers, onChanged }: {
                   </div>
                 </div>
 
-                {!timeOffDismissed && (
-                  <div style={{ background: '#fff', border: '1px solid #DCE0E6', borderLeft: '3px solid #FFC107', borderRadius: 8, overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '11px 13px', borderBottom: '1px solid #DCE0E6' }}>
-                      <span style={{ fontSize: 14, fontWeight: 600 }}>Time off request</span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 8px', borderRadius: 11, background: '#FFF6DE', color: '#8A6100', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                        Awaiting you
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: 13 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 12.5, color: '#696D74' }}>Dates</span>
-                        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Fri Aug 21 – Sat Aug 22</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 12.5, color: '#696D74' }}>Hours</span>
-                        <span style={{ fontSize: 12.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>16.0 of 42.0 available</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 12.5, color: '#696D74' }}>Reason</span>
-                        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Family — planned</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 9, padding: '10px 11px', background: '#FFF9E8', borderRadius: 4 }}>
-                        <WarningIcon />
-                        <span style={{ fontSize: 12, lineHeight: 1.45, color: '#8A6100' }}>
-                          Maple Ridge has no other foreman scheduled Friday. Approving leaves 3 crew unsupervised.
+                {(() => {
+                  const pending = timeOff.filter((t) => t.status === 'pending')
+                  if (pending.length === 0) return null
+                  return (
+                    <div style={{ background: '#fff', border: '1px solid #DCE0E6', borderLeft: '3px solid #FFC107', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '11px 13px', borderBottom: '1px solid #DCE0E6' }}>
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>
+                          Time off {pending.length === 1 ? 'request' : 'requests'}
                         </span>
+                        <span style={{ ...pill, background: '#FFF6DE', color: '#8A6100' }}>Awaiting you</span>
                       </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setTimeOffDismissed(true)} style={{ flex: 1, height: 32, background: '#fff', border: '1px solid #DCE0E6', borderRadius: 3, font: 'inherit', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
-                          Decline
-                        </button>
-                        <button onClick={() => setTimeOffDismissed(true)} style={{ flex: 1, height: 32, background: theme.cta, border: `1px solid ${theme.ctaBorder}`, borderRadius: 3, font: 'inherit', fontSize: 11.5, fontWeight: 700, letterSpacing: '.04em', color: theme.ink, cursor: 'pointer' }}>
-                          APPROVE
-                        </button>
-                      </div>
+                      {pending.map((t) => {
+                        const who = roster.find((r) => r.id === t.worker_id)
+                        return (
+                          <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: 13, borderTop: '1px solid #F1F3F5' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                              <span style={{ fontSize: 12.5, color: '#696D74' }}>{who?.name ?? 'Crew'}</span>
+                              <span style={{ fontSize: 12.5, fontWeight: 600 }}>
+                                {shortDate(t.starts_on)} – {shortDate(t.ends_on)}
+                              </span>
+                            </div>
+                            {t.hours !== null && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ fontSize: 12.5, color: '#696D74' }}>Hours</span>
+                                <span style={{ fontSize: 12.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                  {Number(t.hours).toFixed(1)}
+                                </span>
+                              </div>
+                            )}
+                            {t.reason && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                                <span style={{ fontSize: 12.5, color: '#696D74' }}>Reason</span>
+                                <span style={{ fontSize: 12.5, fontWeight: 600, textAlign: 'right' }}>{t.reason}</span>
+                              </div>
+                            )}
+                            {(() => {
+                              // A real clash check, not a claim: is anyone else rostered
+                              // on the days they want off?
+                              const from = new Date(`${t.starts_on}T00:00:00`).getTime()
+                              const to = new Date(`${t.ends_on}T23:59:59`).getTime()
+                              const others = new Set(
+                                shiftsInRange
+                                  .filter((sh) => {
+                                    const at = new Date(sh.started_at).getTime()
+                                    return at >= from && at <= to && sh.worker_id !== t.worker_id
+                                  })
+                                  .map((sh) => sh.worker_id),
+                              )
+                              if (others.size > 0) return null
+                              return (
+                                <div style={{ display: 'flex', gap: 9, padding: '10px 11px', background: '#FFF9E8', borderRadius: 4 }}>
+                                  <WarningIcon />
+                                  <span style={{ fontSize: 12, lineHeight: 1.45, color: '#8A6100' }}>
+                                    Nobody else has worked those days recently. Check the roster before approving.
+                                  </span>
+                                </div>
+                              )
+                            })()}
+                            {canEdit && (
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => void decideLeave(t, 'declined')} style={{ flex: 1, height: 32, background: '#fff', border: '1px solid #DCE0E6', borderRadius: 3, font: 'inherit', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+                                  Decline
+                                </button>
+                                <button onClick={() => void decideLeave(t, 'approved')} style={{ flex: 1, height: 32, background: theme.cta, border: `1px solid ${theme.ctaBorder}`, borderRadius: 3, font: 'inherit', fontSize: 11.5, fontWeight: 700, letterSpacing: '.04em', color: theme.ink, cursor: 'pointer' }}>
+                                  APPROVE
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
               </>
             ) : (
               <div style={{ background: '#fff', border: '1px solid #DCE0E6', borderRadius: 8, padding: 20, fontSize: 12.5, color: '#696D74', lineHeight: 1.6 }}>
@@ -1561,20 +1301,6 @@ const addBtn: React.CSSProperties = {
   whiteSpace: 'nowrap',
 }
 
-const phoneCta: React.CSSProperties = {
-  width: '100%',
-  height: 56,
-  background: theme.cta,
-  border: `1px solid ${theme.ctaBorder}`,
-  borderRadius: 3,
-  font: 'inherit',
-  fontSize: 15,
-  fontWeight: 700,
-  letterSpacing: '.04em',
-  color: '#1A1D21',
-  cursor: 'pointer',
-}
-
 const formCard: React.CSSProperties = {
   padding: 14,
   background: '#fff',
@@ -1630,3 +1356,79 @@ const cta: React.CSSProperties = {
   letterSpacing: '.04em',
   cursor: 'pointer',
 }
+
+// ------------------------------------------- office side of the worker flows
+
+const CORRECTION_REASON: Record<ShiftCorrectionRow['reason_code'], string> = {
+  parked_offsite: 'Parked off-site and walked in',
+  access_changed: 'Site access point had changed',
+  blocked: 'Truck or equipment was blocking the usual spot',
+  forgot: 'Forgot to start or stop the clock',
+  other: 'Something else',
+}
+
+const LEAVE_META: Record<TimeOffRow['status'], Meta> = {
+  pending: { label: 'Awaiting you', bg: '#FFF6DE', fg: '#8A6100' },
+  approved: { label: 'Approved', bg: '#EAF7EC', fg: '#1B7A2C' },
+  declined: { label: 'Declined', bg: '#FDECEE', fg: '#A00417' },
+  cancelled: { label: 'Withdrawn', bg: '#F1F3F5', fg: '#696D74' },
+}
+
+const detailCard = {
+  display: 'flex',
+  flexDirection: 'column',
+  background: theme.panel,
+  border: `1px solid ${theme.border}`,
+  borderRadius: 8,
+} as const
+
+const detailHead = {
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: 10,
+  padding: '11px 15px',
+  borderBottom: `1px solid ${theme.border}`,
+} as const
+
+const dayRow = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: '8px 15px',
+  borderTop: '1px solid #F1F3F5',
+} as const
+
+const pill = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '2px 8px',
+  borderRadius: 11,
+  fontSize: 11,
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+} as const
+
+const smallGhost = {
+  height: 25,
+  padding: '0 10px',
+  border: `1px solid ${theme.border}`,
+  borderRadius: 3,
+  background: theme.panel,
+  font: 'inherit',
+  fontSize: 12,
+  fontWeight: 500,
+  cursor: 'pointer',
+} as const
+
+const smallCta = {
+  height: 25,
+  padding: '0 12px',
+  border: `1px solid ${theme.ctaBorder}`,
+  borderRadius: 3,
+  background: theme.cta,
+  font: 'inherit',
+  fontSize: 12,
+  fontWeight: 700,
+  color: theme.ink,
+  cursor: 'pointer',
+} as const

@@ -15,6 +15,7 @@ const site = (id: string, center: LatLng, radiusM: number): JobSite => ({
   center,
   radiusM,
   budget: null,
+  contractValue: null,
   clientName: null,
   progressPct: null,
   scheduleNote: null,

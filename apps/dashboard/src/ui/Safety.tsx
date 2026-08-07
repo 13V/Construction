@@ -726,7 +726,7 @@ export function Safety({ me, sites, workers, onChanged }: {
                     <input
                       value={certForm.name}
                       onChange={(e) => setCertForm((f) => (f ? { ...f, name: e.target.value } : f))}
-                      placeholder="OSHA 30"
+                      placeholder="White Card"
                       style={{ ...field, width: 220 }}
                     />
                   </label>
