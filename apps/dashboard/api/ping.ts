@@ -23,6 +23,7 @@ interface Body {
 }
 
 const MAX_CLOCK_SKEW_MS = 5 * 60_000
+const SITE_TIME_ZONE = 'Australia/Adelaide'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -105,8 +106,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const result = advance(phase, ping, sites)
   const siteName = (id: string) => sites.find((s) => s.id === id)?.name ?? 'site'
+  /*
+   * These strings are written on the server and read by a builder in Adelaide,
+   * so they must be rendered in the site's timezone — not the server's. Vercel
+   * runs in UTC, which had clock-ins showing up in the activity log and the
+   * site chat 9.5 hours out.
+   *
+   * The zone is fixed rather than per-company because everything else in the
+   * app is already pinned to en-AU and AUD; it becomes a companies column the
+   * day the product is sold outside this timezone.
+   */
   const hhmm = (t: number) =>
-    new Date(t).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
+    new Date(t).toLocaleTimeString('en-AU', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: SITE_TIME_ZONE,
+    })
 
   // Record the raw position regardless of what the engine decided.
   const { error: positionError } = await db.from('positions').insert({
