@@ -16,7 +16,9 @@ Create a project, then run these in the SQL editor, in order:
 5. `supabase/schema_v5.sql` — RLS corrections. Run this one; it closes a
    cross-tenant leak in `invoice_status_v`, where a Postgres view read as its
    owner and handed every company's invoices to any signed-in user.
-6. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+6. `supabase/schema_v6.sql` — time off, punch corrections, plan pins, contract
+   value, invoice retention, and the expense↔purchase-order link
+7. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
 
 Grab three values from Settings → API: the project URL, the `anon` key, and the
 `service_role` key.
