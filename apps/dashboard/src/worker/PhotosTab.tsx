@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type SiteFileRow, type WorkerRow } from '../data/supabase'
 import { BUCKET_FILES, signedUrl } from '../data/storage'
 import { distanceM } from '../geofence/geo'
+import { useSites } from './useSites'
 import { clockTime, dayDate } from '../format'
 import { theme } from '../theme'
 
@@ -69,30 +70,8 @@ export function PhotosTab({
   activeSiteId: string | null
   onTakePhoto: () => void
 }) {
-  /**
-   * The tracker only learns the site list by pinging, so it is empty until the
-   * worker taps Start tracking. Photos is a tab, not a consequence of being on
-   * the clock — a chippie checking last Tuesday's photos on the couch should
-   * not have to switch their GPS on first. So the tab reads job_sites itself
-   * and only falls back to the tracker's copy.
-   */
-  const [ownSites, setOwnSites] = useState<Site[]>([])
-  useEffect(() => {
-    void (async () => {
-      const { data } = await supabase().from('job_sites').select('id,name,lat,lng,radius_m').order('name')
-      setOwnSites(
-        ((data ?? []) as Array<{ id: string; name: string; lat: number; lng: number; radius_m: number }>).map((s) => ({
-          id: s.id,
-          name: s.name,
-          lat: Number(s.lat),
-          lng: Number(s.lng),
-          radiusM: Number(s.radius_m),
-        })),
-      )
-    })()
-  }, [])
+  const sites = useSites(fromTracker)
 
-  const sites = ownSites.length > 0 ? ownSites : fromTracker
   const [siteId, setSiteId] = useState<string | null>(activeSiteId ?? null)
   const [files, setFiles] = useState<SiteFileRow[]>([])
   const [urls, setUrls] = useState<Record<string, string>>({})

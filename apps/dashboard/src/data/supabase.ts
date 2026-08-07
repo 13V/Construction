@@ -30,6 +30,8 @@ export interface WorkerRow {
   rate: number
   is_office: boolean
   active: boolean
+  /** This worker's ordinary week. 38 under the NES; a part-timer's is less. */
+  ordinary_hours: number
 }
 
 export interface JobSiteRow {

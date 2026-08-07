@@ -18,6 +18,9 @@ import { DWELL_IN_MS, type DwellPhase } from '../geofence/dwell'
 import { distanceM } from '../geofence/geo'
 import { backend, backendNote, startWatching, type LocationWatch } from './location'
 import { clockTime, dayDate, shortDate } from '../format'
+import { HoursTab } from './HoursTab'
+import { PlansScreen } from './PlansScreen'
+import { SafetyScreen } from './SafetyScreen'
 import { PhotosTab } from './PhotosTab'
 import { theme } from '../theme'
 import type { LatLng } from '../types'
@@ -120,7 +123,7 @@ export function WorkerApp() {
 
 // ============================================================== the tracker
 
-type PanelScreen = 'photo' | 'receipt' | 'chat' | 'schedule' | 'correction' | 'timeoff'
+type PanelScreen = 'photo' | 'receipt' | 'chat' | 'schedule' | 'correction' | 'timeoff' | 'safety' | 'plans'
 type Screen = 'tracker' | PanelScreen
 
 /**
@@ -318,6 +321,22 @@ function Tracker({ me }: { me: WorkerRow }) {
         <CorrectionScreen me={me} onClose={() => setScreen('tracker')} />
       )}
       {screen === 'timeoff' && <TimeOffScreen me={me} onClose={() => setScreen('tracker')} />}
+      {screen === 'plans' && (
+        <PlansScreen
+          me={me}
+          siteId={currentSiteId}
+          siteName={sites.find((s) => s.id === currentSiteId)?.name ?? 'this site'}
+          onClose={() => setScreen('tracker')}
+        />
+      )}
+      {screen === 'safety' && (
+        <SafetyScreen
+          me={me}
+          siteId={currentSiteId}
+          siteName={sites.find((s) => s.id === currentSiteId)?.name ?? 'this site'}
+          onClose={() => setScreen('tracker')}
+        />
+      )}
       {screen === 'chat' && (
         <ChatScreen me={me} currentSiteId={currentSiteId} sites={sites} onClose={() => setScreen('tracker')} />
       )}
@@ -335,9 +354,7 @@ function Tracker({ me }: { me: WorkerRow }) {
         <ChatScreen me={me} currentSiteId={currentSiteId} sites={sites} onClose={() => setTab('jobs')} />
       )}
 
-      {screen === 'tracker' && tab === 'time' && (
-        <ScheduleScreen me={me} onClose={() => setTab('jobs')} />
-      )}
+      {screen === 'tracker' && tab === 'time' && <HoursTab me={me} sites={sites} />}
 
       {screen === 'tracker' && tab === 'jobs' && (
         <>
@@ -722,6 +739,13 @@ function OffClockActions({ onOpen }: { onOpen: (screen: PanelScreen) => void }) 
   )
 }
 
+/**
+ * The three things a worker does *at* a job, kept on the clock screen.
+ *
+ * My Jobs, Fix a Punch and Time Off used to be here too. They are places, not
+ * moments, and they now live under the Jobs and Time tabs — a tile was a
+ * one-way trip, which is the wrong shape for a screen you check on payday.
+ */
 function ActionGrid({ onOpen }: { onOpen: (screen: PanelScreen) => void }) {
   const tile: CSSProperties = {
     display: 'flex',
@@ -737,7 +761,7 @@ function ActionGrid({ onOpen }: { onOpen: (screen: PanelScreen) => void }) {
     cursor: 'pointer',
   }
   return (
-    <div style={{ flex: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 9, padding: '16px 20px' }}>
+    <div style={{ flex: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, padding: '16px 20px' }}>
       <button style={tile} onClick={() => onOpen('photo')}>
         <CameraIcon />
         <span style={{ fontSize: 12.5, fontWeight: 600 }}>Take Photo</span>
@@ -746,23 +770,34 @@ function ActionGrid({ onOpen }: { onOpen: (screen: PanelScreen) => void }) {
         <ReceiptIcon />
         <span style={{ fontSize: 12.5, fontWeight: 600 }}>Upload Receipt</span>
       </button>
-      <button style={tile} onClick={() => onOpen('chat')}>
-        <ChatIcon />
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Site Chat</span>
+      <button style={tile} onClick={() => onOpen('plans')}>
+        <SheetIcon />
+        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Plans</span>
       </button>
-      <button style={tile} onClick={() => onOpen('schedule')}>
-        <CalendarIcon />
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>My Jobs</span>
-      </button>
-      <button style={tile} onClick={() => onOpen('correction')}>
-        <FixIcon />
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Fix a Punch</span>
-      </button>
-      <button style={tile} onClick={() => onOpen('timeoff')}>
-        <LeaveIcon />
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Time Off</span>
+      <button style={tile} onClick={() => onOpen('safety')}>
+        <ShieldIcon />
+        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Safety</span>
       </button>
     </div>
+  )
+}
+
+function SheetIcon({ color = theme.ink, size = 24 }: { color?: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4" />
+      <path d="M9 12.5h6M9 16h4" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ShieldIcon({ color = theme.ink, size = 24 }: { color?: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
+      <path d="M12 3.2 19 6v5.4c0 4.2-2.9 7.4-7 9.4-4.1-2-7-5.2-7-9.4V6z" />
+      <path d="M8.9 12.2 11.2 14.5 15.4 10" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
 
@@ -947,7 +982,6 @@ function ChatBubbleIcon({ color = theme.ink, size = 24 }: { color?: string; size
   )
 }
 // Re-exported under the name the action grid expects.
-const ChatIcon = ChatBubbleIcon
 
 function WifiOffIcon() {
   return (
