@@ -227,6 +227,17 @@ try {
       (await stranger.get('messages', 'select=id')).length === 0 && (await stranger.get('channels', 'select=id')).length === 0)
   }
 
+  // ------------------------------------------------- the money is office-only
+  // is_office gated every WRITE and not one READ, so any signed-in field
+  // worker could select colleagues' pay, invoices and expenses. Verified
+  // against the live database before schema_v14 closed it.
+  ok('a field worker reads no invoices', (await field.get('invoices', 'select=id')).length === 0)
+  ok('a field worker reads no estimates', (await field.get('estimates', 'select=id')).length === 0)
+  ok('a field worker reads no purchase orders', (await field.get('purchase_orders', 'select=id')).length === 0)
+  ok('a field worker reads no change orders', (await field.get('change_orders', 'select=id')).length === 0)
+  ok('a field worker reads no job budgets', (await field.get('job_money_v', 'select=site_id')).length === 0)
+  ok('the office still reads its own invoices', (await boss.get('invoices', `select=id&company_id=eq.${companyId}`)).length > 0)
+
   // ---------------------------------------------------------- money maths
   const v = (await boss.get('invoice_status_v', `select=id,invoice_no,overdue,outstanding&company_id=eq.${companyId}`))[0]
   ok('overdue is derived, not stored', v.overdue === true && Number(v.outstanding) === 5000)
