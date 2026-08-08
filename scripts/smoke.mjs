@@ -227,6 +227,20 @@ try {
       (await stranger.get('messages', 'select=id')).length === 0 && (await stranger.get('channels', 'select=id')).length === 0)
   }
 
+  // v15 added builders and subcontract labour behind a company-wide read,
+  // reopening exactly what v14 closed. v16 shut it; this keeps it shut.
+  ok('a field worker reads no builders', (await field.get('builders', 'select=id')).length === 0)
+  ok('a field worker reads no subcontractors', (await field.get('subcontractors', 'select=id')).length === 0)
+  ok('a field worker reads no subcontract work', (await field.get('subcontract_work', 'select=id')).length === 0)
+  // Contacts stay company-wide on purpose: a chippie at a locked gate needs
+  // the supervisor's mobile, and a phone number is not a commercial term.
+  ok('but a field worker CAN reach a site supervisor',
+    Array.isArray(await field.get('builder_contacts', 'select=id')))
+  ok('a field worker cannot rewrite the company ABN',
+    (await field.patch('companies', `id=eq.${companyId}`, { abn: '99999999999' })).ok
+      ? (await field.get('companies', `select=abn&id=eq.${companyId}`))[0]?.abn !== '99999999999'
+      : true)
+
   // ------------------------------------------------- the money is office-only
   // is_office gated every WRITE and not one READ, so any signed-in field
   // worker could select colleagues' pay, invoices and expenses. Verified

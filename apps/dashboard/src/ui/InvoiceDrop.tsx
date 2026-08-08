@@ -205,7 +205,12 @@ export function InvoiceDrop({
   const invoiceTotal = Number(total) || 0
   // A gap between the lines and the printed total usually means a line was
   // missed or a delivery fee was dropped — worth surfacing, not correcting.
-  const gap = invoiceTotal > 0 ? invoiceTotal - linesTotal : 0
+  //
+  // The GST is not that gap. Line items are printed ex-GST and the total is
+  // inclusive, so without subtracting the tax this warned on every Australian
+  // supplier invoice ever scanned — and a badge that always cries wolf is a
+  // badge nobody reads when it finally catches the missed line.
+  const gap = invoiceTotal > 0 ? invoiceTotal - linesTotal - (Number(tax) || 0) : 0
 
   async function save() {
     if (!siteId) return setError('Pick a job site first.')

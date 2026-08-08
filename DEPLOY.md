@@ -39,7 +39,19 @@ Create a project, then run these in the SQL editor, in order:
     invoices and expenses
 15. `supabase/schema_v15.sql` — builders as a real counterparty, GST and ABN on
     invoices, and subcontract labour. Entirely additive
-16. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+16. `supabase/schema_v16.sql` — closes a read leak v15 reopened, makes the
+    company's own ABN and bank details writable, and rebuilds
+    `invoice_status_v` with an explicit column list
+17. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+
+> **Run them in order, and never re-run one on its own.** Later files
+> deliberately tighten what earlier files created — `schema_v14` narrows read
+> policies that `schema_v4` first defined permissively, for instance. Running
+> the whole list start to finish always ends in the right state. Re-running a
+> single early file *after* the others silently reverts every later change to
+> the same object, with no error. That is not hypothetical: re-running
+> `schema_v4.sql` alone reopened the money-read leak on the live database
+> during testing, and only the smoke suite caught it.
 
 Grab three values from Settings → API: the project URL, the `anon` key, and the
 `service_role` key.

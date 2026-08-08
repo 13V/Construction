@@ -101,7 +101,16 @@ create table if not exists invoices (
 create index if not exists invoices_company_idx on invoices (company_id, issued_on desc);
 
 -- Overdue is derived, never stored — a stored flag goes stale overnight.
-create or replace view invoice_status_v as
+--
+-- `drop` then `create`, never `create or replace`. Every file here claims to be
+-- safe to re-run and DEPLOY.md says to run all of them in order — but CREATE OR
+-- REPLACE VIEW can only APPEND columns, and later migrations add columns to
+-- `invoices` that land before `overdue`. Re-running this file on an up-to-date
+-- database aborted with `42P16: cannot change name of view column "overdue"`,
+-- and every migration after this one silently never ran, including the geofence
+-- clock-out fix and the read lockdown.
+drop view if exists invoice_status_v;
+create view invoice_status_v as
   select i.*,
          (i.status = 'sent' and i.due_on is not null and i.due_on < current_date) as overdue,
          greatest(0, i.amount - i.paid_amount) as outstanding

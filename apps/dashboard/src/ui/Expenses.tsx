@@ -198,7 +198,11 @@ export function Expenses({ me, sites, workers, onChanged }: {
   )
 
   const spendToDate = useMemo(
-    () => siteRows.reduce((sum, r) => sum + Number(r.amount) + Number(r.tax), 0),
+    // `amount` is the invoice total and `tax` is the GST INSIDE it — that is
+    // what api/parse-receipt.ts is told to extract and what InvoiceDrop writes.
+    // Adding them double-counted the GST, so this screen read ~9% high while
+    // Materials and the job folder — which use `amount` alone — read correctly.
+    () => siteRows.reduce((sum, r) => sum + Number(r.amount), 0),
     [siteRows],
   )
   const budget = site?.budget ?? null
@@ -213,7 +217,7 @@ export function Expenses({ me, sites, workers, onChanged }: {
     const map = new Map<string, number>()
     for (const r of siteRows) {
       const cat = r.category || 'Uncategorized'
-      map.set(cat, (map.get(cat) ?? 0) + Number(r.amount) + Number(r.tax))
+      map.set(cat, (map.get(cat) ?? 0) + Number(r.amount))
     }
     return [...map.entries()].sort((a, b) => b[1] - a[1])
   }, [siteRows])
@@ -231,7 +235,7 @@ export function Expenses({ me, sites, workers, onChanged }: {
   )
 
   const shownTotal = useMemo(
-    () => categoryFiltered.reduce((sum, r) => sum + Number(r.amount) + Number(r.tax), 0),
+    () => categoryFiltered.reduce((sum, r) => sum + Number(r.amount), 0),
     [categoryFiltered],
   )
 
@@ -504,7 +508,7 @@ export function Expenses({ me, sites, workers, onChanged }: {
               {inboxRows.map((row) => {
                 const selected = inboxSelected === row.id
                 const status = STATUS_META[row.status]
-                const amt = money2(Number(row.amount) + Number(row.tax))
+                const amt = money2(Number(row.amount))
                 return (
                   <Fragment key={row.id}>
                     <div
@@ -612,8 +616,8 @@ export function Expenses({ me, sites, workers, onChanged }: {
                 Date
                 <input type="date" value={quickAdd.spentOn} onChange={(e) => setQuickAdd((f) => (f ? { ...f, spentOn: e.target.value } : f))} style={{ ...miniInput, width: 150 }} />
               </label>
-              <TextField label="Amount" value={quickAdd.amount} onChange={(v) => setQuickAdd((f) => (f ? { ...f, amount: v } : f))} placeholder="0.00" width={110} />
-              <TextField label="Tax" value={quickAdd.tax} onChange={(v) => setQuickAdd((f) => (f ? { ...f, tax: v } : f))} placeholder="0.00" width={100} />
+              <TextField label="Total inc GST" value={quickAdd.amount} onChange={(v) => setQuickAdd((f) => (f ? { ...f, amount: v } : f))} placeholder="0.00" width={110} />
+              <TextField label="GST included" value={quickAdd.tax} onChange={(v) => setQuickAdd((f) => (f ? { ...f, tax: v } : f))} placeholder="0.00" width={100} />
               <label style={miniLabel}>
                 Category
                 <select value={quickAdd.category} onChange={(e) => setQuickAdd((f) => (f ? { ...f, category: e.target.value } : f))} style={{ ...miniInput, width: 160 }}>
@@ -725,7 +729,7 @@ export function Expenses({ me, sites, workers, onChanged }: {
                   <span style={{ fontSize: 12.5, color: BODY }}>{row.category || '—'}</span>
                   <span style={{ fontSize: 12.5, color: BODY }}>{row.cost_code || '—'}</span>
                   <span style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {money2(Number(row.amount) + Number(row.tax))}
+                    {money2(Number(row.amount))}
                   </span>
                   <span style={{ display: 'flex', justifyContent: 'center' }}>
                     {receiptUrl && !isPdf ? (
