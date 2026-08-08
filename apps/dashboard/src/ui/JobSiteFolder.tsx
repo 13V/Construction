@@ -14,6 +14,8 @@ import type {
   WorkerRow,
 } from '../data/supabase'
 import { ContractTab } from './ContractTab'
+import { ProgrammeTab } from './ProgrammeTab'
+import { SiteRecordsTab } from './SiteRecordsTab'
 import { BUCKET_FILES, objectPath, removeFile, signedUrl, uploadFile } from '../data/storage'
 import { money, money2 } from '../format'
 import { costCodes } from '../data/seed'
@@ -59,7 +61,7 @@ const MUTED = '#4A5057'
 
 const TAB_PAD = '16px 18px 40px'
 
-type TabKey = 'overview' | 'photos' | 'plans' | 'time' | 'budget' | 'contract'
+type TabKey = 'overview' | 'photos' | 'plans' | 'time' | 'budget' | 'contract' | 'records' | 'programme'
 
 // `officeOnly` is a display rule, not the security boundary: `contracts` and
 // job_value_v are office-gated in RLS (schema_v17), so a field worker who got
@@ -71,6 +73,10 @@ const TABS: Array<{ key: TabKey; label: string; officeOnly?: boolean }> = [
   { key: 'time', label: 'Time' },
   { key: 'budget', label: 'Budget' },
   { key: 'contract', label: 'Contract', officeOnly: true },
+  // Not office-only. A defect is raised by whoever is standing in front of it,
+  // and "are we on next Tuesday" is asked from a ute.
+  { key: 'records', label: 'Site records' },
+  { key: 'programme', label: 'Programme' },
 ]
 
 const STATUS_META: Record<string, { label: string; bg: string; fg: string }> = {
@@ -419,6 +425,10 @@ export function JobSiteFolder({
         <TimeTab site={site} shifts={shifts} workers={workers} />
       ) : tab === 'contract' ? (
         <ContractTab me={me} site={site} onChanged={afterWrite} />
+      ) : tab === 'records' ? (
+        <SiteRecordsTab me={me} site={site} onChanged={afterWrite} />
+      ) : tab === 'programme' ? (
+        <ProgrammeTab me={me} site={site} onChanged={afterWrite} />
       ) : (
         <BudgetTab
           site={site}

@@ -28,7 +28,14 @@ export interface WorkerRow {
   initials: string
   trade: string
   rate: number
+  /**
+   * Derived from `role` by trigger (schema_v18) and kept because every money
+   * policy since schema_v14 keys off it. Writing either keeps the other in
+   * step; a captain is deliberately NOT office.
+   */
   is_office: boolean
+  /** owner = the company. captain = the jobs they run. employee = themselves. */
+  role: 'owner' | 'captain' | 'employee'
   active: boolean
   /** This worker's ordinary week. 38 under the NES; a part-timer's is less. */
   ordinary_hours: number
@@ -48,7 +55,10 @@ export interface JobSiteRow {
   client_name: string | null
   progress_pct: number | null
   schedule_note: string | null
+  /** Superseded by contracts.contract_sum (schema_v17). Do not write it. */
   contract_value: number | null
+  /** The crew captain running this job. What captains_site() reads. */
+  captain_id: string | null
 }
 
 export interface PositionRow {
@@ -93,6 +103,11 @@ export interface AssignmentRow {
   ends_at: string
   note: string | null
   published: boolean
+  /**
+   * The crew this booking came from. Booking a crew writes one row per member
+   * sharing this id, so the block can be moved or pulled off as one thing.
+   */
+  crew_id: string | null
 }
 
 export interface SiteFileRow {
@@ -522,6 +537,296 @@ export interface JobValueRow {
   draft_invoice_count: number
   /** Job value less what has been claimed. Negative means over-claimed. */
   to_claim_inc: number
+}
+
+
+// ------------------------------------------- v18 row types (roles and crews)
+
+export interface CrewRow {
+  id: string
+  company_id: string
+  name: string
+  captain_id: string | null
+  colour: string | null
+  note: string | null
+  active: boolean
+  created_at: string
+}
+
+export interface CrewMemberRow {
+  crew_id: string
+  worker_id: string
+  company_id: string
+  added_at: string
+}
+
+// ------------------------------------ v19 row types (what happens on a job)
+
+export interface SiteInstructionRow {
+  id: string
+  company_id: string
+  site_id: string
+  ref: string | null
+  builder_ref: string | null
+  received_on: string
+  from_name: string | null
+  from_contact_id: string | null
+  how: 'verbal' | 'email' | 'site_meeting' | 'written' | 'drawing'
+  instruction: string
+  /** Marked when the instruction changes scope — a variation waiting to be raised. */
+  is_variation: boolean
+  change_order_id: string | null
+  status: 'open' | 'actioned' | 'disputed' | 'closed'
+  photo_path: string | null
+  note: string | null
+  raised_by: string | null
+  created_at: string
+}
+
+export interface DefectRow {
+  id: string
+  company_id: string
+  site_id: string
+  ref: string | null
+  location: string | null
+  description: string
+  raised_by_party: 'builder' | 'client' | 'us' | 'certifier' | 'other'
+  /** Half a tiler's defect list is other trades' damage, and this decides who pays. */
+  responsible: 'us' | 'builder' | 'other_trade' | 'client' | 'unknown'
+  severity: 'minor' | 'major' | 'critical'
+  status: 'open' | 'in_progress' | 'fixed' | 'rejected' | 'verified'
+  raised_on: string
+  due_on: string | null
+  fixed_on: string | null
+  verified_on: string | null
+  verified_by: string | null
+  photo_path: string | null
+  fixed_photo_path: string | null
+  plan_pin_id: string | null
+  /** What it will cost US to fix. Never shown in the portal. */
+  cost_estimate: number | null
+  note: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export interface ProgressEntryRow {
+  id: string
+  company_id: string
+  site_id: string
+  area: string
+  cost_code: string | null
+  unit: 'm2' | 'lm' | 'item' | 'room' | '%'
+  quantity: number | null
+  done_quantity: number
+  pct_complete: number
+  assessed_on: string
+  assessed_by: string | null
+  note: string | null
+  created_at: string
+}
+
+/** Latest assessment per area, rolled up weighted by quantity (schema_v19). */
+export interface SiteProgressRow {
+  site_id: string
+  area_count: number
+  last_assessed_on: string | null
+  pct_complete: number
+  total_quantity: number
+  done_quantity: number
+}
+
+/**
+ * One wet area's membrane, per AS 3740. This record is the entire defence if a
+ * shower leaks in two years, because the membrane is under screed and tiles
+ * within a day of going in.
+ */
+export interface WaterproofingRow {
+  id: string
+  company_id: string
+  site_id: string
+  area: string
+  product_id: string | null
+  product_name: string | null
+  batch_no: string | null
+  substrate: string | null
+  primer: string | null
+  coats: number
+  bond_breaker: boolean
+  angle_fillet: boolean
+  wall_height_mm: number | null
+  started_on: string | null
+  completed_on: string | null
+  flood_tested: boolean
+  flood_test_on: string | null
+  flood_test_hours: number | null
+  installer_id: string | null
+  installer_licence: string | null
+  status: 'planned' | 'in_progress' | 'complete' | 'signed_off' | 'failed'
+  /** All three are stamped by the database from identity — never write them. */
+  signed_off_by: string | null
+  signed_off_at: string | null
+  signed_off_name: string | null
+  certificate_path: string | null
+  certificate_no: string | null
+  note: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export interface WaterproofingPhotoRow {
+  id: string
+  company_id: string
+  waterproofing_id: string
+  file_id: string | null
+  storage_path: string
+  stage: 'substrate' | 'primer' | 'fillet' | 'membrane' | 'second_coat' | 'flood_test' | 'other'
+  caption: string | null
+  taken_at: string
+  created_at: string
+}
+
+export interface SiteWaterproofingRow {
+  site_id: string
+  area_count: number
+  signed_off_count: number
+  failed_count: number
+  outstanding_count: number
+  /** Signed off with no flood test, or no photo. Certificates that will not hold. */
+  unflooded_count: number
+  unphotographed_count: number
+  first_completed_on: string | null
+  last_completed_on: string | null
+}
+
+// --------------------------------------- v20/v21 row types (money and time)
+
+export interface JobCostRow {
+  site_id: string
+  company_id: string
+  site_name: string
+  labour_hours: number
+  labour_cost: number
+  material_cost: number
+  expense_cost: number
+  sublet_cost: number
+  total_cost: number
+}
+
+/** What a job is worth, what it cost, and what that leaves. Office only, ex GST. */
+export interface JobProfitRow {
+  site_id: string
+  company_id: string
+  site_name: string
+  contract_id: string | null
+  contract_status: ContractRow['status'] | null
+  builder_id: string | null
+  contract_sum_ex: number
+  approved_variations: number
+  job_value_ex: number
+  job_value_inc: number
+  claimed_inc: number
+  claimed_ex: number
+  paid_inc: number
+  outstanding_inc: number
+  to_claim_inc: number
+  retention_held: number
+  labour_hours: number
+  labour_cost: number
+  material_cost: number
+  expense_cost: number
+  sublet_cost: number
+  total_cost: number
+  margin: number
+  margin_pct: number | null
+  /** What an hour on this job returned after everything that was not labour. */
+  value_per_labour_hour: number | null
+  unbilled_cost: number
+  progress_pct: number | null
+  progress_assessed_on: string | null
+  claimed_pct: number | null
+}
+
+export interface CompanyOverviewRow {
+  active_jobs: number
+  starting_soon: number
+  on_the_clock: number
+  work_in_hand: number
+  left_to_claim: number
+  owed_to_us: number
+  retention_held: number
+  margin_to_date: number
+  overdue_invoices: number
+  overdue_amount: number
+  variations_pending: number
+  variations_pending_value: number
+  open_defects: number
+  open_instructions: number
+  waterproofing_outstanding: number
+  tickets_expiring: number
+}
+
+export interface ProgrammeRow {
+  id: string
+  company_id: string
+  site_id: string
+  name: string
+  revision: string | null
+  issued_on: string | null
+  received_on: string
+  source: 'pdf' | 'excel' | 'csv' | 'manual'
+  file_id: string | null
+  storage_path: string | null
+  status: 'draft' | 'current' | 'superseded'
+  import_note: string | null
+  imported_by: string | null
+  created_at: string
+}
+
+export interface ProgrammeTaskRow {
+  id: string
+  company_id: string
+  programme_id: string
+  site_id: string
+  ref: string | null
+  name: string
+  trade: string | null
+  starts_on: string | null
+  ends_on: string | null
+  duration_days: number | null
+  /** Ours to do. Everything that answers "when are we on" reads this. */
+  is_ours: boolean
+  /** A line that must finish before we can start. What makes readiness answerable. */
+  is_predecessor: boolean
+  pct_complete: number
+  status: 'planned' | 'in_progress' | 'done' | 'not_started' | 'slipped'
+  /** Where this line sat on the PREVIOUS revision. Null on a first import. */
+  prev_starts_on: string | null
+  prev_ends_on: string | null
+  sort: number
+  note: string | null
+  created_at: string
+}
+
+/** Our next window on the builder's current programme, and whether it is ready. */
+export interface SiteProgrammeRow {
+  site_id: string
+  programme_id: string
+  revision: string | null
+  received_on: string
+  our_task: string | null
+  our_start: string | null
+  our_end: string | null
+  prev_starts_on: string | null
+  our_status: ProgrammeTaskRow['status'] | null
+  our_pct: number | null
+  /** Positive means the start has moved later since the last revision. */
+  start_moved_days: number | null
+  days_until_start: number | null
+  blockers_open: number
+  blocked_by: string | null
+  /** Null when the programme names no predecessors — "unknown", not "go". */
+  ready: boolean | null
 }
 
 export interface NotificationRow {
