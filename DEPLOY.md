@@ -34,7 +34,12 @@ Create a project, then run these in the SQL editor, in order:
     ended and the next day's clock-in collided with yesterday's
 13. `supabase/schema_v13.sql` — lets a worker flag a photo and resolve a plan
     pin, both of which silently did nothing
-14. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+14. `supabase/schema_v14.sql` — **run this one.** `is_office` gated every write
+    and not one read, so any field worker could select colleagues' pay rates,
+    invoices and expenses
+15. `supabase/schema_v15.sql` — builders as a real counterparty, GST and ABN on
+    invoices, and subcontract labour. Entirely additive
+16. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
 
 Grab three values from Settings → API: the project URL, the `anon` key, and the
 `service_role` key.
