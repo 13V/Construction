@@ -42,7 +42,16 @@ Create a project, then run these in the SQL editor, in order:
 16. `supabase/schema_v16.sql` — closes a read leak v15 reopened, makes the
     company's own ABN and bank details writable, and rebuilds
     `invoice_status_v` with an explicit column list
-17. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+17. `supabase/schema_v17.sql` — **run this one.** The contract. Every
+    commercial number in the app was measured against `job_sites.contract_value`,
+    a column no form could write and that an approved variation changed not at
+    all. This adds `contracts` (one per job), links variations and invoices to
+    it, stamps the approval date by trigger, and derives `job_value_v` —
+    contract sum + approved variations, against what has been claimed and paid.
+    **This one has to land before the app deploy**, not after: the claim form
+    now writes `tax_amount`, `contract_id` and `variation_id`, and against a
+    database without them every invoice save fails with `PGRST204`
+18. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
 
 > **Run them in order, and never re-run one on its own.** Later files
 > deliberately tighten what earlier files created — `schema_v14` narrows read
@@ -52,6 +61,21 @@ Create a project, then run these in the SQL editor, in order:
 > the same object, with no error. That is not hypothetical: re-running
 > `schema_v4.sql` alone reopened the money-read leak on the live database
 > during testing, and only the smoke suite caught it.
+
+Before running any of it against a real database, prove the whole list still
+applies — twice:
+
+```bash
+scripts/schema-check.sh        # needs postgresql-16+, no credentials
+```
+
+It spins up a throwaway local Postgres, applies all 18 files three times over,
+and runs the behaviour tests in `supabase/tests/`. Three passes rather than one
+because "safe to re-run" has been false twice: `create or replace view` cannot
+rename a column (`schema_v4`, 42P16) and a bare `alter publication … add table`
+raises 42710 on the second run (`schema.sql`). Both aborted the run part-way, so
+every migration after the failure silently never ran. A single pass on a fresh
+database catches neither.
 
 Grab three values from Settings → API: the project URL, the `anon` key, and the
 `service_role` key.

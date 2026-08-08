@@ -5,6 +5,7 @@ import type {
   DailyLogRow,
   EstimateLineRow,
   ExpenseRow,
+  JobValueRow,
   PlanPinRow,
   JobSiteRow,
   MaterialRow,
@@ -12,6 +13,7 @@ import type {
   SiteFileRow,
   WorkerRow,
 } from '../data/supabase'
+import { ContractTab } from './ContractTab'
 import { BUCKET_FILES, objectPath, removeFile, signedUrl, uploadFile } from '../data/storage'
 import { money, money2 } from '../format'
 import { costCodes } from '../data/seed'
@@ -57,14 +59,18 @@ const MUTED = '#4A5057'
 
 const TAB_PAD = '16px 18px 40px'
 
-type TabKey = 'overview' | 'photos' | 'plans' | 'time' | 'budget'
+type TabKey = 'overview' | 'photos' | 'plans' | 'time' | 'budget' | 'contract'
 
-const TABS: Array<{ key: TabKey; label: string }> = [
+// `officeOnly` is a display rule, not the security boundary: `contracts` and
+// job_value_v are office-gated in RLS (schema_v17), so a field worker who got
+// here would read nothing anyway. Hiding the tab just stops it looking broken.
+const TABS: Array<{ key: TabKey; label: string; officeOnly?: boolean }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'photos', label: 'Photos' },
   { key: 'plans', label: 'Plans' },
   { key: 'time', label: 'Time' },
   { key: 'budget', label: 'Budget' },
+  { key: 'contract', label: 'Contract', officeOnly: true },
 ]
 
 const STATUS_META: Record<string, { label: string; bg: string; fg: string }> = {
@@ -110,10 +116,19 @@ function hoursOf(row: ShiftRow): number {
 }
 
 /**
- * What a job has actually cost: labour at each worker's rate, materials that
- * haven't been returned, and expenses not already folded into a material
- * line. Mirrors Materials.tsx's roll-up exactly so the two screens never show
- * different numbers for the same site.
+ * What a job has actually cost, NET OF GST: labour at each worker's rate,
+ * materials that haven't been returned, and expenses not already folded into a
+ * material line. Mirrors Materials.tsx's roll-up exactly so the two screens
+ * never show different numbers for the same site.
+ *
+ * `expenses.amount` is the docket total, GST inclusive, with the GST portion
+ * recorded beside it in `expenses.tax`. That GST is claimed back as an input
+ * credit, so it was never a cost to this business and subtracting it is what
+ * makes this figure comparable to an ex-GST contract sum. An expense with no
+ * GST recorded (tax = 0, the default) is unaffected.
+ *
+ * Materials carry no tax column, so `total_cost` is taken as ex GST — which is
+ * how a supplier quotes to a trade account. Labour is a wage: no GST at all.
  */
 function siteSpend(
   shifts: ShiftRow[],
@@ -126,7 +141,9 @@ function siteSpend(
     .filter((m) => m.status !== 'returned')
     .reduce((sum, m) => sum + Number(m.total_cost), 0)
   const linked = new Set(materials.map((m) => m.expense_id).filter((x): x is string => Boolean(x)))
-  const other = expenses.filter((e) => !linked.has(e.id)).reduce((sum, e) => sum + Number(e.amount), 0)
+  const other = expenses
+    .filter((e) => !linked.has(e.id))
+    .reduce((sum, e) => sum + (Number(e.amount) - Number(e.tax ?? 0)), 0)
   return { labour, materials: materialsCost, other, total: labour + materialsCost + other }
 }
 
@@ -287,6 +304,7 @@ export function JobSiteFolder({
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [logs, setLogs] = useState<DailyLogRow[]>([])
   const [estLines, setEstLines] = useState<EstimateLineRow[]>([])
+  const [jobValue, setJobValue] = useState<JobValueRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -303,7 +321,7 @@ export function JobSiteFolder({
     setLoading(true)
     setError(null)
     const client = supabase()
-    const [siteRes, filesRes, shiftsRes, materialsRes, expensesRes, logsRes, estRes] = await Promise.all([
+    const [siteRes, filesRes, shiftsRes, materialsRes, expensesRes, logsRes, estRes, valueRes] = await Promise.all([
       client.from('job_sites').select('*').eq('id', siteId).maybeSingle(),
       client.from('site_files').select('*').eq('site_id', siteId).order('created_at', { ascending: false }),
       client.from('shifts').select('*').eq('site_id', siteId),
@@ -313,6 +331,11 @@ export function JobSiteFolder({
       // The approved estimate is the only place the schema says what a cost
       // code was sold for, which is what makes variance meaningful.
       client.from('estimates').select('id').eq('site_id', siteId).eq('status', 'approved'),
+      // Contract sum plus approved variations, derived in Postgres. Office only
+      // by RLS, so a field worker's request would return nothing — don't make it.
+      me.is_office
+        ? client.from('job_value_v').select('*').eq('site_id', siteId).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ])
     const firstError =
       siteRes.error ?? filesRes.error ?? shiftsRes.error ?? materialsRes.error ?? expensesRes.error ?? logsRes.error
@@ -327,6 +350,7 @@ export function JobSiteFolder({
     setMaterials((materialsRes.data ?? []) as MaterialRow[])
     setExpenses((expensesRes.data ?? []) as ExpenseRow[])
     setLogs((logsRes.data ?? []) as DailyLogRow[])
+    setJobValue((valueRes.data as JobValueRow | null) ?? null)
 
     const estIds = ((estRes.data ?? []) as Array<{ id: string }>).map((e) => e.id)
     if (estIds.length > 0) {
@@ -336,7 +360,7 @@ export function JobSiteFolder({
       setEstLines([])
     }
     setLoading(false)
-  }, [siteId])
+  }, [siteId, me.is_office])
 
   useEffect(() => {
     void load()
@@ -363,7 +387,7 @@ export function JobSiteFolder({
 
       <div style={{ flex: 'none', background: theme.panel, borderBottom: `1px solid ${theme.border}` }}>
         <HeaderContent site={site} siteRow={siteRow} shifts={shifts} workers={workers} />
-        <TabRow tab={tab} onChange={setTab} />
+        <TabRow tab={tab} isOffice={me.is_office} onChange={setTab} />
       </div>
 
       {error && (
@@ -393,10 +417,13 @@ export function JobSiteFolder({
         <PlansTab me={me} siteId={siteId} rows={files.filter((f) => f.kind === 'document')} workers={workers} onChanged={afterWrite} />
       ) : tab === 'time' ? (
         <TimeTab site={site} shifts={shifts} workers={workers} />
+      ) : tab === 'contract' ? (
+        <ContractTab me={me} site={site} onChanged={afterWrite} />
       ) : (
         <BudgetTab
           site={site}
           siteRow={siteRow}
+          jobValue={jobValue}
           shifts={shifts}
           materials={materials}
           expenses={expenses}
@@ -582,10 +609,10 @@ function HeaderContent({
   )
 }
 
-function TabRow({ tab, onChange }: { tab: TabKey; onChange: (t: TabKey) => void }) {
+function TabRow({ tab, isOffice, onChange }: { tab: TabKey; isOffice: boolean; onChange: (t: TabKey) => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0 18px', overflowX: 'auto' }}>
-      {TABS.map((t) => {
+      {TABS.filter((t) => isOffice || !t.officeOnly).map((t) => {
         const active = t.key === tab
         return (
           <button
@@ -2065,6 +2092,7 @@ const BUDGET_COLUMNS = '1.6fr 84px 84px 112px 112px 122px'
 function BudgetTab({
   site,
   siteRow,
+  jobValue,
   shifts,
   materials,
   expenses,
@@ -2073,6 +2101,7 @@ function BudgetTab({
 }: {
   site: JobSite
   siteRow: JobSiteRow | null
+  jobValue: JobValueRow | null
   shifts: ShiftRow[]
   materials: MaterialRow[]
   expenses: ExpenseRow[]
@@ -2083,10 +2112,28 @@ function BudgetTab({
   const spend = useMemo(() => siteSpend(shifts, materials, expenses, rateOf), [shifts, materials, expenses, rateOf])
 
   const budget = siteRow?.budget === null || siteRow?.budget === undefined ? site.budget : Number(siteRow.budget)
-  const contract =
+
+  // What the job is worth, ex GST — the contract as signed PLUS every approved
+  // variation. Costs are ex GST too (see siteSpend), so the two sides of the
+  // margin are on the same basis.
+  //
+  // Before schema_v17 this read job_sites.contract_value: one flat number that
+  // no form could write and that an approved variation changed not at all. On a
+  // job where the variations are the profit, the margin shown was the margin on
+  // the base contract only. `contract_value` stays as the fallback for a job
+  // whose contract has not been entered yet.
+  const hasContract = Boolean(jobValue?.contract_id)
+  const legacyContract =
     siteRow?.contract_value === null || siteRow?.contract_value === undefined
       ? site.contractValue
       : Number(siteRow.contract_value)
+  const contract = hasContract ? Number(jobValue?.job_value_ex ?? 0) : legacyContract
+  const approvedVariations = hasContract ? Number(jobValue?.approved_variations ?? 0) : 0
+  const contractNote = !hasContract
+    ? 'Enter the contract on the Contract tab'
+    : approvedVariations !== 0
+      ? `${money(Number(jobValue?.contract_sum_ex ?? 0))} contract + ${money(approvedVariations)} approved variations`
+      : 'Contract sum, ex GST · no variations approved yet'
 
   // Margin is contract minus cost. Comparing spend to `budget` only tells you
   // whether the job beat its own cost target, which is a different question.
@@ -2174,22 +2221,22 @@ function BudgetTab({
     <div style={{ flex: 1, overflow: 'auto', padding: TAB_PAD }}>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <StatCard
-          label="CONTRACT VALUE"
+          label="JOB VALUE"
           value={contract === null ? '—' : money(contract)}
-          note={contract === null ? 'Set the agreed price on the job site' : 'What the client is paying'}
+          note={contract === null ? 'Enter the contract on the Contract tab' : contractNote}
         />
         <StatCard
           label="COST TO DATE"
           value={money(spend.total)}
-          note={`${money(spend.labour)} labour · ${money(spend.materials)} materials · ${money(spend.other)} other`}
+          note={`ex GST · ${money(spend.labour)} labour · ${money(spend.materials)} materials · ${money(spend.other)} other`}
         />
         <StatCard
           label="PROJECTED MARGIN"
           value={margin === null ? '—' : money(margin)}
           note={
             marginPct === null
-              ? 'Needs a contract value'
-              : `${marginPct.toFixed(1)}% of contract · ${budget ? `${Math.round(spentPct)}% of cost budget spent` : 'no cost budget set'}`
+              ? 'Needs a contract sum'
+              : `${marginPct.toFixed(1)}% of job value · ${budget ? `${Math.round(spentPct)}% of cost budget spent` : 'no cost budget set'}`
           }
           tone={margin !== null && margin < 0 ? 'watch' : undefined}
         />

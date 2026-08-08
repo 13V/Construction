@@ -61,7 +61,7 @@ const SCREENS: Partial<Record<NavItem, ComponentType<FeatureProps>>> = {
   Estimates,
   'Purchase Orders': PurchaseOrders,
   Invoices,
-  'Change Orders': ChangeOrders,
+  Variations: ChangeOrders,
   Safety,
   Portals,
 }

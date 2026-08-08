@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   supabase,
+  type ChangeOrderRow,
   type EstimateLineRow,
   type EstimateRow,
   type ExpenseRow,
@@ -70,6 +71,14 @@ function daysPastDue(dueOn: string | null, today: Date): number {
   return Math.round((today.getTime() - due.getTime()) / 86_400_000)
 }
 
+/**
+ * Round to cents at every step of a claim, not once at the end. `numeric(14,2)`
+ * rounds on the way into Postgres, so a total carrying a third decimal comes
+ * back a cent away from the sum of its own parts — and a claim whose GST line
+ * does not add up is a claim a builder's accounts team sends back.
+ */
+const round2 = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
+
 const outstandingOf = (inv: InvoiceRow) => Math.max(0, Number(inv.amount) - Number(inv.paid_amount))
 
 /** Sent, still owing, and past its due date. The only definition used anywhere here. */
@@ -134,8 +143,20 @@ interface ClaimForm {
   issuedOn: string
   dueOn: string
   retentionPct: string
+  /** 10.00 in Australia. Zero for a supplier who is not registered for GST. */
+  gstRate: string
+  /** Set when this claim is for one approved variation rather than the base contract. */
+  variationId: string
   note: string
   lines: ClaimLineDraft[]
+}
+
+/** The contract fields a claim needs: which contract, and its default terms. */
+interface ContractLite {
+  id: string
+  site_id: string
+  retention_pct: number
+  payment_terms_days: number
 }
 
 export function Invoices({
@@ -161,6 +182,8 @@ export function Invoices({
   const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [estimates, setEstimates] = useState<EstimateRow[]>([])
   const [estLines, setEstLines] = useState<EstimateLineRow[]>([])
+  const [contracts, setContracts] = useState<ContractLite[]>([])
+  const [variations, setVariations] = useState<ChangeOrderRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -179,7 +202,7 @@ export function Invoices({
   const load = useCallback(async () => {
     setLoading(true)
     const client = supabase()
-    const [inv, il, ip, po, pl, ex, es, el] = await Promise.all([
+    const [inv, il, ip, po, pl, ex, es, el, ct, vo] = await Promise.all([
       client.from('invoices').select('*').order('issued_on', { ascending: false }),
       client.from('invoice_lines').select('*').order('sort'),
       client.from('invoice_payments').select('*').order('received_on'),
@@ -188,6 +211,10 @@ export function Invoices({
       client.from('expenses').select('*'),
       client.from('estimates').select('*').eq('status', 'approved'),
       client.from('estimate_lines').select('*'),
+      // The contract a claim is made against, and the approved variations that
+      // can be claimed individually. Both are per-site (schema_v17).
+      client.from('contracts').select('id, site_id, retention_pct, payment_terms_days'),
+      client.from('change_orders').select('*').eq('status', 'approved'),
     ])
     const failed = [inv, il, ip, po, pl, ex, es, el].find((r) => r.error)
     if (failed?.error) setError(failed.error.message)
@@ -200,6 +227,8 @@ export function Invoices({
     setExpenses((ex.data ?? []) as ExpenseRow[])
     setEstimates((es.data ?? []) as EstimateRow[])
     setEstLines((el.data ?? []) as EstimateLineRow[])
+    setContracts((ct.data ?? []) as ContractLite[])
+    setVariations((vo.data ?? []) as ChangeOrderRow[])
     setLoading(false)
   }, [])
 
@@ -546,9 +575,13 @@ export function Invoices({
 
   const startClaim = () => {
     const site = sites[0]
+    // Retention and payment terms are contract terms, not app preferences. When
+    // the job has a contract they come from it; the old hard-coded 5% and 14
+    // days are only the fallback for a job that has none yet.
+    const contract = site ? contracts.find((c) => c.site_id === site.id) : undefined
     const issued = new Date()
     const due = new Date()
-    due.setDate(due.getDate() + 14)
+    due.setDate(due.getDate() + (contract ? contract.payment_terms_days : 14))
     setForm({
       editingId: null,
       invoiceNo: suggestInvoiceNo(rows),
@@ -557,7 +590,9 @@ export function Invoices({
       period: '',
       issuedOn: issued.toISOString().slice(0, 10),
       dueOn: due.toISOString().slice(0, 10),
-      retentionPct: '5',
+      retentionPct: contract ? String(Number(contract.retention_pct)) : '5',
+      gstRate: '10',
+      variationId: '',
       note: '',
       lines: [blankClaimLine()],
     })
@@ -588,6 +623,8 @@ export function Invoices({
       issuedOn: inv.issued_on,
       dueOn: inv.due_on ?? '',
       retentionPct: String(Number(inv.retention_pct)),
+      gstRate: String(Number(inv.tax_rate ?? 10)),
+      variationId: inv.variation_id ?? '',
       note: inv.note ?? '',
       lines: mine.length > 0 ? mine : [blankClaimLine()],
     })
@@ -604,10 +641,27 @@ export function Invoices({
     [form],
   )
   const claimRetained = useMemo(
-    () => (form ? claimGross * ((Number(form.retentionPct) || 0) / 100) : 0),
+    () => (form ? round2(claimGross * ((Number(form.retentionPct) || 0) / 100)) : 0),
     [form, claimGross],
   )
-  const claimTotal = claimGross - claimRetained
+  /** Value of work less retention, still excluding GST. */
+  const claimNet = round2(claimGross - claimRetained)
+  /**
+   * GST, on the net. This is the order an Australian progress claim runs in:
+   * value of work → less retention → net → plus GST → total payable. Charging
+   * GST on the gross and then retaining would collect tax on money the contract
+   * does not entitle them to yet.
+   *
+   * Before this, the app wrote no tax at all — schema_v15 added the columns and
+   * nothing filled them, so every claim it produced was missing the one line
+   * that makes a document a tax invoice.
+   */
+  const claimGst = useMemo(
+    () => (form ? round2(claimNet * ((Number(form.gstRate) || 0) / 100)) : 0),
+    [form, claimNet],
+  )
+  /** `invoices.amount` is GST inclusive and has been since schema_v4. */
+  const claimTotal = round2(claimNet + claimGst)
 
   const saveClaim = async () => {
     if (!form || !canEdit || busy) return
@@ -620,12 +674,20 @@ export function Invoices({
     const client = supabase()
     const header = {
       site_id: form.siteId || null,
+      // The claim goes ON the contract: one contract per site, so the link is
+      // derived rather than asked for. A variation claim also names which
+      // variation it bills, which is how the office answers "have we actually
+      // invoiced VO-3".
+      contract_id: (form.siteId && contracts.find((c) => c.site_id === form.siteId)?.id) || null,
+      variation_id: form.variationId || null,
       invoice_no: form.invoiceNo.trim(),
       client_name: form.clientName.trim(),
       period: form.period.trim() || null,
       issued_on: form.issuedOn,
       due_on: form.dueOn || null,
       amount: claimTotal,
+      tax_amount: claimGst,
+      tax_rate: Number(form.gstRate) || 0,
       retention_pct: Number(form.retentionPct) || 0,
       retention_amount: claimRetained,
       note: form.note.trim() || null,
@@ -1149,9 +1211,13 @@ export function Invoices({
         <ClaimEditor
           form={form}
           sites={sites}
+          variations={variations}
+          contracts={contracts}
           total={claimTotal}
           gross={claimGross}
           retained={claimRetained}
+          net={claimNet}
+          gst={claimGst}
           busy={busy}
           onChange={setForm}
           onCancel={() => setForm(null)}
@@ -1412,9 +1478,13 @@ function ConfirmDialog({
 function ClaimEditor({
   form,
   sites,
+  variations,
+  contracts,
   total,
   gross,
   retained,
+  net,
+  gst,
   busy,
   onChange,
   onCancel,
@@ -1422,14 +1492,22 @@ function ClaimEditor({
 }: {
   form: ClaimForm
   sites: JobSite[]
+  variations: ChangeOrderRow[]
+  contracts: ContractLite[]
   total: number
   gross: number
   retained: number
+  net: number
+  gst: number
   busy: boolean
   onChange: (f: ClaimForm) => void
   onCancel: () => void
   onSave: () => void
 }) {
+  // Only variations already approved on this job can be claimed: an unapproved
+  // one adds nothing to the contract sum, so billing it is exactly the thing a
+  // builder disputes.
+  const claimable = variations.filter((v) => v.site_id === form.siteId)
   const set = <K extends keyof ClaimForm>(k: K, v: ClaimForm[K]) => onChange({ ...form, [k]: v })
   const setLine = (key: string, patch: Partial<ClaimLineDraft>) =>
     onChange({ ...form, lines: form.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) })
@@ -1457,8 +1535,19 @@ function ClaimEditor({
               <select
                 value={form.siteId}
                 onChange={(e) => {
-                  const s = sites.find((x) => x.id === e.target.value)
-                  onChange({ ...form, siteId: e.target.value, clientName: s?.clientName ?? form.clientName })
+                  const id = e.target.value
+                  const s = sites.find((x) => x.id === id)
+                  const c = contracts.find((x) => x.site_id === id)
+                  // Retention follows the new job's contract, and the variation
+                  // is cleared outright — one raised on the old job is not a
+                  // thing this claim can bill.
+                  onChange({
+                    ...form,
+                    siteId: id,
+                    clientName: s?.clientName ?? form.clientName,
+                    retentionPct: c ? String(Number(c.retention_pct)) : form.retentionPct,
+                    variationId: '',
+                  })
                 }}
                 style={input}
               >
@@ -1498,19 +1587,44 @@ function ClaimEditor({
                 style={{ ...input, width: 78, textAlign: 'right' }}
               />
             </Field>
+            <Field label="GST %">
+              <input
+                value={form.gstRate}
+                onChange={(e) => set('gstRate', e.target.value)}
+                inputMode="decimal"
+                style={{ ...input, width: 78, textAlign: 'right' }}
+              />
+            </Field>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Field label="Claims" grow>
+              <select value={form.variationId} onChange={(e) => set('variationId', e.target.value)} style={input}>
+                <option value="">The contract — progress claim</option>
+                {claimable.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.co_no} — {v.description} ({money2(Number(v.cost_impact))})
+                  </option>
+                ))}
+              </select>
+            </Field>
           </div>
 
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 11 }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600 }}>Claim lines</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600 }}>
+                Claim lines <span style={{ fontWeight: 400, color: theme.inkFaint }}>· amounts ex GST</span>
+              </span>
               <span style={{ flex: 1 }} />
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                {retained > 0 && (
-                  <span style={{ fontSize: 11.5, color: theme.inkFaint, fontVariantNumeric: 'tabular-nums' }}>
-                    {money2(gross)} less {money2(retained)} retention
-                  </span>
-                )}
-                <span style={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{money2(total)}</span>
+                <span style={{ fontSize: 11.5, color: theme.inkFaint, fontVariantNumeric: 'tabular-nums' }}>
+                  {retained > 0 ? `${money2(gross)} less ${money2(retained)} retention = ` : ''}
+                  {money2(net)} ex GST
+                  {gst > 0 ? ` + ${money2(gst)} GST` : ''}
+                </span>
+                <span style={{ fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                  {money2(total)} inc GST
+                </span>
               </span>
             </div>
 

@@ -298,6 +298,72 @@ try {
   const forge = await boss.post('materials', { company_id: companyId, site_id: site.id, name: 'Forged', quantity: 1, unit_cost: '1.00', total_cost: '99999.00' })
   ok('a generated column cannot be written', forge.status === 400, `HTTP ${forge.status}`)
 
+  // ------------------------------------------- the contract (schema_v17)
+  // Everything commercial used to be measured against job_sites.contract_value:
+  // a column with no writer anywhere in the app, that an approved variation
+  // changed not at all.
+  // Its own job site, so every figure below is exact rather than a delta on
+  // whatever the invoice tests left on Smoke Site.
+  const csite = (await body(await boss.post('job_sites', {
+    company_id: companyId, name: 'Contract Site', lat: -34.9285, lng: 138.6007, radius_m: 150,
+  })))[0]
+
+  const contract = (await body(await boss.post('contracts', {
+    company_id: companyId, site_id: csite.id, contract_no: 'C-2291',
+    contract_sum: 80000, gst_inclusive: false, retention_pct: 5, status: 'active',
+  })))[0]
+  ok('the office can enter a contract', Boolean(contract?.id), contract?.contract_no)
+
+  const dupe = await boss.post('contracts', { company_id: companyId, site_id: csite.id, contract_sum: 1 })
+  ok('a job cannot carry two contracts', dupe.status === 409, `HTTP ${dupe.status}`)
+
+  const vo = (await body(await boss.post('change_orders', [
+    { company_id: companyId, site_id: csite.id, contract_id: contract.id, co_no: 'VO-1', description: 'Extra wet area', cost_impact: 12000, status: 'draft' },
+    { company_id: companyId, site_id: csite.id, contract_id: contract.id, co_no: 'VO-2', description: 'Feature niche', cost_impact: 6400, status: 'pending_client' },
+  ])))
+  const voId = vo.find((r) => r.co_no === 'VO-1').id
+  ok('a draft variation carries no approval date', vo.every((r) => r.approved_on === null))
+
+  const jv = async () => (await boss.get('job_value_v', `select=*&site_id=eq.${csite.id}`))[0]
+  let value = await jv()
+  ok('an unapproved variation adds nothing to the contract',
+    Number(value.job_value_ex) === 80000 && Number(value.pending_variations) === 6400,
+    `value ${value.job_value_ex}, pending ${value.pending_variations}`)
+
+  await boss.patch('change_orders', `id=eq.${voId}`, { status: 'approved' })
+  const approved = (await boss.get('change_orders', `select=approved_on&id=eq.${voId}`))[0]
+  ok('approving stamps the date in the database, not the client', approved.approved_on === day(0), approved.approved_on)
+
+  value = await jv()
+  ok('an approved variation goes on the contract',
+    Number(value.job_value_ex) === 92000 && Number(value.job_value_inc) === 101200,
+    `${value.job_value_ex} ex / ${value.job_value_inc} inc`)
+
+  // Walking it back must take the authority to bill with it.
+  await boss.patch('change_orders', `id=eq.${voId}`, { status: 'rejected' })
+  ok('declining clears the approval date',
+    (await boss.get('change_orders', `select=approved_on&id=eq.${voId}`))[0].approved_on === null)
+  ok('declining takes the value back off the contract', Number((await jv()).job_value_ex) === 80000)
+  await boss.patch('change_orders', `id=eq.${voId}`, { status: 'approved' })
+
+  // A claim lands on the contract, and only a SENT claim counts as claimed.
+  await boss.post('invoices', [
+    { company_id: companyId, site_id: csite.id, contract_id: contract.id, invoice_no: `C1-${stamp}`, amount: 44000, tax_amount: 4000, retention_pct: 5, retention_amount: 2000, status: 'sent' },
+    { company_id: companyId, site_id: csite.id, contract_id: contract.id, invoice_no: `C2-${stamp}`, amount: 99000, tax_amount: 9000, status: 'draft' },
+  ])
+  value = await jv()
+  ok('a draft claim is not a claim',
+    Number(value.claimed_inc) === 44000 && Number(value.draft_invoice_count) === 1,
+    `claimed ${value.claimed_inc}, ${value.draft_invoice_count} draft`)
+  ok('left to claim is job value less what has been claimed',
+    Number(value.to_claim_inc) === 57200, `${value.to_claim_inc}`)
+  ok('retention held comes off the claims', Number(value.retention_held) === 2000)
+
+  ok('a field worker reads no contracts', (await field.get('contracts', 'select=id')).length === 0)
+  ok('a field worker reads no job value', (await field.get('job_value_v', 'select=site_id')).length === 0)
+  ok('a field worker cannot enter a contract',
+    (await field.post('contracts', { company_id: companyId, site_id: csite.id, contract_sum: 1 })).status === 403)
+
   // ------------------------------------------------------------ the AI key
   const ai = await fetch(`${APP}/api/parse-receipt`, { method: 'POST', headers: boss.H, body: JSON.stringify({}) })
   ok('receipt extraction answers honestly without a key', ai.status === 501 || ai.ok, `HTTP ${ai.status}`)

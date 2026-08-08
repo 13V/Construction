@@ -6,15 +6,27 @@ import { theme } from '../theme'
 import type { JobSite, Worker } from '../types'
 
 /**
- * Change orders — scope and price changes to the contract, tracked from
- * draft through the client's signature. Grouped by job site because that is
- * how the office actually reads exposure on a job: "what's still unsigned
- * here" is a per-site question, not a per-change-order one.
+ * Variations — scope and price changes to the contract, tracked from draft
+ * through the builder's approval. Grouped by job site because that is how the
+ * office actually reads exposure on a job: "what's still unapproved here" is a
+ * per-site question, not a per-variation one.
+ *
+ * Called "variations" throughout, and numbered VO-n, because that is the word
+ * used on every Australian site — a builder asks for a VO, never a CO. The
+ * table is still `change_orders` (schema_v4) and existing CO-n numbers are left
+ * alone; renaming rows would break the builder's own references to them.
  *
  * The cost impact is always the sum of its scope lines rather than a number
- * typed in separately — a change order's whole job is to trace a price back
- * to an itemised scope, and that trace can never be allowed to drift once a
- * client has signed against it.
+ * typed in separately — a variation's whole job is to trace a price back to an
+ * itemised scope, and that trace can never be allowed to drift once a builder
+ * has approved against it.
+ *
+ * Approving one is no longer just a status change. Since schema_v17 an approved
+ * variation joins the contract sum: `job_value_v` adds it, the Contract tab
+ * shows it on the value ladder, and the Budget tab's margin is measured against
+ * the total. That is what the client meant by a variation "going on the
+ * contract", and it is why the approval date is stamped by the database rather
+ * than inferred from whenever the signature was scanned back.
  */
 
 type SortMode = 'site' | 'date'
@@ -61,9 +73,9 @@ interface ImpactTile {
 
 const STATUS_META: Record<ChangeOrderRow['status'], { label: string; bg: string; fg: string }> = {
   draft: { label: 'Draft', bg: theme.appBg, fg: theme.inkFaint },
-  pending_client: { label: 'Pending client', bg: '#FFF6DE', fg: '#8A6100' },
-  approved: { label: 'Approved', bg: '#EAF7EE', fg: '#1B7A32' },
-  rejected: { label: 'Rejected', bg: '#FCE8EA', fg: theme.alert },
+  pending_client: { label: 'Pending builder', bg: '#FFF6DE', fg: '#8A6100' },
+  approved: { label: 'On the contract', bg: '#EAF7EE', fg: '#1B7A32' },
+  rejected: { label: 'Declined', bg: '#FCE8EA', fg: theme.alert },
 }
 
 // A categorical palette for the small per-job-site dot in the group header.
@@ -85,14 +97,19 @@ const blankForm = (coNo: string): CoFormState => ({
   lines: [blankLine()],
 })
 
-/** Next unused "CO-N", derived from what's already on the job — never invented out of thin air. */
+/**
+ * Next unused "VO-N", derived from what's already on the job — never invented
+ * out of thin air. Both prefixes count towards the high-water mark: a company
+ * that raised CO-1 through CO-7 before this screen was relabelled must not get
+ * a VO-1 that reads like the first variation on the job.
+ */
 function nextCoNo(rows: ChangeOrderRow[]): string {
   let max = 0
   for (const r of rows) {
-    const m = /^CO-(\d+)$/i.exec(r.co_no.trim())
+    const m = /^(?:VO|CO)-(\d+)$/i.exec(r.co_no.trim())
     if (m) max = Math.max(max, parseInt(m[1], 10))
   }
-  return `CO-${max + 1}`
+  return `VO-${max + 1}`
 }
 
 function colorForSite(siteId: string, sites: JobSite[]): string {
@@ -135,13 +152,13 @@ function costColor(n: number): string {
 function statusNote(co: ChangeOrderRow): string {
   switch (co.status) {
     case 'draft':
-      return 'not sent to the client yet'
+      return 'not sent to the builder yet'
     case 'pending_client':
-      return 'awaiting signature'
+      return 'awaiting the builder’s approval'
     case 'approved':
-      return co.signature ? `signed by ${co.signature.name}` : 'signed'
+      return co.signature ? `approved by ${co.signature.name}` : 'approved'
     case 'rejected':
-      return 'declined by the client'
+      return 'declined by the builder'
     default:
       return ''
   }
@@ -184,7 +201,7 @@ function buildImpactTiles(co: ChangeOrderRow, lines: ChangeOrderLineRow[]): Impa
 
 function buildSteps(co: ChangeOrderRow): Step[] {
   const raised: Step = {
-    name: 'Change order raised',
+    name: 'Variation raised',
     when: listDate(co.raised_on),
     done: true,
     wait: false,
@@ -193,8 +210,8 @@ function buildSteps(co: ChangeOrderRow): Step[] {
 
   const sent: Step =
     co.status === 'draft'
-      ? { name: 'Sent to the client', when: 'Not sent yet', done: false, wait: false, fg: theme.inkFaint }
-      : { name: 'Sent to the client', when: 'Visible in the client portal', done: true, wait: false, fg: theme.ink }
+      ? { name: 'Sent for approval', when: 'Not sent yet', done: false, wait: false, fg: theme.inkFaint }
+      : { name: 'Sent for approval', when: 'Visible in the portal', done: true, wait: false, fg: theme.ink }
 
   let signature: Step
   if (co.status === 'approved' && co.signature) {
@@ -207,7 +224,7 @@ function buildSteps(co: ChangeOrderRow): Step[] {
     }
   } else if (co.status === 'pending_client') {
     signature = {
-      name: "Awaiting the client's signature",
+      name: 'Awaiting the signature',
       when: 'No signature yet',
       done: false,
       wait: true,
@@ -215,7 +232,7 @@ function buildSteps(co: ChangeOrderRow): Step[] {
     }
   } else if (co.status === 'rejected') {
     signature = {
-      name: 'Rejected by the client',
+      name: 'Declined',
       when: 'No signature was recorded',
       done: false,
       wait: false,
@@ -223,22 +240,54 @@ function buildSteps(co: ChangeOrderRow): Step[] {
     }
   } else {
     signature = {
-      name: 'Client signature',
-      when: 'Send it to the client first',
+      name: 'Signature',
+      when: 'Send it for approval first',
       done: false,
       wait: false,
       fg: theme.inkFaint,
     }
   }
 
-  return [raised, sent, signature]
+  // The step that used to be missing. Approving a variation adds its value to
+  // the contract sum (schema_v17), which is what makes it billable — and the
+  // reason "approved" is worth a separate line from "signed".
+  let onContract: Step
+  if (co.status === 'approved') {
+    onContract = {
+      name: 'On the contract',
+      when: co.approved_on
+        ? `Added to the contract sum ${listDate(co.approved_on)}`
+        : 'Added to the contract sum',
+      done: true,
+      wait: false,
+      fg: theme.ink,
+    }
+  } else if (co.status === 'rejected') {
+    onContract = {
+      name: 'Not on the contract',
+      when: 'Declined, so it adds nothing and cannot be billed',
+      done: false,
+      wait: false,
+      fg: theme.inkFaint,
+    }
+  } else {
+    onContract = {
+      name: 'On the contract',
+      when: 'Approve it to add its value to the contract sum',
+      done: false,
+      wait: false,
+      fg: theme.inkFaint,
+    }
+  }
+
+  return [raised, sent, signature, onContract]
 }
 
 /** Real, computed urgency — never the fabricated schedule narrative from the mockup. */
 function waitingCopy(raisedOn: string): string {
   const days = daysSince(raisedOn)
   const since = days <= 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`
-  return `Raised ${since} and still waiting on the client's signature. Work covered by this change order shouldn't proceed until it's signed.`
+  return `Raised ${since} and still waiting on approval. It adds nothing to the contract sum until then, so work covered by this variation shouldn't proceed and it can't be billed.`
 }
 
 export function ChangeOrders({
@@ -270,19 +319,32 @@ export function ChangeOrders({
   const [confirmingReject, setConfirmingReject] = useState(false)
   const [reminderNoted, setReminderNoted] = useState(false)
 
+  // site_id -> contract_id, so a new variation is stamped with the contract it
+  // varies at insert time rather than being reconciled later. One contract per
+  // site is a unique constraint (schema_v17), so this map is unambiguous.
+  const [contractBySite, setContractBySite] = useState<Map<string, string>>(new Map())
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const { data, error: err } = await supabase()
-      .from('change_orders')
-      .select('*')
-      .order('raised_on', { ascending: false })
-    if (err) {
-      setError(err.message)
+    const client = supabase()
+    const [coRes, contractRes] = await Promise.all([
+      client.from('change_orders').select('*').order('raised_on', { ascending: false }),
+      client.from('contracts').select('id, site_id'),
+    ])
+    if (coRes.error) {
+      setError(coRes.error.message)
       setLoading(false)
       return
     }
-    setRows((data ?? []) as ChangeOrderRow[])
+    setRows((coRes.data ?? []) as ChangeOrderRow[])
+    // A missing contracts read is not fatal: a variation without a contract_id
+    // is still counted on the value ladder, which sums by site.
+    setContractBySite(
+      new Map(
+        ((contractRes.data ?? []) as Array<{ id: string; site_id: string }>).map((c) => [c.site_id, c.id]),
+      ),
+    )
     setLoading(false)
   }, [])
 
@@ -412,6 +474,7 @@ export function ChangeOrders({
       .insert({
         company_id: me.company_id,
         site_id: form.siteId || null,
+        contract_id: (form.siteId && contractBySite.get(form.siteId)) || null,
         co_no: form.coNo.trim(),
         description: form.description.trim(),
         detail: form.detail.trim() || null,
@@ -429,8 +492,8 @@ export function ChangeOrders({
       // duplicate number, not a server problem worth alarming anyone over.
       setFormError(
         err?.code === '23505'
-          ? `CO number "${form.coNo.trim()}" is already used on another change order — pick a different number.`
-          : err?.message ?? 'Could not save the change order.',
+          ? `Number "${form.coNo.trim()}" is already used on another variation — pick a different one.`
+          : err?.message ?? 'Could not save the variation.',
       )
       return
     }
@@ -450,7 +513,7 @@ export function ChangeOrders({
       )
       if (lineErr) {
         setSaving(false)
-        setFormError(`The change order saved, but its scope lines failed: ${lineErr.message}`)
+        setFormError(`The variation saved, but its scope lines failed: ${lineErr.message}`)
         return
       }
     }
@@ -591,7 +654,7 @@ export function ChangeOrders({
         <div style={{ flex: 'none', width: 1, height: 20, background: theme.border, margin: '0 4px' }} />
 
         <span style={{ flex: 'none', fontSize: 12.5, color: theme.inkSoft, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-          {money(summary.approved)} approved · {money(summary.pending)} pending signature · {money(summary.rejected)} rejected
+          {money(summary.approved)} on the contract · {money(summary.pending)} awaiting approval · {money(summary.rejected)} declined
         </span>
 
         <div style={{ flex: 1 }} />
@@ -622,7 +685,7 @@ export function ChangeOrders({
               whiteSpace: 'nowrap',
             }}
           >
-            NEW CHANGE ORDER
+            NEW VARIATION
           </button>
         )}
       </div>
@@ -647,11 +710,11 @@ export function ChangeOrders({
 
         {form && (
           <div style={{ background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 8, padding: 14, marginBottom: 14 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 10 }}>New change order</div>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 10 }}>New variation</div>
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <label style={{ ...formLabel, marginTop: 0 }}>
-                CO number
+                Variation no
                 <input
                   value={form.coNo}
                   onChange={(e) => setForm((f) => (f ? { ...f, coNo: e.target.value } : f))}
@@ -820,7 +883,7 @@ export function ChangeOrders({
               borderBottom: `1px solid ${theme.border}`,
             }}
           >
-            <span style={colHead}>CO</span>
+            <span style={colHead}>VO</span>
             <span style={colHead}>DESCRIPTION</span>
             <span style={colHead}>JOB SITE</span>
             <span style={colHead}>RAISED</span>
@@ -834,7 +897,7 @@ export function ChangeOrders({
           )}
           {!loading && groups.length === 0 && (
             <div style={{ padding: '28px 14px', textAlign: 'center', fontSize: 12.5, color: theme.inkSoft }}>
-              {me.is_office ? 'No change orders yet — raise the first one with New Change Order above.' : 'No change orders yet.'}
+              {me.is_office ? 'No variations raised yet — raise the first one with New Variation above.' : 'No variations raised yet.'}
             </div>
           )}
 
@@ -854,7 +917,7 @@ export function ChangeOrders({
                 <span style={{ flex: 'none', width: 9, height: 9, borderRadius: 2, background: g.color }} />
                 <span style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{g.site}</span>
                 <span style={{ fontSize: 11.5, color: LABEL, whiteSpace: 'nowrap' }}>
-                  {g.rows.length} change order{g.rows.length === 1 ? '' : 's'}
+                  {g.rows.length} variation{g.rows.length === 1 ? '' : 's'}
                 </span>
                 <span style={{ flex: 1 }} />
                 <span style={{ fontSize: 11, color: LABEL, whiteSpace: 'nowrap' }}>cost impact</span>
@@ -961,7 +1024,7 @@ export function ChangeOrders({
                   SCOPE OF THE CHANGE
                 </span>
                 <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: TEXT2, textWrap: 'pretty' }}>
-                  {selected.detail || 'No scope notes recorded for this change order.'}
+                  {selected.detail || 'No scope notes recorded for this variation.'}
                 </p>
               </div>
 
@@ -1079,11 +1142,11 @@ export function ChangeOrders({
                           background: HEAD_BG,
                         }}
                       >
-                        <span style={{ fontSize: 12.5, color: LABEL }}>Not sent to the client yet</span>
+                        <span style={{ fontSize: 12.5, color: LABEL }}>Not sent for approval yet</span>
                       </div>
                       <span style={{ fontSize: 11.5, lineHeight: 1.45, color: LABEL }}>
-                        Send it once the scope and cost are ready. The client signs in their own portal — nothing to print
-                        or scan.
+                        Send it once the scope and cost are ready. It is signed in the portal — nothing to print or scan.
+                        Approving it is what adds its value to the contract sum.
                       </span>
                       {me.is_office && (
                         <button onClick={() => void sendToClient(selected)} disabled={actionBusy} style={ctaFullStyle}>
@@ -1106,10 +1169,10 @@ export function ChangeOrders({
                           background: HEAD_BG,
                         }}
                       >
-                        <span style={{ fontSize: 12.5, color: LABEL }}>Awaiting the client's signature</span>
+                        <span style={{ fontSize: 12.5, color: LABEL }}>Awaiting approval</span>
                       </div>
                       <span style={{ fontSize: 11.5, lineHeight: 1.45, color: LABEL }}>
-                        Signed in the client portal — no printing, no scanning. The signed PDF lands in Plans &amp; Docs.
+                        Signed in the portal — no printing, no scanning. The signed PDF lands in Plans &amp; Docs.
                       </span>
 
                       {me.is_office && (
@@ -1137,7 +1200,7 @@ export function ChangeOrders({
                               RECORD THE SIGNATURE
                             </span>
                             <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.45, color: LABEL }}>
-                              This becomes the record of authority to bill this change order — type the client's name
+                              This becomes the record of authority to bill this variation — type the client's name
                               exactly as they signed. Never guess or pre-fill it.
                             </p>
                             <input
@@ -1151,7 +1214,7 @@ export function ChangeOrders({
                               disabled={actionBusy || !signName.trim()}
                               style={ctaFullStyle}
                             >
-                              {actionBusy ? 'RECORDING…' : 'RECORD SIGNATURE & APPROVE'}
+                              {actionBusy ? 'RECORDING…' : 'APPROVE — ADD TO THE CONTRACT'}
                             </button>
 
                             {confirmingReject ? (
@@ -1161,7 +1224,7 @@ export function ChangeOrders({
                                   disabled={actionBusy}
                                   style={{ ...ghostFullStyle, borderColor: theme.alert, color: theme.alert }}
                                 >
-                                  {actionBusy ? 'REJECTING…' : 'CONFIRM REJECT'}
+                                  {actionBusy ? 'DECLINING…' : 'CONFIRM DECLINE'}
                                 </button>
                                 <button onClick={() => setConfirmingReject(false)} style={ghostFullStyle}>
                                   Cancel
@@ -1169,7 +1232,7 @@ export function ChangeOrders({
                               </div>
                             ) : (
                               <button onClick={() => setConfirmingReject(true)} style={{ ...ghostFullStyle, color: theme.alert }}>
-                                Reject change order
+                                Decline variation
                               </button>
                             )}
                           </div>
@@ -1205,7 +1268,7 @@ export function ChangeOrders({
                         )}
                       </div>
                       <span style={{ fontSize: 11.5, lineHeight: 1.45, color: LABEL }}>
-                        This signature is the record of authority to bill this change order.
+                        This signature is the record of authority to bill this variation. Its value is on the contract sum.
                       </span>
                     </>
                   )}
@@ -1223,10 +1286,10 @@ export function ChangeOrders({
                           background: HEAD_BG,
                         }}
                       >
-                        <span style={{ fontSize: 12.5, color: theme.alert }}>Rejected — no signature recorded</span>
+                        <span style={{ fontSize: 12.5, color: theme.alert }}>Declined — no signature recorded</span>
                       </div>
                       <span style={{ fontSize: 11.5, lineHeight: 1.45, color: LABEL }}>
-                        Revise the scope or cost and raise a new change order if the work still needs doing.
+                        Revise the scope or cost and raise a new variation if the work still needs doing.
                       </span>
                     </>
                   )}

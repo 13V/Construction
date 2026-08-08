@@ -17,7 +17,7 @@ const NAV = [
   'Estimates',
   'Purchase Orders',
   'Invoices',
-  'Change Orders',
+  'Variations',
   'Safety',
   'Portals',
 ] as const
@@ -51,7 +51,7 @@ const ICONS: Record<NavItem, string> = {
   Estimates: 'M3.4 2.2h9.2v11.6H3.4z|M5.8 5.4h4.4M5.8 8h4.4M5.8 10.6h2.6',
   'Purchase Orders': 'M2.4 3.2h2l1.7 7.4h6.4l1.3-5.4H5.2|M6.8 13a.9.9 0 100-1.8.9.9 0 000 1.8M11.4 13a.9.9 0 100-1.8.9.9 0 000 1.8',
   Invoices: 'M3.6 2.2h8.8v11.6l-1.8-1.2-1.7 1.2-1.7-1.2-1.8 1.2z|M6 5.6h4M6 8.2h4',
-  'Change Orders': 'M3 5.8a5.2 5.2 0 018.9-2.4M13 10.2a5.2 5.2 0 01-8.9 2.4|M11.6 2.2v3.4H8.2M4.4 13.8v-3.4h3.4',
+  Variations: 'M3 5.8a5.2 5.2 0 018.9-2.4M13 10.2a5.2 5.2 0 01-8.9 2.4|M11.6 2.2v3.4H8.2M4.4 13.8v-3.4h3.4',
   Portals: 'M8 2.1a5.9 5.9 0 100 11.8A5.9 5.9 0 008 2.1z|M2.1 8h11.8M8 2.1c1.6 1.7 2.4 3.7 2.4 5.9S9.6 12.2 8 13.9c-1.6-1.7-2.4-3.7-2.4-5.9S6.4 3.8 8 2.1z',
 }
 

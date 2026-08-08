@@ -280,12 +280,23 @@ export interface InvoiceRow {
   period: string | null
   issued_on: string
   due_on: string | null
+  /** What the builder owes, GST INCLUSIVE. Unchanged meaning since schema_v4. */
   amount: number
+  /** The GST portion of `amount` (schema_v15). Zero on anything raised before it. */
+  tax_amount: number
+  /** Generated in Postgres as amount - tax_amount. Never write it. */
+  ex_tax: number
+  tax_rate: number
   paid_amount: number
   status: 'draft' | 'sent' | 'paid' | 'void'
   note: string | null
   retention_pct: number
   retention_amount: number
+  builder_id: string | null
+  /** The contract this claim is made against (schema_v17). */
+  contract_id: string | null
+  /** Set when the claim is for one specific variation rather than the base contract. */
+  variation_id: string | null
 }
 
 /**
@@ -316,6 +327,11 @@ export interface InvoiceLineRow {
   sort: number
 }
 
+/**
+ * A variation. Called `change_orders` in the database since schema_v4 and
+ * shown as "Variations" everywhere in the app, because that is the word used
+ * on every Australian site — a builder asks for a VO, never a CO.
+ */
 export interface ChangeOrderRow {
   id: string
   company_id: string
@@ -328,6 +344,10 @@ export interface ChangeOrderRow {
   status: 'draft' | 'pending_client' | 'approved' | 'rejected'
   raised_on: string
   signature: { name: string; signed_at: string } | null
+  /** The contract this variation adds to (schema_v17). */
+  contract_id: string | null
+  /** Stamped by the database when status becomes approved; cleared if it moves back. */
+  approved_on: string | null
 }
 
 export interface ChangeOrderLineRow {
@@ -418,6 +438,90 @@ export interface PlanPinRow {
   photo_id: string | null
   created_by: string | null
   created_at: string
+}
+
+// ----------------------------------------- v15/v17 row types (the contract)
+
+export interface BuilderRow {
+  id: string
+  company_id: string
+  name: string
+  abn: string | null
+  accounts_email: string | null
+  phone: string | null
+  address: string | null
+  payment_terms_days: number
+  default_retention_pct: number
+  /** True when the BUILDER raises the invoice under an RCTI agreement. */
+  rcti: boolean
+  note: string | null
+  active: boolean
+}
+
+/** The head contract received from the builder. One per job site (schema_v17). */
+export interface ContractRow {
+  id: string
+  company_id: string
+  site_id: string
+  builder_id: string | null
+  contract_no: string | null
+  order_no: string | null
+  title: string | null
+  /** The sum as the contract states it — read with `gst_inclusive`, never alone. */
+  contract_sum: number
+  gst_inclusive: boolean
+  gst_rate: number
+  retention_pct: number
+  payment_terms_days: number
+  signed_on: string | null
+  starts_on: string | null
+  due_on: string | null
+  status: 'draft' | 'active' | 'completed' | 'terminated'
+  note: string | null
+  created_at: string
+}
+
+/**
+ * One row per job site from `job_value_v`: what the job is worth once approved
+ * variations are counted, against what has been claimed and paid. Office only.
+ *
+ * Every figure is derived in Postgres so that no two screens can disagree
+ * about it. `contract_id` is null when no contract has been entered yet, in
+ * which case every money field is zero rather than absent.
+ */
+export interface JobValueRow {
+  site_id: string
+  company_id: string
+  site_name: string
+  contract_id: string | null
+  contract_no: string | null
+  order_no: string | null
+  builder_id: string | null
+  contract_status: ContractRow['status'] | null
+  signed_on: string | null
+  due_on: string | null
+  retention_pct: number | null
+  payment_terms_days: number | null
+  gst_inclusive: boolean | null
+  gst_rate: number
+  contract_sum: number
+  contract_sum_ex: number
+  contract_sum_inc: number
+  approved_variations: number
+  pending_variations: number
+  approved_variation_count: number
+  pending_variation_count: number
+  /** Contract sum plus approved variations. What the job is worth now. */
+  job_value_ex: number
+  job_value_inc: number
+  claimed_inc: number
+  claimed_ex: number
+  paid_inc: number
+  outstanding_inc: number
+  retention_held: number
+  draft_invoice_count: number
+  /** Job value less what has been claimed. Negative means over-claimed. */
+  to_claim_inc: number
 }
 
 export interface NotificationRow {

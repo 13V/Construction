@@ -71,8 +71,10 @@ export function Materials({
       client.from('materials').select('*').eq('site_id', siteId).order('delivered_on', { ascending: false }),
       client.from('shifts').select('*').eq('site_id', siteId),
       // Expenses already linked to a material line would double-count, so only
-      // unlinked spend counts as "other".
-      client.from('expenses').select('amount, id').eq('site_id', siteId),
+      // unlinked spend counts as "other". `tax` comes along because the GST on
+      // a docket is an input credit, not a cost — netting it here is what keeps
+      // this figure identical to JobSiteFolder's siteSpend().
+      client.from('expenses').select('amount, tax, id').eq('site_id', siteId),
     ])
 
     const firstError = mat.error ?? shf.error ?? exp.error
@@ -87,9 +89,9 @@ export function Materials({
     setShifts((shf.data ?? []) as ShiftRow[])
 
     const linked = new Set(materials.map((m) => m.expense_id).filter(Boolean))
-    const spend = ((exp.data ?? []) as Array<{ amount: number; id: string }>)
+    const spend = ((exp.data ?? []) as Array<{ amount: number; tax: number; id: string }>)
       .filter((e) => !linked.has(e.id))
-      .reduce((sum, e) => sum + Number(e.amount), 0)
+      .reduce((sum, e) => sum + (Number(e.amount) - Number(e.tax ?? 0)), 0)
     setOtherSpend(spend)
     setLoading(false)
   }, [siteId])

@@ -213,6 +213,19 @@ create policy events_read on geofence_events
 
 -- ------------------------------------------------------------------ realtime
 
-alter publication supabase_realtime add table positions;
-alter publication supabase_realtime add table shifts;
-alter publication supabase_realtime add table geofence_events;
+-- Wrapped, like every later migration's version of this block. Bare `alter
+-- publication ... add table` raises 42710 the second time it runs, and
+-- DEPLOY.md tells an operator to run all of these in order on a database that
+-- may already be up to date. This file failing on line one of its last section
+-- meant nothing after it ran either.
+do $$
+declare t text;
+begin
+  foreach t in array array['positions','shifts','geofence_events']
+  loop
+    begin
+      execute format('alter publication supabase_realtime add table %I', t);
+    exception when duplicate_object then null;
+    end;
+  end loop;
+end $$;
