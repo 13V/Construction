@@ -24,7 +24,17 @@ Create a project, then run these in the SQL editor, in order:
    `status` become derived from it by trigger, so a client paying part of a
    claim is finally expressible. It backfills an opening balance for anything
    already part paid — run it before recording any payment by hand
-10. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+10. `supabase/schema_v10.sql` — SWMS and site inductions with per-worker
+    signatures, a worker's own ordinary hours, what an expired ticket stops you
+    doing, and a lifecycle for plan pins
+11. `supabase/schema_v11.sql` — products, their technical and safety data
+    sheets, and the hazardous chemical register
+12. `supabase/schema_v12.sql` — **run this one.** The geofence engine could
+    open a shift and was then refused permission to close it, so shifts never
+    ended and the next day's clock-in collided with yesterday's
+13. `supabase/schema_v13.sql` — lets a worker flag a photo and resolve a plan
+    pin, both of which silently did nothing
+14. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
 
 Grab three values from Settings → API: the project URL, the `anon` key, and the
 `service_role` key.

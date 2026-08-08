@@ -133,6 +133,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
   if (positionError) console.error('[ping] position insert failed', positionError)
 
+  /** Things the worker needs telling, surfaced instead of logged and lost. */
+  const notes: string[] = []
+
   for (const event of result.events) {
     if (event.kind === 'clock_in') {
       const { error } = await db.from('shifts').insert({
@@ -142,9 +145,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         started_at: new Date(event.at).toISOString(),
         source: 'auto',
       })
-      // The partial unique index rejects a second open shift; that means we
-      // already have one and this is a duplicate delivery, which is fine.
-      if (error && error.code !== '23505') {
+      // 23505: the partial unique index rejected a second open shift, so we
+      // already have one and this is a duplicate delivery — fine.
+      //
+      // 23P01: shifts_no_overlap refused because an EARLIER shift is still
+      // open and, being open, is treated as running to infinity. That is not
+      // a duplicate; it means this worker has a stranded shift and is now
+      // silently not being tracked. Closing the old one here would be
+      // inventing an end time, so it is surfaced instead of swallowed.
+      if (error?.code === '23P01') {
+        console.error('[ping] clock_in blocked by an unclosed earlier shift', {
+          workerId: worker.id,
+          siteId: event.siteId,
+        })
+        notes.push('An earlier shift never closed, so this clock-in was refused. Tell the office.')
+      } else if (error && error.code !== '23505') {
         console.error('[ping] clock_in insert failed', error)
       }
     }
@@ -155,7 +170,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .update({ ended_at: new Date(event.at).toISOString() })
         .eq('worker_id', worker.id)
         .is('ended_at', null)
-      if (error) console.error('[ping] clock_out update failed', error)
+      // A failure here used to be invisible: the shift stayed open, the next
+      // day's clock-in collided with it, and the worker stopped being tracked
+      // with nothing said. The engine is the system of record for times, so
+      // this is the one write that must not fail quietly.
+      if (error) {
+        console.error('[ping] clock_out update failed', error)
+        notes.push('Your clock-out did not save. Your hours are being held — tell the office.')
+      }
     }
 
     const message =
@@ -206,6 +228,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // countdown rather than a second, drifting one of its own.
   return res.status(200).json({
     ok: true,
+    notes,
     phase: result.phase,
     events: result.events.map((e) => ({ kind: e.kind, siteId: e.siteId, at: e.at })),
     sites: sites.map((s) => ({

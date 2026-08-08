@@ -76,8 +76,13 @@ let pass = 0, fail = 0
 const ok = (n, c, x = '') => { c ? pass++ : fail++; console.log(`${c ? ' PASS' : '*FAIL'}  ${n}${x ? '  ' + x : ''}`) }
 const j = async (r) => { const t = await r.text(); try { return JSON.parse(t) } catch { return t.slice(0, 240) } }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+const log = (m) => console.log(`       ${m}`)
+/** Must match src/geofence/dwell.ts. */
+const DWELL_OUT_MS = 3 * 60_000
 
 const stamp = Date.now()
+/** Origin for the simulated drive. Every ping stamp is T0 + something. */
+const T0 = Date.now()
 const SITE = { lat: -34.9285, lng: 138.6007 }
 
 // --- the office sets up the job
@@ -110,17 +115,17 @@ await new Promise((res, rej) => {
 const ping = (lat, lng, at) => fetch(`${APP}/api/ping`, { method: 'POST', headers: phone.H, body: JSON.stringify({ lat, lng, accuracyM: 8, at }) }).then(j)
 
 // Well outside the fence first — arriving, not yet there.
-let r = await ping(-34.9500, 138.6400, Date.now())
+let r = await ping(-34.9500, 138.6400, T0 - 10_000)
 ok('a fix outside every fence opens no shift', !r.shift && !r.event?.kind?.includes('in'), JSON.stringify(r).slice(0, 90))
 
 // Inside, but only just arrived: the dwell rule must refuse to clock in yet.
-r = await ping(SITE.lat, SITE.lng, Date.now())
+r = await ping(SITE.lat, SITE.lng, T0)
 const openAfterFirst = await j(await fetch(`${SB}/rest/v1/shifts?select=id&worker_id=eq.${fw.id}&ended_at=is.null`, { headers: boss.H }))
 ok('arriving on site does not clock in immediately (dwell)', openAfterFirst.length === 0, `${openAfterFirst.length} open shifts`)
 
 // Still there two and a half minutes later. DWELL_IN_MS is 2 minutes, and the
 // server clamps client time to ±5 min, so this is inside what it will accept.
-r = await ping(SITE.lat + 0.0001, SITE.lng, Date.now() + 150_000)
+r = await ping(SITE.lat + 0.0001, SITE.lng, T0 + 150_000)
 await wait(1500)
 const open = await j(await fetch(`${SB}/rest/v1/shifts?select=id,site_id,started_at&worker_id=eq.${fw.id}&ended_at=is.null`, { headers: boss.H }))
 ok('dwelling on site clocks the worker in, server-side', open.length === 1 && open[0].site_id === site.id,
@@ -129,6 +134,42 @@ ok('dwelling on site clocks the worker in, server-side', open.length === 1 && op
 await wait(3000)
 ok('the office dashboard is told about the shift over realtime, no refresh',
   live.shifts.length > 0, `${live.shifts.length} shift events pushed`)
+
+// --- and then they leave.
+//
+// This is the assertion that was missing, and its absence hid the worst bug in
+// the product for weeks. shifts_worker_guard is a trigger, and triggers are
+// NOT bypassed by the service role the way RLS is — so the geofence engine
+// could open a shift and was then refused permission to close it. The shift
+// stayed open, shifts_no_overlap treated it as running to infinity, the next
+// day's clock-in collided with it, and the worker silently stopped being
+// tracked. Everything above this line passed the whole time.
+//
+// DWELL_OUT_MS is 3 minutes and the server clamps client time to +/-5 min, so
+// the exit is driven at +4 minutes: far enough out to trip the dwell, near
+// enough that the clamp still accepts it.
+const away = { lat: -34.9600, lng: 138.6500 }
+
+// Timestamps have to keep moving FORWARD. The clock-in above was driven at
+// T0+150s, so the engine's state already sits 150s in the future; an exit ping
+// at real `now` would go backwards and be ignored. And the two dwells cannot
+// both fit inside the +/-5 min clamp (120 + 180 = 300s exactly), so the clock
+// is advanced virtually while real time is allowed to catch up underneath it.
+await ping(away.lat, away.lng, T0 + 160_000)     // outside: the exit dwell starts
+log('letting real time catch up so the next stamp stays inside the clamp…')
+await wait(105_000)
+await ping(away.lat, away.lng, T0 + 345_000)     // 185s later: past DWELL_OUT_MS
+await wait(2500)
+
+const closed = await j(await fetch(`${SB}/rest/v1/shifts?select=id,started_at,ended_at&worker_id=eq.${fw.id}&order=started_at.desc`, { headers: boss.H }))
+ok('leaving the site closes the shift', closed.length > 0 && closed[0].ended_at !== null,
+  closed.length ? `ended_at ${closed[0].ended_at ?? 'STILL NULL'}` : 'no shift at all')
+
+// The point of closing it: the worker can clock in again tomorrow. An open
+// shift blocks the next one through shifts_no_overlap, which is how a failed
+// clock-out turned into a worker who stopped being tracked entirely.
+const openNow = await j(await fetch(`${SB}/rest/v1/shifts?select=id&worker_id=eq.${fw.id}&ended_at=is.null`, { headers: boss.H }))
+ok('no shift is left open to block the next clock-in', openNow.length === 0, `${openNow.length} still open`)
 
 // --- chat, both directions
 const chans = await j(await fetch(`${SB}/rest/v1/channels?select=id,site_id&company_id=eq.${co}`, { headers: boss.H }))

@@ -517,7 +517,17 @@ function SheetViewer({
             {!openPin.resolved_at && (
               <button
                 onClick={async () => {
-                  await supabase().from('plan_pins').update({ resolved_at: new Date().toISOString(), resolved_by: me.id }).eq('id', openPin.id)
+                  const { data, error } = await supabase()
+                    .from('plan_pins')
+                    .update({ resolved_at: new Date().toISOString(), resolved_by: me.id })
+                    .eq('id', openPin.id)
+                    .select('id')
+                  // A zero-row UPDATE answers with success, so the row itself
+                  // is the only proof the pin actually closed.
+                  if (error || !data || data.length === 0) {
+                    setErr(error?.message ?? 'That did not save. Tell the office.')
+                    return
+                  }
                   setOpenPin(null)
                   onChanged()
                 }}

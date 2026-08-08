@@ -430,12 +430,25 @@ function Viewer({
   }, [index, files.length, onIndex, onClose])
 
   /** Flagging is a category change, which is what the office filters on. */
+  const [flagErr, setFlagErr] = useState<string | null>(null)
   const flag = async () => {
     if (busy || file.category === 'issue') return
     setBusy(true)
-    await supabase().from('site_files').update({ category: 'issue' }).eq('id', file.id)
+    // Read the row back rather than trusting the status. A zero-row UPDATE —
+    // which is what a missing policy produces — answers with success, and this
+    // button spent its whole life reporting one.
+    const { data, error } = await supabase()
+      .from('site_files')
+      .update({ category: 'issue' })
+      .eq('id', file.id)
+      .select('id,category')
     setBusy(false)
-    onChanged()
+    if (error) setFlagErr(error.message)
+    else if (!data || data.length === 0) setFlagErr('That did not save. Tell the office.')
+    else {
+      setFlagErr(null)
+      onChanged()
+    }
   }
 
   return (
@@ -513,6 +526,7 @@ function Viewer({
             {busy ? 'Flagging…' : 'Flag as an issue'}
           </button>
         )}
+        {flagErr && <span style={{ fontSize: 12.5, color: '#FF8A94' }}>{flagErr}</span>}
       </div>
     </div>
   )
