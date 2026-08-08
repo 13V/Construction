@@ -364,6 +364,56 @@ try {
   ok('a field worker cannot enter a contract',
     (await field.post('contracts', { company_id: companyId, site_id: csite.id, contract_sum: 1 })).status === 403)
 
+  // ---------------------------------------- the captain tier (schema_v18)
+  // Checked through PostgREST rather than only in SQL, because the REST layer
+  // is the actual attack surface: a policy can be right and still be reachable
+  // around if a view or an embed exposes the table another way.
+  const capEmail = `smoke-captain-${stamp}@mailinator.com`
+  await boss.post('workers', {
+    company_id: companyId, name: 'Lead Hand', initials: 'LH',
+    trade: 'Tiler', rate: 62, role: 'captain', invite_email: capEmail,
+  })
+  const capRow = (await boss.get('workers', `select=id,is_office,role&invite_email=eq.${capEmail}`))[0]
+  ok('a captain is not office', capRow.role === 'captain' && capRow.is_office === false)
+
+  const captain = await user(capEmail)
+  await fetch(`${APP}/api/bootstrap`, { method: 'POST', headers: captain.H, body: JSON.stringify({}) })
+  await boss.patch('job_sites', `id=eq.${csite.id}`, { captain_id: capRow.id })
+
+  ok('a captain sees their own job\'s variations',
+    (await captain.get('change_orders', `select=id&site_id=eq.${csite.id}`)).length > 0)
+  ok('a captain reads no contracts', (await captain.get('contracts', 'select=id')).length === 0)
+  ok('a captain reads no invoices', (await captain.get('invoices', 'select=id')).length === 0)
+  ok('a captain reads no job value', (await captain.get('job_value_v', 'select=site_id')).length === 0)
+  ok('a captain reads no job profit', (await captain.get('job_profit_v', 'select=site_id')).length === 0)
+  ok('a captain reads no company overview', (await captain.get('company_overview_v', 'select=active_jobs')).length === 0)
+
+  // -------------------------------------------- site records (schema_v19)
+  ok('anyone in the company can raise a defect',
+    (await field.post('defects', {
+      company_id: companyId, site_id: site.id, location: 'Ensuite',
+      description: 'Chipped tile beside the waste',
+    })).ok)
+
+  const defect = (await body(await boss.post('defects', {
+    company_id: companyId, site_id: site.id, description: 'Grout cracked', cost_estimate: 480,
+  })))[0]
+  await field.patch('defects', `id=eq.${defect.id}`, { severity: 'critical' })
+  ok('but a field worker cannot edit one',
+    (await boss.get('defects', `select=severity&id=eq.${defect.id}`))[0].severity === 'minor')
+
+  const wp = (await body(await boss.post('waterproofing', {
+    company_id: companyId, site_id: site.id, area: 'Ensuite',
+    product_name: 'Ardex WPM 300', batch_no: 'B-4471', status: 'in_progress',
+  })))[0]
+  await boss.patch('waterproofing', `id=eq.${wp.id}`, {
+    status: 'signed_off', signed_off_name: 'Somebody Else', signed_off_at: '2020-01-01T00:00:00Z',
+  })
+  const signed = (await boss.get('waterproofing', `select=signed_off_name,signed_off_at&id=eq.${wp.id}`))[0]
+  ok('a waterproofing sign-off is stamped from identity, not the form',
+    signed.signed_off_name === 'Smoke Boss' && signed.signed_off_at.slice(0, 4) !== '2020',
+    `${signed.signed_off_name}, ${signed.signed_off_at}`)
+
   // ------------------------------------------------------------ the AI key
   const ai = await fetch(`${APP}/api/parse-receipt`, { method: 'POST', headers: boss.H, body: JSON.stringify({}) })
   ok('receipt extraction answers honestly without a key', ai.status === 501 || ai.ok, `HTTP ${ai.status}`)

@@ -231,6 +231,17 @@ create index if not exists wp_photos_idx on waterproofing_photos (waterproofing_
 create or replace function waterproofing_stamp_signoff() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
+  -- Anyone in the company may CREATE a wet area record — the tiler who laid the
+  -- membrane is the right person to start it. Signing one off is a different
+  -- act: it is a certificate somebody can be prosecuted over. The insert policy
+  -- cannot express "any status except this one", so the rule lives here.
+  if tg_op = 'INSERT'
+     and new.status = 'signed_off'
+     and auth.uid() is not null
+     and not (current_is_office() or captains_site(new.site_id)) then
+    new.status := 'in_progress';
+  end if;
+
   if new.status = 'signed_off' and (old is null or old.status <> 'signed_off') then
     new.signed_off_at := now();
     new.signed_off_by := coalesce(current_worker_id(), new.signed_off_by);

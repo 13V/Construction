@@ -117,11 +117,19 @@ create or replace function programme_carry_previous(p_programme uuid)
 returns integer language plpgsql security definer set search_path = public as $$
 declare
   v_site uuid;
+  v_company uuid;
   v_prev uuid;
   v_moved integer;
 begin
-  select site_id into v_site from programmes where id = p_programme;
+  -- SECURITY DEFINER means this runs as the owner and RLS does not apply, so
+  -- the tenant check has to be made here explicitly. Without it, any signed-in
+  -- user could pass another company's programme id and rewrite its dates —
+  -- reading nothing back, but corrupting a job they have no business touching.
+  select site_id, company_id into v_site, v_company from programmes where id = p_programme;
   if v_site is null then return 0; end if;
+  if v_company is distinct from current_company_id() then
+    raise exception 'That programme belongs to another company';
+  end if;
 
   select id into v_prev
     from programmes
