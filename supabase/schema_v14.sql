@@ -90,7 +90,16 @@ create policy expenses_read on expenses
 -- off it. Only three columns are sensitive, and a view is the only way to
 -- drop columns, so the office-only figures live here and the app reads this
 -- instead of selecting budget/contract_value off the table.
-drop view if exists job_money_v;
+-- `cascade`, on every view drop in this repo. A later migration builds views on
+-- top of this one (job_profit_v and company_overview_v read job_value_v and
+-- invoice_status_v), and Postgres refuses to drop a view something depends on.
+-- Without cascade, re-running this file on an up-to-date database aborts — and
+-- DEPLOY.md's instruction is to run the whole list in order, so an abort here
+-- means every migration after it silently never runs. That exact failure has
+-- now happened twice. The dependants are recreated by the later file, which
+-- always runs after this one; the run is only ever safe as a complete run,
+-- which is what the runbook has said all along.
+drop view if exists job_money_v cascade;
 create view job_money_v with (security_invoker = on) as
   select s.id as site_id, s.name, s.budget, s.contract_value
     from job_sites s
@@ -107,7 +116,7 @@ create view job_money_v with (security_invoker = on) as
 -- still selects `rate` in office screens that would break. crew_v exists so
 -- the worker app and any crew list can move onto it first; the revoke lands
 -- once nothing field-facing reads the table directly.
-drop view if exists crew_v;
+drop view if exists crew_v cascade;
 create view crew_v with (security_invoker = on) as
   select id, company_id, auth_user_id, name, initials, trade, is_office, active, ordinary_hours
     from workers

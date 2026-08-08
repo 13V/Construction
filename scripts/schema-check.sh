@@ -33,7 +33,7 @@ cd "$ROOT/supabase"
 FILES=(schema.sql schema_v2.sql schema_v3.sql schema_v4.sql schema_v5.sql schema_v6.sql
        schema_v7.sql schema_v8.sql schema_v9.sql schema_v10.sql schema_v11.sql
        schema_v12.sql schema_v13.sql schema_v14.sql schema_v15.sql schema_v16.sql
-       schema_v17.sql storage.sql)
+       schema_v17.sql schema_v18.sql schema_v19.sql schema_v20.sql storage.sql)
 
 OWNER=postgres
 id "$OWNER" >/dev/null 2>&1 || { echo "no '$OWNER' user on this machine"; exit 2; }
@@ -57,7 +57,7 @@ sleep 2
 
 PSQL="psql -h /tmp -p $PORT -U postgres -q -v ON_ERROR_STOP=1"
 
-$PSQL -f tests/_shim.sql >/dev/null 2>&1
+$PSQL -f tests/_shim.sql >/dev/null 2>&1 || true
 echo "shim loaded — postgres $($PSQL -tAc 'show server_version')"
 
 fail=0
@@ -72,8 +72,16 @@ for pass in 1 2 3; do
   echo " PASS  pass $pass: all ${#FILES[@]} files applied clean"
 done
 
+# Re-run the shim's grants: tables created by the migrations above did not
+# exist when it first ran, and `authenticated` needs reaching them for RLS to be
+# under test at all.
+$PSQL -f tests/_shim.sql >/dev/null 2>&1 || true
+
 for t in tests/v*.sql; do
-  out=$(psql -h /tmp -p "$PORT" -U postgres -q -f "$t" 2>&1)
+  # `|| true` is load-bearing. Under `set -e` a failing command substitution
+  # kills the script, so one failing test used to end the run with no output at
+  # all — the harness reported nothing and looked like a pass.
+  out=$(psql -h /tmp -p "$PORT" -U postgres -q -f "$t" 2>&1 || true)
   if echo "$out" | grep -qE "ERROR|FAIL:"; then
     echo "*FAIL  $t"
     echo "$out" | grep -E "ERROR|FAIL:" | head -5

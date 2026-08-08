@@ -41,6 +41,7 @@ insert into change_orders (id, company_id, site_id, contract_id, co_no, descript
    'cccccccc-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000001',
    'VO-3', 'Deleted laundry tiling', -2000, 'pending_client');
 
+set local role authenticated;
 set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 
 -- =========================================================== 1. the trigger
@@ -164,6 +165,7 @@ end $$;
 do $$
 declare n integer;
 begin
+  set local role authenticated;
   set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
   select count(*) into n from job_value_v;
   if n <> 0 then raise exception 'FAIL: a field worker read % rows of contract value', n; end if;
@@ -173,6 +175,7 @@ end $$;
 -- ================================================ 8. one contract per site
 do $$
 begin
+  set local role authenticated;
   set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
   begin
     insert into contracts (company_id, site_id, contract_sum)

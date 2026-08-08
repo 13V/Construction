@@ -39,11 +39,33 @@ do $$ begin
   create publication supabase_realtime;
 exception when duplicate_object then null; end $$;
 
-create role authenticated;
-create role anon;
-create role service_role;
+-- RLS is NOT enforced for a superuser or a table owner. Running the tests as
+-- `postgres` therefore proves nothing about any policy — it silently passes
+-- everything. The tests `set local role authenticated` for exactly this reason,
+-- and that role needs the grants Supabase gives it.
+do $$
+declare r text;
+begin
+  foreach r in array array['authenticated','anon','service_role']
+  loop
+    begin
+      execute format('create role %I', r);
+    exception when duplicate_object then null;
+    end;
+  end loop;
+end $$;
+grant usage on schema public, storage to authenticated, anon;
 
 -- Buckets carry more columns in Supabase; only the ones storage.sql writes
 -- matter here.
 alter table storage.buckets add column if not exists file_size_limit bigint;
 alter table storage.objects enable row level security;
+
+-- Applied again at the end of scripts/schema-check.sh's migration passes, since
+-- tables created by a later migration need them too.
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public
+  grant usage, select on sequences to authenticated;

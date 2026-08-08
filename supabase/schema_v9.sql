@@ -153,7 +153,16 @@ create policy invoice_payments_portal_read on invoice_payments
 
 -- Recreated because the column list changed. `security_invoker` is not
 -- optional here — see schema_v5.sql for what happens without it.
-drop view if exists invoice_status_v;
+-- `cascade`, on every view drop in this repo. A later migration builds views on
+-- top of this one (job_profit_v and company_overview_v read job_value_v and
+-- invoice_status_v), and Postgres refuses to drop a view something depends on.
+-- Without cascade, re-running this file on an up-to-date database aborts — and
+-- DEPLOY.md's instruction is to run the whole list in order, so an abort here
+-- means every migration after it silently never runs. That exact failure has
+-- now happened twice. The dependants are recreated by the later file, which
+-- always runs after this one; the run is only ever safe as a complete run,
+-- which is what the runbook has said all along.
+drop view if exists invoice_status_v cascade;
 create view invoice_status_v with (security_invoker = on) as
   select i.*,
          (i.status = 'sent'

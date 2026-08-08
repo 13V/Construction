@@ -109,7 +109,16 @@ create index if not exists invoices_company_idx on invoices (company_id, issued_
 -- database aborted with `42P16: cannot change name of view column "overdue"`,
 -- and every migration after this one silently never ran, including the geofence
 -- clock-out fix and the read lockdown.
-drop view if exists invoice_status_v;
+-- `cascade`, on every view drop in this repo. A later migration builds views on
+-- top of this one (job_profit_v and company_overview_v read job_value_v and
+-- invoice_status_v), and Postgres refuses to drop a view something depends on.
+-- Without cascade, re-running this file on an up-to-date database aborts — and
+-- DEPLOY.md's instruction is to run the whole list in order, so an abort here
+-- means every migration after it silently never runs. That exact failure has
+-- now happened twice. The dependants are recreated by the later file, which
+-- always runs after this one; the run is only ever safe as a complete run,
+-- which is what the runbook has said all along.
+drop view if exists invoice_status_v cascade;
 create view invoice_status_v as
   select i.*,
          (i.status = 'sent' and i.due_on is not null and i.due_on < current_date) as overdue,

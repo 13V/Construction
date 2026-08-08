@@ -165,7 +165,16 @@ comment on column job_sites.contract_value is
 -- Both GST bases are carried because both are needed and neither can be
 -- inferred later: ex GST is what the business earns and what margin is measured
 -- on, inc GST is what the builder actually owes and what invoices.amount holds.
-drop view if exists job_value_v;
+-- `cascade`, on every view drop in this repo. A later migration builds views on
+-- top of this one (job_profit_v and company_overview_v read job_value_v and
+-- invoice_status_v), and Postgres refuses to drop a view something depends on.
+-- Without cascade, re-running this file on an up-to-date database aborts — and
+-- DEPLOY.md's instruction is to run the whole list in order, so an abort here
+-- means every migration after it silently never runs. That exact failure has
+-- now happened twice. The dependants are recreated by the later file, which
+-- always runs after this one; the run is only ever safe as a complete run,
+-- which is what the runbook has said all along.
+drop view if exists job_value_v cascade;
 create view job_value_v with (security_invoker = on) as
 with variation_totals as (
   select co.site_id,
