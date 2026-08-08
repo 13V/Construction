@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   supabase,
   type ChangeOrderRow,
+  type ContractRow,
   type EstimateLineRow,
   type EstimateRow,
   type ExpenseRow,
@@ -12,6 +13,8 @@ import {
   type PurchaseOrderRow,
   type WorkerRow,
 } from '../data/supabase'
+import { invoicePdf, type CompanyDetails } from '../data/documents'
+import { downloadPdf } from '../data/pdf'
 import { costCodes } from '../data/seed'
 import { money, money2 } from '../format'
 import { theme } from '../theme'
@@ -663,6 +666,47 @@ export function Invoices({
   /** `invoices.amount` is GST inclusive and has been since schema_v4. */
   const claimTotal = round2(claimNet + claimGst)
 
+  /**
+   * The claim as a document. The company's own details come from `companies`
+   * rather than being baked in — an invoice carries the supplier's ABN and
+   * licence, and both are per-company facts the settings form owns.
+   */
+  async function downloadInvoice(inv: InvoiceRow) {
+    setBusy(true)
+    const c = supabase()
+    const [{ data: company }, { data: contract }, { data: builder }, { data: vo }] = await Promise.all([
+      c.from('companies').select('*').eq('id', me.company_id).maybeSingle(),
+      inv.contract_id
+        ? c.from('contracts').select('*').eq('id', inv.contract_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      inv.builder_id
+        ? c.from('builders').select('name, abn').eq('id', inv.builder_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      inv.variation_id
+        ? c.from('change_orders').select('*').eq('id', inv.variation_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+    setBusy(false)
+    if (!company) {
+      setError('Could not read the company details the invoice needs.')
+      return
+    }
+    const b = builder as { name: string; abn: string | null } | null
+    downloadPdf(
+      invoicePdf({
+        company: company as CompanyDetails,
+        invoice: inv,
+        lines: lines.filter((l) => l.invoice_id === inv.id),
+        contract: (contract as ContractRow | null) ?? null,
+        siteName: siteName(inv.site_id),
+        builderName: b?.name ?? null,
+        builderAbn: b?.abn ?? null,
+        variation: (vo as ChangeOrderRow | null) ?? null,
+      }),
+      `${inv.invoice_no}.pdf`,
+    )
+  }
+
   const saveClaim = async () => {
     if (!form || !canEdit || busy) return
     const usable = form.lines.filter((l) => l.description.trim() || Number(l.amount) > 0)
@@ -1058,6 +1102,9 @@ export function Invoices({
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                <button onClick={() => void downloadInvoice(open)} disabled={busy} style={ghost} title="A compliant Australian tax invoice, generated here — no service, no upload">
+                  PDF
+                </button>
                 {canEdit && open.status === 'draft' && (
                   <>
                     <button onClick={() => setConfirm({ inv: open, action: 'delete' })} style={ghost}>

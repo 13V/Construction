@@ -8,6 +8,7 @@ import {
   type WorkerRow,
 } from '../data/supabase'
 import { theme } from '../theme'
+import { CrewsPanel } from './CrewsPanel'
 import { money2, shortDate } from '../format'
 import type { JobSite, Worker } from '../types'
 
@@ -112,9 +113,34 @@ const STATUS_META: Record<StatusKey, Meta> = {
 interface AdminFields {
   authUserId: string | null
   isOffice: boolean
+  role: WorkerRow['role']
   createdAt: string | null
 }
-const DEFAULT_ADMIN: AdminFields = { authUserId: null, isOffice: false, createdAt: null }
+const DEFAULT_ADMIN: AdminFields = { authUserId: null, isOffice: false, role: 'employee', createdAt: null }
+
+/**
+ * The three tiers, in the words the client used. `is_office` is still what
+ * every money policy reads, and the database keeps the two in step by trigger
+ * (schema_v18) — so this screen writes the role and never the boolean.
+ */
+const ROLES: Array<{ key: WorkerRow['role']; label: string; blurb: string }> = [
+  {
+    key: 'employee',
+    label: 'Employee',
+    blurb: 'Their own hours, the jobs they are rostered on, photos and safety. Nothing else.',
+  },
+  {
+    key: 'captain',
+    label: 'Crew captain',
+    blurb:
+      'Everything an employee has, plus the jobs they run: variations, materials, the daily log, and approving their crew’s timesheets. No pay rates, no invoices, no contract sums — on any job.',
+  },
+  {
+    key: 'owner',
+    label: 'Owner',
+    blurb: 'The whole company, including every pay rate, invoice, contract and margin.',
+  },
+]
 
 interface CrewRow extends Worker, AdminFields {}
 
@@ -171,7 +197,7 @@ interface SignoffDay {
 
 // ------------------------------------------------------------------ forms
 
-const blankMember = { name: '', trade: '', rate: '', email: '', isOffice: false }
+const blankMember = { name: '', trade: '', rate: '', email: '', role: 'employee' as WorkerRow['role'] }
 type MemberForm = typeof blankMember
 
 const blankCert = { name: '', expiresOn: '' }
@@ -190,7 +216,9 @@ export function Crew({ me, sites, workers, onChanged }: {
   const [statusFilter, setStatusFilter] = useState<'all' | 'on_clock' | 'off' | 'exception'>('all')
   const [tradeFilter, setTradeFilter] = useState('')
 
-  const [adminRows, setAdminRows] = useState<Array<{ id: string; auth_user_id: string | null; is_office: boolean; created_at: string }>>([])
+  const [adminRows, setAdminRows] = useState<
+    Array<{ id: string; auth_user_id: string | null; is_office: boolean; role: WorkerRow['role']; created_at: string }>
+  >([])
   const [certs, setCerts] = useState<CertificationRow[]>([])
   const [corrections, setCorrections] = useState<ShiftCorrectionRow[]>([])
   const [timeOff, setTimeOff] = useState<TimeOffRow[]>([])
@@ -232,7 +260,7 @@ export function Crew({ me, sites, workers, onChanged }: {
     const [admin, certRes, rangeRes, openRes, corrRes, leaveRes] = await Promise.all([
       client
         .from('workers')
-        .select('id, auth_user_id, is_office, created_at')
+        .select('id, auth_user_id, is_office, role, created_at')
         .eq('company_id', me.company_id)
         .eq('active', true),
       client.from('certifications').select('*').order('expires_on', { ascending: true }),
@@ -272,7 +300,10 @@ export function Crew({ me, sites, workers, onChanged }: {
   const adminById = useMemo(
     () =>
       new Map(
-        adminRows.map((r) => [r.id, { authUserId: r.auth_user_id, isOffice: r.is_office, createdAt: r.created_at }]),
+        adminRows.map((r) => [
+          r.id,
+          { authUserId: r.auth_user_id, isOffice: r.is_office, role: r.role, createdAt: r.created_at },
+        ]),
       ),
     [adminRows],
   )
@@ -434,7 +465,9 @@ export function Crew({ me, sites, workers, onChanged }: {
         trade: memberForm.trade.trim() || 'Crew',
         rate: Number(memberForm.rate) || 0,
         invite_email: memberForm.email.trim().toLowerCase() || null,
-        is_office: memberForm.isOffice,
+        // The role is written, never is_office: the trigger derives the
+        // boolean from it, and writing both invites them to disagree.
+        role: memberForm.role,
         // RLS additionally checks this matches the caller's own company.
         company_id: me.company_id,
       })
@@ -444,6 +477,18 @@ export function Crew({ me, sites, workers, onChanged }: {
       return
     }
     setMemberForm(null)
+    await load()
+    onChanged()
+  }
+
+  async function setRole(id: string, role: WorkerRow['role']) {
+    setMemberBusy(true)
+    const { error: err } = await supabase().from('workers').update({ role }).eq('id', id)
+    setMemberBusy(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
     await load()
     onChanged()
   }
@@ -547,7 +592,7 @@ export function Crew({ me, sites, workers, onChanged }: {
       const fields = [
         row.name,
         row.trade,
-        row.isOffice ? 'Office' : 'Field',
+        ROLES.find((r) => r.key === row.role)?.label ?? 'Employee',
         canSeeRate(row) ? money2(Number(row.rate)) : '—',
         st.label,
         certLabels,
@@ -621,6 +666,10 @@ export function Crew({ me, sites, workers, onChanged }: {
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: '20px 22px 44px' }}>
+          {/* Crews sit above the roster: who works together is the thing the
+              office schedules with, and the roster below is the consequence. */}
+          <CrewsPanel me={me} workers={workers} onChanged={onChanged} />
+
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'flex-start' }}>
             <div style={{ flex: '1 1 620px', minWidth: 460, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={detailCard}>
@@ -878,14 +927,35 @@ export function Crew({ me, sites, workers, onChanged }: {
                   <FormField label="Hourly rate" value={memberForm.rate} onChange={(v) => setMemberForm({ ...memberForm, rate: v })} placeholder="54" width={110} />
                   <FormField label="Email to invite" value={memberForm.email} onChange={(v) => setMemberForm({ ...memberForm, email: v })} placeholder="danny@example.com" width={230} />
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 12, fontSize: 12.5 }}>
-                  <input
-                    type="checkbox"
-                    checked={memberForm.isOffice}
-                    onChange={(e) => setMemberForm({ ...memberForm, isOffice: e.target.checked })}
-                  />
-                  Office access — can see the whole crew's location and approve timesheets
-                </label>
+                <div style={{ marginTop: 12 }}>
+                  <span style={{ display: 'block', fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#8B9096' }}>
+                    What they can see
+                  </span>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                    {ROLES.map((r) => (
+                      <button
+                        key={r.key}
+                        type="button"
+                        onClick={() => setMemberForm({ ...memberForm, role: r.key })}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: 15,
+                          border: `1px solid ${memberForm.role === r.key ? '#1A1D21' : '#DCE0E6'}`,
+                          background: memberForm.role === r.key ? '#1A1D21' : '#fff',
+                          color: memberForm.role === r.key ? '#fff' : '#1A1D21',
+                          font: 'inherit',
+                          fontSize: 12.5,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 11.5, color: '#8B9096', lineHeight: 1.5, margin: '8px 0 0' }}>
+                    {ROLES.find((r) => r.key === memberForm.role)?.blurb}
+                  </p>
+                </div>
                 <p style={{ fontSize: 11.5, color: '#8B9096', lineHeight: 1.5, margin: '10px 0 0' }}>
                   They sign up at <code>/worker</code> with that email address and their account links to this record
                   automatically — no invite token to send or expire.
@@ -1045,11 +1115,39 @@ export function Crew({ me, sites, workers, onChanged }: {
                       </span>
                     </div>
                     {canEdit && selected.id !== me.id && (
-                      <button onClick={() => void deactivate(selected.id)} disabled={memberBusy} style={ghost}>
-                        Deactivate
-                      </button>
+                      <>
+                        {/*
+                          Changing a role changes what this person can see the
+                          moment it saves — RLS reads it directly. Only shown to
+                          an owner, and never for themselves: an owner who
+                          demotes their own account locks themselves out of the
+                          screen they would need to undo it.
+                        */}
+                        <select
+                          value={selected.role}
+                          disabled={memberBusy}
+                          onChange={(e) => void setRole(selected.id, e.target.value as WorkerRow['role'])}
+                          style={{ ...ghost, height: 30, padding: '0 8px' }}
+                          title={ROLES.find((r) => r.key === selected.role)?.blurb}
+                        >
+                          {ROLES.map((r) => (
+                            <option key={r.key} value={r.key}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button onClick={() => void deactivate(selected.id)} disabled={memberBusy} style={ghost}>
+                          Deactivate
+                        </button>
+                      </>
                     )}
                   </div>
+
+                  {canEdit && (
+                    <div style={{ padding: '9px 14px', background: '#FAFBFC', borderBottom: '1px solid #DCE0E6', fontSize: 11.5, lineHeight: 1.5, color: '#696D74' }}>
+                      {ROLES.find((r) => r.key === selected.role)?.blurb}
+                    </div>
+                  )}
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, background: '#DCE0E6' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '11px 13px', background: '#fff' }}>

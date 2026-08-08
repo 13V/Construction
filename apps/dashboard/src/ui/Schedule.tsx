@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { supabase, type AssignmentRow, type WorkerRow } from '../data/supabase'
+import {
+  supabase,
+  type AssignmentRow,
+  type CrewMemberRow,
+  type CrewRow,
+  type WorkerRow,
+} from '../data/supabase'
 import { theme } from '../theme'
 import { money } from '../format'
 import type { JobSite, Worker } from '../types'
@@ -74,6 +80,15 @@ function hoursColor(hrs: number): string {
   return theme.ink
 }
 
+/** Booking a whole crew onto one day, rather than one person at a time. */
+interface CrewBooking {
+  crewId: string
+  day: Date
+  siteId: string
+  start: string
+  end: string
+}
+
 interface EditState {
   workerId: string
   day: Date
@@ -112,6 +127,12 @@ export function Schedule({
   const [siteFilter, setSiteFilter] = useState('')
   const [tradeFilter, setTradeFilter] = useState('')
 
+  // Crews, for booking a whole one at once. Loaded here rather than threaded
+  // down: the roster grid is per worker and stays that way.
+  const [crews, setCrews] = useState<CrewRow[]>([])
+  const [crewMembers, setCrewMembers] = useState<CrewMemberRow[]>([])
+  const [crewBooking, setCrewBooking] = useState<CrewBooking | null>(null)
+
   const weekStart = useMemo(() => addDays(startOfWeek(new Date()), weekOffset * 7), [weekOffset])
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
 
@@ -136,6 +157,85 @@ export function Schedule({
     setEdit(null) // the open editor would otherwise point at a day from the week we just left
     void load()
   }, [load])
+
+  useEffect(() => {
+    void (async () => {
+      const c = supabase()
+      const [cr, cm] = await Promise.all([
+        c.from('crews').select('*').eq('active', true).order('name'),
+        c.from('crew_members').select('*'),
+      ])
+      setCrews((cr.data ?? []) as CrewRow[])
+      setCrewMembers((cm.data ?? []) as CrewMemberRow[])
+    })()
+  }, [])
+
+  /**
+   * Book a whole crew: one assignment per member, all sharing the crew_id that
+   * made them. The geofence, the roster and the notifications are all per
+   * worker and none of them needs to know a crew exists — but the shared id is
+   * what lets the block be pulled off the job again as one thing.
+   *
+   * Anyone already booked on that day is skipped rather than double-booked:
+   * schema_v8's exclusion constraint would reject the whole batch otherwise,
+   * and one person having a dentist appointment is not a reason the other four
+   * cannot be rostered.
+   */
+  async function bookCrew() {
+    if (!crewBooking) return
+    const { crewId, day, siteId, start, end } = crewBooking
+    if (!siteId) {
+      setError('Pick a job site.')
+      return
+    }
+    const starts_at = timeToIso(day, start)
+    const ends_at = timeToIso(day, end)
+    if (ends_at <= starts_at) {
+      setError('End time has to be after the start time.')
+      return
+    }
+
+    const memberIds = crewMembers.filter((m) => m.crew_id === crewId).map((m) => m.worker_id)
+    if (memberIds.length === 0) {
+      setError('That crew has nobody in it yet — add people to it on the Crew screen.')
+      return
+    }
+    const dayKey = day.toDateString()
+    const alreadyOn = new Set(
+      assignments.filter((a) => new Date(a.starts_at).toDateString() === dayKey).map((a) => a.worker_id),
+    )
+    const toBook = memberIds.filter((id) => !alreadyOn.has(id))
+    if (toBook.length === 0) {
+      setError('Everyone in that crew is already booked that day.')
+      return
+    }
+
+    setBusy(true)
+    setError(null)
+    const { error: err } = await supabase().from('assignments').insert(
+      toBook.map((worker_id) => ({
+        company_id: me.company_id,
+        worker_id,
+        site_id: siteId,
+        crew_id: crewId,
+        starts_at,
+        ends_at,
+        published: false,
+      })),
+    )
+    setBusy(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    const skipped = memberIds.length - toBook.length
+    if (skipped > 0) {
+      setError(`Booked ${toBook.length}. ${skipped} already had something on that day and were left alone.`)
+    }
+    setCrewBooking(null)
+    await load()
+    onChanged()
+  }
 
   function openNew(workerId: string, day: Date) {
     if (!canEdit) return
@@ -387,6 +487,32 @@ export function Schedule({
           options={[{ value: '', label: 'All trades' }, ...trades.map((t) => ({ value: t, label: t }))]}
         />
 
+        {canEdit && crews.length > 0 && (
+          <button
+            onClick={() =>
+              setCrewBooking({
+                crewId: crews[0].id,
+                day: days[0],
+                siteId: siteFilter || sites[0]?.id || '',
+                start: '07:00',
+                end: '15:00',
+              })
+            }
+            style={{
+              flex: 'none',
+              padding: '6px 12px',
+              borderRadius: 4,
+              border: `1px solid ${theme.border}`,
+              background: theme.panel,
+              font: 'inherit',
+              fontSize: 12.5,
+              cursor: 'pointer',
+            }}
+          >
+            Book a crew
+          </button>
+        )}
+
         <div style={{ flex: 1 }} />
 
         {canEdit && (
@@ -402,6 +528,82 @@ export function Schedule({
         {error && (
           <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 4, background: '#FCE9EB', color: theme.alert, fontSize: 12.5 }}>
             {error}
+          </div>
+        )}
+
+        {crewBooking && (
+          <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: 8, padding: 14, marginBottom: 12 }}>
+            <div style={{ fontSize: 11.5, color: '#8B9096', marginBottom: 8 }}>
+              Books everyone in the crew in one go. Anyone already on that day keeps what they have.
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <label style={fieldLabelStyle}>
+                Crew
+                <select
+                  value={crewBooking.crewId}
+                  onChange={(e) => setCrewBooking({ ...crewBooking, crewId: e.target.value })}
+                  style={fieldStyle}
+                >
+                  {crews.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({crewMembers.filter((m) => m.crew_id === c.id).length})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={fieldLabelStyle}>
+                Day
+                <select
+                  value={crewBooking.day.toISOString()}
+                  onChange={(e) => setCrewBooking({ ...crewBooking, day: new Date(e.target.value) })}
+                  style={fieldStyle}
+                >
+                  {days.map((d) => (
+                    <option key={d.toISOString()} value={d.toISOString()}>
+                      {d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={fieldLabelStyle}>
+                Job site
+                <select
+                  value={crewBooking.siteId}
+                  onChange={(e) => setCrewBooking({ ...crewBooking, siteId: e.target.value })}
+                  style={fieldStyle}
+                >
+                  {sites.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={fieldLabelStyle}>
+                Start
+                <input
+                  type="time"
+                  value={crewBooking.start}
+                  onChange={(e) => setCrewBooking({ ...crewBooking, start: e.target.value })}
+                  style={fieldStyle}
+                />
+              </label>
+              <label style={fieldLabelStyle}>
+                End
+                <input
+                  type="time"
+                  value={crewBooking.end}
+                  onChange={(e) => setCrewBooking({ ...crewBooking, end: e.target.value })}
+                  style={fieldStyle}
+                />
+              </label>
+              <button onClick={() => void bookCrew()} disabled={busy} style={ctaStyle}>
+                {busy ? 'BOOKING…' : 'BOOK THE CREW'}
+              </button>
+              <button onClick={() => setCrewBooking(null)} style={ghostStyle}>
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 

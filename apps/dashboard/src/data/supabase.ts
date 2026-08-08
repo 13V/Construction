@@ -308,6 +308,13 @@ export interface InvoiceRow {
   retention_pct: number
   retention_amount: number
   builder_id: string | null
+  /** Stamped at issue, because a company can re-register or change details. */
+  supplier_abn: string | null
+  builder_abn: string | null
+  /** The builder's own job or lot number. Their accounts team searches on this. */
+  builder_job_ref: string | null
+  /** An RCTI is raised by the recipient; the document says so on its face. */
+  is_rcti: boolean
   /** The contract this claim is made against (schema_v17). */
   contract_id: string | null
   /** Set when the claim is for one specific variation rather than the base contract. */

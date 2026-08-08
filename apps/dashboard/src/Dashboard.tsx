@@ -39,6 +39,7 @@ const PurchaseOrders = lazyScreen(() => import('./ui/PurchaseOrders'), 'Purchase
 const Invoices = lazyScreen(() => import('./ui/Invoices'), 'Invoices')
 const ChangeOrders = lazyScreen(() => import('./ui/ChangeOrders'), 'ChangeOrders')
 const Safety = lazyScreen(() => import('./ui/Safety'), 'Safety')
+const Overview = lazyScreen(() => import('./ui/Overview'), 'Overview')
 const Portals = lazyScreen(() => import('./ui/Portals'), 'Portals')
 
 /** Every feature screen takes the same props, so adding one is a single entry. */
@@ -62,6 +63,7 @@ const SCREENS: Partial<Record<NavItem, ComponentType<FeatureProps>>> = {
   'Purchase Orders': PurchaseOrders,
   Invoices,
   Variations: ChangeOrders,
+  Overview,
   Safety,
   Portals,
 }

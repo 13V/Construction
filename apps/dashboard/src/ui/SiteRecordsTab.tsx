@@ -8,6 +8,8 @@ import {
   type WaterproofingRow,
   type WorkerRow,
 } from '../data/supabase'
+import { waterproofingPdf, type CompanyDetails } from '../data/documents'
+import { downloadPdf } from '../data/pdf'
 import { fullDate, money2 } from '../format'
 import { theme } from '../theme'
 import type { JobSite } from '../types'
@@ -169,6 +171,38 @@ export function SiteRecordsTab({
     onChanged()
   }
 
+  /**
+   * The certificate, generated from the record rather than typed. Everything on
+   * it — batch, coats, flood test, who signed and when — is a fact captured
+   * before the membrane was covered, which is the only reason the record exists.
+   */
+  async function certificate(w: WaterproofingRow) {
+    setBusy(true)
+    const c = supabase()
+    const [{ data: company }, { count }, { data: siteRow }] = await Promise.all([
+      c.from('companies').select('*').eq('id', me.company_id).maybeSingle(),
+      c.from('waterproofing_photos').select('id', { count: 'exact', head: true }).eq('waterproofing_id', w.id),
+      c.from('job_sites').select('address, client_name').eq('id', siteId).maybeSingle(),
+    ])
+    setBusy(false)
+    if (!company) {
+      setError('Could not read the company details the certificate needs.')
+      return
+    }
+    const sr = siteRow as { address: string | null; client_name: string | null } | null
+    downloadPdf(
+      waterproofingPdf({
+        company: company as CompanyDetails,
+        record: w,
+        siteName: site.name,
+        siteAddress: sr?.address ?? null,
+        builderName: sr?.client_name ?? null,
+        photoCount: count ?? 0,
+      }),
+      `${w.certificate_no ?? 'waterproofing'}-${w.area}.pdf`,
+    )
+  }
+
   const openDefects = defects.filter((d) => d.status === 'open' || d.status === 'in_progress')
   const openInstructions = instructions.filter((i) => i.status === 'open')
   const unsignedWet = wet.filter((w) => w.status !== 'signed_off')
@@ -250,6 +284,7 @@ export function SiteRecordsTab({
           onCancel={() => setAdding(false)}
           onCreate={(v) => write('waterproofing', { ...v, created_by: me.id })}
           onPatch={(id, v) => patch('waterproofing', id, v)}
+          onCertificate={(w) => void certificate(w)}
           meId={me.id}
         />
       )}
@@ -796,6 +831,7 @@ function Waterproofing({
   onCancel,
   onCreate,
   onPatch,
+  onCertificate,
 }: {
   rows: WaterproofingRow[]
   canEdit: boolean
@@ -806,6 +842,7 @@ function Waterproofing({
   onCancel: () => void
   onCreate: (v: Record<string, unknown>) => Promise<boolean>
   onPatch: (id: string, v: Record<string, unknown>) => void
+  onCertificate: (w: WaterproofingRow) => void
 }) {
   const [area, setArea] = useState('')
   const [product, setProduct] = useState('')
@@ -984,6 +1021,16 @@ function Waterproofing({
                       Bond breaker
                     </label>
                     <span style={{ flex: 1 }} />
+                    {w.status === 'signed_off' && (
+                      <button
+                        onClick={() => void onCertificate(w)}
+                        disabled={busy}
+                        style={ghostStyle}
+                        title="The document the builder puts in their handover file"
+                      >
+                        Certificate
+                      </button>
+                    )}
                     {w.status !== 'signed_off' ? (
                       <button
                         disabled={busy}

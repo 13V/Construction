@@ -51,7 +51,19 @@ Create a project, then run these in the SQL editor, in order:
     **This one has to land before the app deploy**, not after: the claim form
     now writes `tax_amount`, `contract_id` and `variation_id`, and against a
     database without them every invoice save fails with `PGRST204`
-18. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+18. `supabase/schema_v18.sql` — **run this one.** The third role. There were two
+    tiers expressed as one boolean, so the only way to let a leading hand run a
+    job was to make them office — which handed them every pay rate and contract
+    sum in the business. Adds `crews` with it
+19. `supabase/schema_v19.sql` — site instructions, defects, progress and
+    waterproofing (AS 3740, with the sign-off stamped from identity rather than
+    taken from the form)
+20. `supabase/schema_v20.sql` — job cost and profitability. Cost moves out of
+    TypeScript, where it existed in two copies, and picks up sublet labour,
+    which no roll-up had ever counted
+21. `supabase/schema_v21.sql` — the builder's programme, its revisions, and
+    whether a job is actually ready for us
+22. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
 
 > **Run them in order, and never re-run one on its own.** Later files
 > deliberately tighten what earlier files created — `schema_v14` narrows read
@@ -69,7 +81,7 @@ applies — twice:
 scripts/schema-check.sh        # needs postgresql-16+, no credentials
 ```
 
-It spins up a throwaway local Postgres, applies all 18 files three times over,
+It spins up a throwaway local Postgres, applies all 22 files three times over,
 and runs the behaviour tests in `supabase/tests/`. Three passes rather than one
 because "safe to re-run" has been false twice: `create or replace view` cannot
 rename a column (`schema_v4`, 42P16) and a bare `alter publication … add table`

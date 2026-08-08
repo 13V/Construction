@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type ChangeOrderLineRow, type ChangeOrderRow, type WorkerRow } from '../data/supabase'
+import { variationPdf, type CompanyDetails } from '../data/documents'
+import { downloadPdf } from '../data/pdf'
 import { costCodes } from '../data/seed'
 import { money, money2 } from '../format'
 import { theme } from '../theme'
@@ -444,6 +446,40 @@ export function ChangeOrders({
     }
     return { approved, pending, rejected }
   }, [rows])
+
+  /**
+   * The variation as a document the builder can sign. An unapproved one prints
+   * with a signature block and the line about not proceeding; an approved one
+   * prints who signed it, when, and the date it joined the contract sum.
+   */
+  async function downloadVariation(co: ChangeOrderRow) {
+    setActionBusy(true)
+    const c = supabase()
+    const [{ data: company }, { data: lineRows }] = await Promise.all([
+      c.from('companies').select('*').eq('id', me.company_id).maybeSingle(),
+      c.from('change_order_lines').select('*').eq('change_order_id', co.id).order('sort'),
+    ])
+    setActionBusy(false)
+    if (!company) {
+      setActionError('Could not read the company details the document needs.')
+      return
+    }
+    let builderName: string | null = null
+    if (co.site_id) {
+      const { data: site } = await c.from('job_sites').select('client_name').eq('id', co.site_id).maybeSingle()
+      builderName = (site as { client_name: string | null } | null)?.client_name ?? null
+    }
+    downloadPdf(
+      variationPdf({
+        company: company as CompanyDetails,
+        variation: co,
+        lines: (lineRows ?? []) as ChangeOrderLineRow[],
+        siteName: siteName(co.site_id),
+        builderName,
+      }),
+      `${co.co_no}.pdf`,
+    )
+  }
 
   const selected = rows.find((r) => r.id === selectedId) ?? null
   const selectedLines = selectedId ? lineCache.get(selectedId) ?? [] : []
@@ -1014,8 +1050,26 @@ export function ChangeOrders({
                   </span>
                   <StatusChip status={selected.status} />
                 </span>
-                <span style={{ fontSize: 12.5, color: theme.inkSoft }}>
-                  {siteName(selected.site_id)} · raised {listDate(selected.raised_on)}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 12.5, color: theme.inkSoft }}>
+                    {siteName(selected.site_id)} · raised {listDate(selected.raised_on)}
+                  </span>
+                  <button
+                    onClick={() => void downloadVariation(selected)}
+                    disabled={actionBusy}
+                    style={{
+                      padding: '5px 11px',
+                      borderRadius: 3,
+                      border: `1px solid ${theme.border}`,
+                      background: '#fff',
+                      font: 'inherit',
+                      fontSize: 11.5,
+                      cursor: 'pointer',
+                    }}
+                    title="An unapproved variation prints with a signature block; an approved one prints who signed it and when"
+                  >
+                    PDF
+                  </button>
                 </span>
               </div>
 
