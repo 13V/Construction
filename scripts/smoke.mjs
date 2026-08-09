@@ -362,10 +362,16 @@ try {
   await boss.patch('change_orders', `id=eq.${voId}`, { status: 'approved' })
 
   // A claim lands on the contract, and only a SENT claim counts as claimed.
-  await boss.post('invoices', [
+  //
+  // Both rows carry the SAME keys. PostgREST rejects a bulk insert whose
+  // objects differ in shape with PGRST102 — it builds one statement with one
+  // column list — and the whole batch fails, which reads downstream as the
+  // view being wrong rather than the insert never happening.
+  const claims = await boss.post('invoices', [
     { company_id: companyId, site_id: csite.id, contract_id: contract.id, invoice_no: `C1-${stamp}`, amount: 44000, tax_amount: 4000, retention_pct: 5, retention_amount: 2000, status: 'sent' },
-    { company_id: companyId, site_id: csite.id, contract_id: contract.id, invoice_no: `C2-${stamp}`, amount: 99000, tax_amount: 9000, status: 'draft' },
+    { company_id: companyId, site_id: csite.id, contract_id: contract.id, invoice_no: `C2-${stamp}`, amount: 99000, tax_amount: 9000, retention_pct: 0, retention_amount: 0, status: 'draft' },
   ])
+  ok('both claims were actually raised', claims.ok, `HTTP ${claims.status}`)
   value = await jv()
   ok('a draft claim is not a claim',
     Number(value.claimed_inc) === 44000 && Number(value.draft_invoice_count) === 1,
