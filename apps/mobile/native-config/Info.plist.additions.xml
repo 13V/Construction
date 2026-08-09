@@ -1,16 +1,23 @@
 <!--
-  Merge into ios/App/App/Info.plist after `npx cap add ios`.
+  Merge into ios/App/App/Info.plist after `npx cap add ios`. Keep this file and
+  the checked-in Info.plist in sync — this is the template a regenerated
+  project is rebuilt from, so a fix made only in one silently reverts the next
+  time someone runs `cap add ios`.
 
   iOS shows these strings verbatim in the permission prompt, so they are
   written for the person holding the phone, not for the App Store reviewer.
   "Always" is what keeps the clock honest when the screen is off; without it
-  iOS only reports while the app is open.
+  iOS only reports while the app is open. The "Always" string says tracking is
+  continuous once switched on, not just near a job site — it is, every fix
+  from the START TRACKING tap onward is recorded, on the drive to site and
+  back included, so the description has to say that rather than imply the
+  opposite.
 -->
 <key>NSLocationWhenInUseUsageDescription</key>
-<string>Crewline uses your location to clock you in automatically when you arrive at a job site.</string>
+<string>Crewline clocks you in automatically when you arrive at a job site.</string>
 
 <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-<string>Crewline records your hours by noticing when you arrive at and leave a job site. Choosing "Always" means your hours keep recording with your phone in your pocket. Location is only used while you have tracking switched on.</string>
+<string>Crewline records your location continuously while tracking is switched on — not only near a job site — so your hours keep recording with your phone in your pocket. Choose "Always" so this keeps working with the screen off. Turn tracking off any time to stop.</string>
 
 <key>UIBackgroundModes</key>
 <array>
@@ -22,3 +29,19 @@
 
 <key>NSPhotoLibraryAddUsageDescription</key>
 <string>Save site photos you take in Crewline.</string>
+
+<!--
+  Every network call is HTTPS to Vercel and Supabase, and the only
+  cryptography beyond TLS is Supabase's own auth — both are Apple's "exempt"
+  standard encryption, and nothing here implements its own cipher. Without
+  this, App Store Connect asks on every single upload.
+-->
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>
+
+<!--
+  No UIRequiredDeviceCapabilities entry. "armv7" is a 32-bit-era flag that
+  blocks nothing on a modern install — every current device is arm64 — and is
+  actively wrong to declare on an arm64-only build: it asserts an instruction
+  set the binary does not contain.
+-->

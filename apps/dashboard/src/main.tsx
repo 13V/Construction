@@ -36,8 +36,25 @@ const isNativeShell = Boolean(
  */
 const workerOnlyBuild = import.meta.env.VITE_SURFACE === 'worker'
 
-const isWorker =
-  workerOnlyBuild || isNativeShell || window.location.pathname.replace(/\/+$/, '') === '/worker'
+const path = window.location.pathname.replace(/\/+$/, '')
+
+const isWorker = workerOnlyBuild || isNativeShell || path === '/worker'
+
+/**
+ * The privacy policy, before and outside everything else.
+ *
+ * Apple requires a privacy policy URL that is publicly reachable — a reviewer
+ * opens it in a browser with no account — so it cannot sit behind the auth
+ * gate inside either surface. Matching here means /privacy renders on its own,
+ * on the marketing domain and inside the phone app alike, with no session.
+ *
+ * It is deliberately NOT excluded from the worker build: the app links to it
+ * from the account sheet, and a link that only works when you have signal to
+ * reach the website is not much of a disclosure.
+ */
+const isPrivacy = path === '/privacy'
+
+const Privacy = lazy(() => import('./legal/Privacy.tsx').then((m) => ({ default: m.Privacy })))
 
 const WorkerApp = lazy(() => import('./worker/WorkerApp.tsx').then((m) => ({ default: m.WorkerApp })))
 
@@ -106,7 +123,9 @@ function ConfigError({ message }: { message: string }) {
 
 const configError = apiConfigError()
 
-const surface = configError ? (
+const surface = isPrivacy ? (
+  <Privacy />
+) : configError ? (
   <ConfigError message={configError} />
 ) : isWorker ? (
   <WorkerApp />

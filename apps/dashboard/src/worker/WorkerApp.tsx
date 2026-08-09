@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { AuthScreen } from '../auth/AuthScreen'
 import { useSession } from '../auth/useSession'
 import { api } from '../data/api'
+import { DeleteAccount } from './DeleteAccount'
 import { supabase, supabaseConfigured } from '../data/supabase'
 import type {
   AssignmentRow,
@@ -147,6 +148,14 @@ interface Celebration {
   at: number
   /** Metres inside the fence at clock-in, if a fix was available for that ping. */
   marginM: number | null
+  /**
+   * True when the worker tapped "Clock in manually" rather than the geofence
+   * noticing them. The screen says different things for each, and both used to
+   * get the automatic wording — which told a worker they "didn't have to do
+   * anything" immediately after they had, and claimed a two-minute settle that a
+   * manual clock-in deliberately skips.
+   */
+  manual: boolean
 }
 
 function Tracker({ me }: { me: WorkerRow }) {
@@ -210,7 +219,7 @@ function Tracker({ me }: { me: WorkerRow }) {
       const marginM = clockedSite
         ? Math.round(clockedSite.radiusM - distanceM({ lat: body.lat, lng: body.lng }, clockedSite))
         : null
-      setCelebration({ siteId: clockIn.siteId, at: clockIn.at, marginM })
+      setCelebration({ siteId: clockIn.siteId, at: clockIn.at, marginM, manual: body.manual === true })
     }
     // Returned so a deliberate tap (manual clock-in) can tell whether it
     // actually produced a clock-in or was refused, rather than guessing from
@@ -411,6 +420,7 @@ function Tracker({ me }: { me: WorkerRow }) {
               siteName={celebrationSite?.name ?? 'the site'}
               at={celebration.at}
               marginM={celebration.marginM}
+              manual={celebration.manual}
               onDismiss={() => setCelebration(null)}
               onFixPunch={() => {
                 setCelebration(null)
@@ -562,6 +572,12 @@ function ClockTabIcon({ color }: { color: string }) {
 // ================================================================== shared
 
 function AccountSheet({ me, onClose }: { me: WorkerRow; onClose: () => void }) {
+  // Apple 5.1.1(v): an app that lets you make an account has to let you delete
+  // it from inside the app. Reached from here rather than a settings screen
+  // this app does not have — and deliberately not adjacent to Sign out, which
+  // people tap without reading.
+  const [deleting, setDeleting] = useState(false)
+  if (deleting) return <DeleteAccount me={me} onClose={() => setDeleting(false)} />
   return (
     <div
       style={{
@@ -606,6 +622,22 @@ function AccountSheet({ me, onClose }: { me: WorkerRow; onClose: () => void }) {
         <button onClick={onClose} style={{ ...ctaGhost, marginTop: 10 }}>
           Close
         </button>
+        <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button
+            onClick={() => setDeleting(true)}
+            style={{ ...ctaGhost, color: theme.alert, borderColor: theme.border }}
+          >
+            Delete my account
+          </button>
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noreferrer"
+            style={{ fontSize: 12.5, color: design.faint, textAlign: 'center', textDecoration: 'underline' }}
+          >
+            What Crewline records about you
+          </a>
+        </div>
       </div>
     </div>
   )
@@ -1381,6 +1413,7 @@ function CelebrationScreen({
   siteName,
   at,
   marginM,
+  manual,
   onDismiss,
   onFixPunch,
 }: {
@@ -1388,6 +1421,7 @@ function CelebrationScreen({
   siteName: string
   at: number
   marginM: number | null
+  manual: boolean
   onDismiss: () => void
   onFixPunch: () => void
 }) {
@@ -1407,7 +1441,7 @@ function CelebrationScreen({
           </span>
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 13px', borderRadius: 13, background: 'rgba(255,255,255,.16)', fontSize: 13, fontWeight: 600 }}>
-          Automatic — you didn't have to do anything
+          {manual ? 'You clocked in yourself' : "Automatic — you didn't have to do anything"}
         </span>
       </div>
 
@@ -1427,13 +1461,20 @@ function CelebrationScreen({
             </svg>
           </div>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, justifyContent: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.07em', color: design.faint }}>ARRIVAL VERIFIED</span>
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.07em', color: design.faint }}>
+              {manual ? 'POSITION CHECKED' : 'ARRIVAL VERIFIED'}
+            </span>
             <span style={{ fontSize: 14, lineHeight: 1.4, color: design.mid }}>
               GPS put you{' '}
               <b style={{ fontWeight: 600, color: theme.ink }}>
                 {marginM != null && marginM >= 0 ? `${marginM} m inside` : 'inside'}
               </b>{' '}
-              the fence for {dwellMin} min before the clock started.
+              {/* A manual clock-in skips the settle window on purpose — the server
+                  opens the shift on the spot. Claiming the two minutes ran would be
+                  the same untruth this screen's copy was just corrected for. */}
+              {manual
+                ? 'the fence when you tapped, so the clock started there and then.'
+                : `the fence for ${dwellMin} min before the clock started.`}
             </span>
           </div>
         </div>

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Native shell for the Crewline worker app. Exists for one reason: background location.",
   "scripts": {
-    "build:web": "cd ../dashboard && VITE_SURFACE=worker npm run build",
+    "build:web": "cd ../dashboard && VITE_API_BASE=\"${VITE_API_BASE:-https://construction-opal-three.vercel.app}\" VITE_SURFACE=worker npm run build",
     "sync": "npm run build:web && cap sync",
     "android": "npm run sync && cap open android",
     "ios": "npm run sync && cap open ios",

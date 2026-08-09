@@ -63,7 +63,14 @@ Create a project, then run these in the SQL editor, in order:
     which no roll-up had ever counted
 21. `supabase/schema_v21.sql` — the builder's programme, its revisions, and
     whether a job is actually ready for us
-22. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+22. `supabase/schema_v22.sql` — deletes raw location pings after 3 days. The
+    breadcrumb trail existed forever; nothing in this repo had ever removed one.
+    Scheduled with pg_cron where it is available — read the file header for the
+    fallback, and check `select * from cron.job` after running it
+23. `supabase/schema_v23.sql` — in-app account deletion (App Store 5.1.1(v)).
+    Severs the login and removes location data while preserving the timesheets
+    the Fair Work Act requires an employer to keep for seven years
+24. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
 
 > **Run them in order, and never re-run one on its own.** Later files
 > deliberately tighten what earlier files created — `schema_v14` narrows read
@@ -81,7 +88,7 @@ applies — twice:
 scripts/schema-check.sh        # needs postgresql-16+, no credentials
 ```
 
-It spins up a throwaway local Postgres, applies all 22 files three times over,
+It spins up a throwaway local Postgres, applies all 24 files three times over,
 and runs the behaviour tests in `supabase/tests/`. Three passes rather than one
 because "safe to re-run" has been false twice: `create or replace view` cannot
 rename a column (`schema_v4`, 42P16) and a bare `alter publication … add table`

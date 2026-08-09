@@ -47,10 +47,15 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>armv7</string>
-	</array>
+	<!-- No UIRequiredDeviceCapabilities entry: armv7 was a 32-bit-era flag that
+	     blocks nothing on a modern install (every current device is arm64) and
+	     App Store Connect has rejected 32-bit-only binaries for years, so the
+	     key is pure vestige, not a real requirement. Declaring "armv7" is
+	     actively wrong now — it advertises a 32-bit instruction set this
+	     arm64-only build does not contain, which is the kind of mismatch App
+	     Store static analysis flags. Omitting the key is correct: the App Store
+	     already enforces device compatibility from the build's own architecture
+	     and Deployment Info, so nothing here needs to assert it by hand. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -80,9 +85,17 @@
 	  "Always" is the one that matters. Without it iOS only reports while the
 	  app is open, which is the failure the native app exists to fix — a phone
 	  goes in a pocket and the worker stops being on the clock.
+
+	  The string used to say location was "only used while you have tracking
+	  switched on", true but read alongside the first sentence as "only near a
+	  job site" — it is not. Once tracking is on, every fix is recorded the
+	  whole time, on the drive to site and back, not only at arrival and
+	  departure. A vague description gets the permission declined by App
+	  Review, and an inaccurate one is worse: it is the sentence a worker reads
+	  before deciding whether to trust the app with their location.
 	-->
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Crewline records your hours by noticing when you arrive at and leave a job site. Choosing "Always" means your hours keep recording with your phone in your pocket. Your location is only used while you have tracking switched on.</string>
+	<string>Crewline records your location continuously while tracking is switched on — not only near a job site — so your hours keep recording with your phone in your pocket. Choose "Always" so this keeps working with the screen off. Turn tracking off any time to stop.</string>
 
 	<!-- Without the location background mode, iOS suspends the app and the
 	     fixes stop the moment the screen locks. -->
@@ -96,5 +109,16 @@
 
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save site photos you take in Crewline.</string>
+
+	<!--
+	  Every network call the app makes is HTTPS to Vercel and Supabase, and the
+	  only cryptography beyond TLS is Supabase's own auth (JWT session tokens
+	  over that same TLS connection) — both are the standard, OS-provided
+	  encryption Apple's export rules call "exempt", and nothing in this app
+	  implements or bundles its own cipher. Declaring the answer here is what
+	  stops App Store Connect asking on every single upload.
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

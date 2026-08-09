@@ -30,6 +30,11 @@ const MIGRATIONS = [
   { file: 'schema_v19.sql', proves: ['defects', 'site_instructions', 'progress_entries', 'waterproofing'] },
   { file: 'schema_v20.sql', proves: ['job_cost_v', 'job_profit_v', 'company_overview_v'] },
   { file: 'schema_v21.sql', proves: ['programmes', 'programme_tasks', 'site_programme_v'] },
+  // v22 and v23 add no tables — a retention function and a deletion RPC. Probing
+  // for a relation would never see them, so these are proved by the routines
+  // themselves; `proves` is matched against functions as well as relations.
+  { file: 'schema_v22.sql', proves: ['prune_positions'] },
+  { file: 'schema_v23.sql', proves: ['delete_worker_account'] },
 ]
 
 // ------------------------------------------------------------- credentials
@@ -105,7 +110,11 @@ try {
     (
       await sql(`select table_name as n from information_schema.tables where table_schema = 'public'
                  union all
-                 select table_name as n from information_schema.views where table_schema = 'public'`)
+                 select table_name as n from information_schema.views where table_schema = 'public'
+                 union all
+                 select p.proname as n from pg_proc p
+                   join pg_namespace ns on ns.oid = p.pronamespace
+                  where ns.nspname = 'public'`)
     ).map((r) => r.n),
   )
 
@@ -148,7 +157,11 @@ try {
     (
       await sql(`select table_name as n from information_schema.tables where table_schema = 'public'
                  union all
-                 select table_name as n from information_schema.views where table_schema = 'public'`)
+                 select table_name as n from information_schema.views where table_schema = 'public'
+                 union all
+                 select p.proname as n from pg_proc p
+                   join pg_namespace ns on ns.oid = p.pronamespace
+                  where ns.nspname = 'public'`)
     ).map((r) => r.n),
   )
   const missing = MIGRATIONS.flatMap((m) => m.proves).filter((t) => !after.has(t))

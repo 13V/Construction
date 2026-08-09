@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Apple requires this file, or App Store Connect rejects the build.
+
+  What is actually collected, and why each entry below is what it is:
+
+    - Precise location. The whole reason this app exists: the geofence engine
+      clocks a worker in and out by where they are, continuously while
+      tracking is on (see NSLocationAlwaysAndWhenInUseUsageDescription in
+      Info.plist and src/worker/location.ts). Linked to the worker's account
+      because a position with nobody attached cannot produce a timesheet.
+    - Photos. Site photos and receipt photos the worker takes or picks,
+      uploaded to Supabase Storage against their account and the job. Linked
+      for the same reason.
+    - User ID. The Supabase auth user id every write is attributed to — RLS is
+      keyed off it, so it is collected on every request, not stored
+      separately for any secondary purpose.
+
+  None of it feeds tracking as Apple defines the term: nothing here is used to
+  link the worker's activity to advertising, sold or shared with a data
+  broker, or joined with data from another company's app or site. There is no
+  ad SDK in this project and nothing in NSPrivacyTrackingDomains — Crewline
+  carries no ads. All three types exist solely for the app's own core
+  function: recording a worker's hours and site records for their employer.
+
+  NSPrivacyAccessedAPITypes is empty because it should be, not because it was
+  skipped: checked ios/Capacitor/PrivacyInfo.xcprivacy and
+  ios/CapacitorCordova/PrivacyInfo.xcprivacy in @capacitor/ios (both declare
+  no required-reason API usage), and grepped the Swift/Obj-C sources of
+  @capacitor-community/background-geolocation and @capacitor/app — neither
+  plugin has an xcprivacy of its own, and neither touches UserDefaults, file
+  timestamps, system boot time, or disk space, the four categories the
+  required-reason rule covers. The same grep against this app's own
+  AppDelegate.swift and SceneDelegate.swift came back empty too. If a future
+  dependency starts using one of those APIs, this array is where its reason
+  code has to be added — Apple's static analysis at upload catches the gap
+  either way, but better to be right before that stage.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePreciseLocation</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array/>
+</dict>
+</plist>
