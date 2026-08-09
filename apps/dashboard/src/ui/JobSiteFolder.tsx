@@ -63,15 +63,26 @@ const TAB_PAD = '16px 18px 40px'
 
 type TabKey = 'overview' | 'photos' | 'plans' | 'time' | 'budget' | 'contract' | 'records' | 'programme'
 
-// `officeOnly` is a display rule, not the security boundary: `contracts` and
-// job_value_v are office-gated in RLS (schema_v17), so a field worker who got
-// here would read nothing anyway. Hiding the tab just stops it looking broken.
+// `officeOnly` is a display rule, not the security boundary — for most of these.
+// `contracts` and job_value_v are office-gated in RLS (schema_v17), so a field
+// worker who got here would read nothing anyway and hiding the tab just stops it
+// looking broken.
+//
+// `budget` is the exception and it is doing real work: job_sites is readable by
+// the whole company (schema.sql), budget and contract_value are columns on it,
+// and RLS therefore empties nothing. Until those two columns move to a table of
+// their own, this flag is the only thing keeping them off a field worker's
+// screen — which makes it a boundary, not a display rule. Treat it accordingly.
 const TABS: Array<{ key: TabKey; label: string; officeOnly?: boolean }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'photos', label: 'Photos' },
   { key: 'plans', label: 'Plans' },
   { key: 'time', label: 'Time' },
-  { key: 'budget', label: 'Budget' },
+  // officeOnly, and it was not. The tab reads job_sites.budget and
+  // contract_value, and job_sites is company-wide readable by design — so
+  // unlike `contract` next to it, RLS does NOT empty this tab for a field
+  // worker. It rendered with real figures and no error.
+  { key: 'budget', label: 'Budget', officeOnly: true },
   { key: 'contract', label: 'Contract', officeOnly: true },
   // Not office-only. A defect is raised by whoever is standing in front of it,
   // and "are we on next Tuesday" is asked from a ute.
