@@ -1,0 +1,6 @@
+# Signing material produced by scripts/ios-signing.sh. The private key in here
+# is what somebody would need to sign software as you — it belongs in a password
+# manager, not in a repository.
+ios-signing/
+
+node_modules/

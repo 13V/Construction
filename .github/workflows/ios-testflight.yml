@@ -4,6 +4,18 @@ name: iOS → TestFlight
 # this app benefits from a build on every push — the web deploy is what changes
 # hourly, and it does not reach installed phones anyway because the assets are
 # bundled. Run this when you actually want a build in testers' hands.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# READ THIS BEFORE THE FIRST DISPATCH.
+#
+# The first successful upload permanently binds the bundle identifier
+# app.crewline.worker to whichever Apple team APPLE_TEAM_ID names. Apple will
+# not release a bundle ID once a build has been uploaded under it, deleting the
+# app record does not free it, and App Transfer to another team is unavailable
+# until the app has had at least one version publicly released on the App Store.
+# So the team this runs under is not a detail to fix later — see TESTFLIGHT.md,
+# "Who owns the app".
+# ─────────────────────────────────────────────────────────────────────────────
 on:
   workflow_dispatch:
     inputs:
@@ -11,10 +23,6 @@ on:
         description: 'Backend the app talks to (must be absolute — see src/data/api.ts)'
         required: true
         default: 'https://construction-opal-three.vercel.app'
-      notes:
-        description: "What testers should look at in this build"
-        required: false
-        default: 'Automatic clock-in when you arrive at a job site.'
 
 # One build at a time. Two concurrent runs would race for the same build number
 # and the second upload would be rejected as a duplicate.
@@ -24,7 +32,11 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    # macos-26, not macos-15. Since 28 April 2026 App Store Connect rejects any
+    # upload not built with Xcode 26 and an iOS 26 SDK, and macos-15's default
+    # Xcode is 16.4 — the archive would build cleanly and the upload would
+    # bounce with ITMS-90725 after twenty minutes of runner time.
+    runs-on: macos-26
     timeout-minutes: 60
 
     env:
@@ -39,9 +51,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pin the toolchain rather than trusting the image default. A runner image
+      # rollback shows up as a rejected upload three days later, which is a much
+      # worse way to find out than a red build now.
+      - name: Select and verify Xcode
+        run: |
+          set -euo pipefail
+          newest=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)
+          if [ -n "$newest" ]; then
+            sudo xcode-select -s "$newest"
+          fi
+          # Captured whole rather than piped through head: under `pipefail`,
+          # head closing the pipe early can hand xcodebuild a SIGPIPE and fail
+          # the step for no reason.
+          version=$(xcodebuild -version)
+          echo "$version"
+          major=$(printf '%s\n' "$version" | sed -n '1s/^Xcode \([0-9]*\).*/\1/p')
+          if [ -z "$major" ] || [ "$major" -lt 26 ]; then
+            echo "::error::Xcode $major is selected. App Store Connect has rejected uploads built with anything older than Xcode 26 since 28 April 2026."
+            exit 1
+          fi
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: |
             apps/dashboard/package-lock.json
@@ -68,57 +101,155 @@ jobs:
       # on a phone.
       - name: Verify the backend URL was baked in
         run: |
-          if ! grep -rq "${VITE_API_BASE}" apps/dashboard/dist/assets/*.js; then
+          if ! grep -rqF "${VITE_API_BASE}" apps/dashboard/dist/assets/*.js; then
             echo "::error::VITE_API_BASE (${VITE_API_BASE}) is not in the built bundle."
             exit 1
           fi
           echo "Backend URL present in the bundle."
 
+      # ios/App/App/public/ is gitignored, so the checkout has no web assets in
+      # the native project at all. Without this the archive succeeds and ships a
+      # white screen.
       - name: Copy web assets into the native project
         run: npx cap sync ios
         working-directory: apps/mobile
 
-      # Every upload needs a build number higher than the last one App Store
-      # Connect saw. The run number is monotonic per workflow and needs no human
-      # to remember, and no commit to bump a file.
-      - name: Set the build number
+      # ───────────────────────────────────────────────────────────────────────
+      # Signing is manual, and deliberately so.
+      #
+      # The tempting alternative is CODE_SIGN_STYLE=Automatic with
+      # -allowProvisioningUpdates and an App Store Connect API key, which does
+      # work — but it works by letting xcodebuild create identifiers, profiles
+      # and certificates in the Apple account as a side effect of a build. Two
+      # reasons not to want that here. The first upload decides who owns
+      # app.crewline.worker forever, so registering it should be a deliberate
+      # act in the portal, not a consequence of pressing "Run workflow". And
+      # every run lands on a fresh VM with an empty keychain, so anything
+      # machine-local that automatic signing mints gets minted again next run,
+      # against Apple's per-account certificate cap.
+      #
+      # Manual signing needs no network call to Apple during the archive at all.
+      # The API key below is used for one thing: authenticating the upload.
+      # ───────────────────────────────────────────────────────────────────────
+      - name: Import the signing identity into a throwaway keychain
+        env:
+          CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
         run: |
-          agvtool new-version -all ${{ github.run_number }}
-          echo "Build ${{ github.run_number }}"
-        working-directory: apps/mobile/ios/App
+          set -euo pipefail          # not set -x: that would echo the secrets
 
-      # An App Store Connect API key rather than a distribution certificate and
-      # provisioning profile in secrets: the key is one file, does not expire
-      # annually, and lets xcodebuild create and update the profile itself with
-      # -allowProvisioningUpdates. Certificates in CI are the thing that breaks
-      # twelve months later when nobody remembers how they got there.
+          # The keychain lives for one job, so its password is generated here
+          # rather than being one more secret for a human to invent and store.
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # Keep the login keychain in the search list so the Apple WWDR
+          # intermediate that ships with the image stays visible; without the
+          # intermediate the identity imports but is not valid for signing.
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+          echo -n "$CERT_P12_BASE64" | base64 --decode -o "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" \
+            -k "$KEYCHAIN" -P "$CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security -f pkcs12
+          rm -f "$RUNNER_TEMP/dist.p12"
+
+          # Without this, codesign blocks on a GUI "allow access" prompt that
+          # nobody is there to click and the job sits there until the timeout.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+
+          # Identity names only — no key material. Also the earliest point at
+          # which "you exported the wrong certificate" is visible.
+          security find-identity -v -p codesigning "$KEYCHAIN"
+          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -q "Apple Distribution"; then
+            echo "::error::No Apple Distribution identity in the keychain. IOS_DIST_CERT_P12_BASE64 is probably an Apple Development certificate — see TESTFLIGHT.md."
+            exit 1
+          fi
+
+      - name: Install the provisioning profile
+        env:
+          PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          echo -n "$PROFILE_BASE64" | base64 --decode -o "$RUNNER_TEMP/crewline.mobileprovision"
+          security cms -D -i "$RUNNER_TEMP/crewline.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+
+          UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/profile.plist")
+          NAME=$(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/profile.plist")
+          APPID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$RUNNER_TEMP/profile.plist")
+          EXPIRY=$(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' "$RUNNER_TEMP/profile.plist")
+          echo "Profile: $NAME ($UUID)"
+          echo "Covers:  $APPID"
+          echo "Expires: $EXPIRY"
+
+          # Catches the two ways this goes wrong — a profile for a different app
+          # and a development profile — in one second rather than twenty minutes
+          # into an archive.
+          case "$APPID" in
+            *.app.crewline.worker) ;;
+            *) echo "::error::Profile covers $APPID, not app.crewline.worker."; exit 1 ;;
+          esac
+          if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$RUNNER_TEMP/profile.plist" >/dev/null 2>&1; then
+            echo "::error::That is a development profile (it lists devices). TestFlight needs an App Store distribution profile."
+            exit 1
+          fi
+
+          # Xcode 16+ reads from UserData; older tooling and some Xcode paths
+          # still read the MobileDevice location. Both cost one copy.
+          for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" \
+                     "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$RUNNER_TEMP/crewline.mobileprovision" "$dir/$UUID.mobileprovision"
+          done
+
+          # The profile names itself, so there is no secret to keep in step with
+          # what was actually downloaded.
+          echo "PROFILE_NAME=$NAME" >> "$GITHUB_ENV"
+
       - name: Install the App Store Connect API key
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
-          mkdir -p ~/private_keys
-          echo "$PRIVATE_KEY" > ~/private_keys/AuthKey_${KEY_ID}.p8
-          chmod 600 ~/private_keys/AuthKey_${KEY_ID}.p8
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          printf '%s\n' "$PRIVATE_KEY" > "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8"
+          chmod 600 "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8"
 
+      # No agvtool. agvtool only drives projects whose VERSIONING_SYSTEM is
+      # "apple-generic", and this one never sets it — the call would either
+      # no-op or bake a literal into Info.plist. Info.plist already reads
+      # CFBundleVersion from $(CURRENT_PROJECT_VERSION), so overriding that one
+      # build setting on the command line is enough, and it mutates nothing on
+      # disk. github.run_number is monotonic per workflow file, which is exactly
+      # what App Store Connect demands of a build number.
       - name: Archive
         env:
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          set -euo pipefail
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           xcodebuild archive \
             -project App.xcodeproj \
             -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Crewline.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${KEY_ID}.p8 \
-            -authenticationKeyID "$KEY_ID" \
-            -authenticationKeyIssuerID "$ISSUER_ID" \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN"
         working-directory: apps/mobile/ios/App
 
       - name: Write ExportOptions
@@ -130,43 +261,82 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
+            <!-- "app-store" is the deprecated spelling. -->
             <key>method</key><string>app-store-connect</string>
             <key>teamID</key><string>${TEAM_ID}</string>
-            <!-- Upload straight from xcodebuild. altool's upload path still
-                 works but is the deprecated one, and this keeps the signing
-                 context that produced the archive. -->
+            <!-- Upload straight from xcodebuild, in the signing context that
+                 produced the archive. altool's upload path still works but is
+                 the deprecated one. -->
             <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>app.crewline.worker</key><string>${PROFILE_NAME}</string>
+            </dict>
             <key>uploadSymbols</key><true/>
+            <!-- Must stay false. True lets Xcode choose its own build number and
+                 silently discard the run number set during the archive. -->
             <key>manageAppVersionAndBuildNumber</key><false/>
           </dict>
           </plist>
           PLIST
+          cat "$RUNNER_TEMP/ExportOptions.plist"
 
       - name: Export and upload to TestFlight
         env:
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
+          set -euo pipefail
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Crewline.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${KEY_ID}.p8 \
+            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8" \
             -authenticationKeyID "$KEY_ID" \
             -authenticationKeyIssuerID "$ISSUER_ID"
 
-      # The key is a credential that can upload builds under this team. Leaving
-      # it on a runner that is about to be recycled is probably harmless; not
-      # leaving it costs one line.
-      - name: Remove the API key
-        if: always()
-        run: rm -rf ~/private_keys
+      - name: Where the build went
+        if: success()
+        run: |
+          {
+            echo "### Build ${{ github.run_number }} uploaded"
+            echo ""
+            echo "Processing in App Store Connect takes 5–30 minutes. Once it appears:"
+            echo ""
+            echo "- Add the **What to Test** note — TestFlight will not release the"
+            echo "  build to external testers without one, and nothing in this"
+            echo "  workflow can set it."
+            echo "- Internal testers (anyone with an App Store Connect account on"
+            echo "  the team) get it immediately, no beta review."
+            echo "- External testers wait on Beta App Review, and background"
+            echo "  location gets that read properly. Explain in the review notes"
+            echo "  that tracking is worker-initiated, for clock-in at the"
+            echo "  employer's own sites, with a persistent notification."
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Keep the archive for debugging
+      # The keychain holds a distribution private key and the profile is a
+      # credential of sorts too. The runner is about to be recycled, but not
+      # leaving them costs three lines.
+      - name: Destroy the keychain, the profile and the API key
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/private_keys" \
+                 "$RUNNER_TEMP/crewline.mobileprovision" \
+                 "$RUNNER_TEMP/profile.plist" \
+                 "$HOME/Library/MobileDevice/Provisioning Profiles" \
+                 "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+
+      # Deliberately not uploading the .xcarchive: it embeds the provisioning
+      # profile and a signed binary. The export logs say what failed.
+      - name: Keep the export logs for debugging
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: xcarchive
-          path: ${{ runner.temp }}/Crewline.xcarchive
+          name: export-logs
+          path: ${{ runner.temp }}/export/*.log
           retention-days: 5
+          if-no-files-found: ignore

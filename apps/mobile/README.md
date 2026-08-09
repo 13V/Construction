@@ -14,7 +14,7 @@ chat — is the same worker surface the web serves at `/worker`.
 | | |
 |---|---|
 | Android | **Builds.** `app-debug.apk`, 5.2 MB, produced and inspected. Not yet run on a physical phone. |
-| iOS | **Scaffolded, never compiled.** Needs macOS and Xcode; neither existed in the environment this was written in. |
+| iOS | **Scaffolded, never compiled.** Needs macOS and Xcode; neither existed in the environment this was written in. There is a pipeline for it now — `.github/workflows/ios-testflight.yml` builds on a GitHub macOS runner. See `TESTFLIGHT.md`. |
 
 What "not yet run on a physical phone" rules out: whether Android's Doze mode
 lets the foreground service keep reporting overnight, whether the manufacturer's
@@ -117,9 +117,12 @@ See `SHIP.md`.
 
 ## Known rough edges
 
-- `@capacitor-community/background-geolocation@1.2.26` is built against
-  Capacitor 7; this project is on Capacitor 8 and the CLI warns about it on
-  `cap add ios`. The Android build works regardless. Watch it on iOS.
+- `@capacitor-community/background-geolocation@1.2.26` declares Capacitor 7 in
+  its `devDependencies`, and the CLI warns about it on `cap add ios`. The
+  warning reads worse than it is: the plugin's own `Package.swift` depends on
+  `capacitor-swift-pm` `from: "8.0.0"`, which this project's `exact: "8.5.0"`
+  satisfies, so Swift Package Manager resolves it cleanly. Android builds
+  regardless. Still unproven on a device.
 - The web assets are bundled rather than pointed at the hosted URL, because a
   job site is exactly where signal drops — the app has to open and show the
   clock with no network. The trade is that a web deploy no longer reaches
