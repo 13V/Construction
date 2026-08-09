@@ -14,13 +14,13 @@ insert into auth.users (id, email) values
 
 insert into companies (id, name) values ('aaaaaaaa-0000-0000-0000-0000000000f1', 'Roles Co');
 
-insert into workers (id, company_id, auth_user_id, name, initials, trade, rate, role) values
+insert into workers (id, company_id, auth_user_id, name, initials, trade, role) values
   ('bbbbbbbb-0000-0000-0000-0000000000f1', 'aaaaaaaa-0000-0000-0000-0000000000f1',
-   '11111111-0000-0000-0000-0000000000a1', 'Owner', 'OW', 'admin', 0, 'owner'),
+   '11111111-0000-0000-0000-0000000000a1', 'Owner', 'OW', 'admin', 'owner'),
   ('bbbbbbbb-0000-0000-0000-0000000000f2', 'aaaaaaaa-0000-0000-0000-0000000000f1',
-   '11111111-0000-0000-0000-0000000000a2', 'Captain', 'CA', 'tiler', 62, 'captain'),
+   '11111111-0000-0000-0000-0000000000a2', 'Captain', 'CA', 'tiler', 'captain'),
   ('bbbbbbbb-0000-0000-0000-0000000000f3', 'aaaaaaaa-0000-0000-0000-0000000000f1',
-   '11111111-0000-0000-0000-0000000000a3', 'Chippie', 'CH', 'tiler', 55, 'employee');
+   '11111111-0000-0000-0000-0000000000a3', 'Chippie', 'CH', 'tiler', 'employee');
 
 -- Theirs, and not theirs.
 insert into job_sites (id, company_id, name, lat, lng, captain_id) values
@@ -87,8 +87,16 @@ begin
     raise exception 'FAIL: a captain reaches a job that is not theirs';
   end if;
 
+  -- The scoping this always asserted still holds; what changed in schema_v24 is
+  -- where it is enforced. Reading change_orders directly handed the captain
+  -- cost_impact along with the description, because RLS is row-level and cannot
+  -- return a row with one column withheld. The table is office-only now and the
+  -- captain's register is a view with no money on it.
   select count(*) into n from change_orders;
-  if n <> 1 then raise exception 'FAIL: a captain read % variations, should be 1 (their own job)', n; end if;
+  if n <> 0 then raise exception 'FAIL: a captain read % change_orders rows', n; end if;
+
+  select count(*) into n from site_variations_v;
+  if n <> 1 then raise exception 'FAIL: a captain saw % variations, should be 1 (their own job)', n; end if;
 
   raise notice 'PASS  a captain sees their own job''s variations and no others';
 end $$;

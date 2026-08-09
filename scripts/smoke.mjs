@@ -142,7 +142,7 @@ try {
   const fieldEmail = `smoke-field-${stamp}@mailinator.com`
   const fieldRow = (await body(await boss.post('workers', {
     company_id: companyId, name: 'Kane Brooker', initials: 'KB',
-    trade: 'Labourer', rate: 45, is_office: false, invite_email: fieldEmail,
+    trade: 'Labourer', is_office: false, invite_email: fieldEmail,
   })))[0]
   const field = await user(fieldEmail)
   const joinRes = await fetch(`${APP}/api/bootstrap`, { method: 'POST', headers: field.H, body: JSON.stringify({}) })
@@ -152,7 +152,7 @@ try {
   const impostorEmail = `smoke-impostor-${stamp}@mailinator.com`
   const decoy = (await body(await boss.post('workers', {
     company_id: companyId, name: 'Bec Lindqvist', initials: 'BL',
-    trade: 'Carpenter', rate: 58, is_office: false, invite_email: impostorEmail,
+    trade: 'Carpenter', is_office: false, invite_email: impostorEmail,
   })))[0]
   const key = await service()
   await fetch(`${SB}/auth/v1/admin/users`, {
@@ -392,7 +392,7 @@ try {
   const capEmail = `smoke-captain-${stamp}@mailinator.com`
   await boss.post('workers', {
     company_id: companyId, name: 'Lead Hand', initials: 'LH',
-    trade: 'Tiler', rate: 62, role: 'captain', invite_email: capEmail,
+    trade: 'Tiler', role: 'captain', invite_email: capEmail,
   })
   const capRow = (await boss.get('workers', `select=id,is_office,role&invite_email=eq.${capEmail}`))[0]
   ok('a captain is not office', capRow.role === 'captain' && capRow.is_office === false)
@@ -401,13 +401,34 @@ try {
   await fetch(`${APP}/api/bootstrap`, { method: 'POST', headers: captain.H, body: JSON.stringify({}) })
   await boss.patch('job_sites', `id=eq.${csite.id}`, { captain_id: capRow.id })
 
-  ok('a captain sees their own job\'s variations',
-    (await captain.get('change_orders', `select=id&site_id=eq.${csite.id}`)).length > 0)
+  // schema_v24 moved this boundary. Reading change_orders directly handed the
+  // captain cost_impact along with the description — RLS is row-level and
+  // cannot return a row with one column withheld — so the table is office-only
+  // now and the register comes from a view with no money on it.
+  ok('a captain reads no change_orders row',
+    (await captain.get('change_orders', 'select=id')).length === 0)
+  ok('a captain sees their own job\'s variations, without the money',
+    (await captain.get('site_variations_v', `select=id,description&site_id=eq.${csite.id}`)).length > 0)
+  ok('site_variations_v does not carry cost_impact',
+    typeof (await captain.get('site_variations_v', 'select=*&limit=1'))[0]?.cost_impact === 'undefined')
   ok('a captain reads no contracts', (await captain.get('contracts', 'select=id')).length === 0)
   ok('a captain reads no invoices', (await captain.get('invoices', 'select=id')).length === 0)
   ok('a captain reads no job value', (await captain.get('job_value_v', 'select=site_id')).length === 0)
   ok('a captain reads no job profit', (await captain.get('job_profit_v', 'select=site_id')).length === 0)
   ok('a captain reads no company overview', (await captain.get('company_overview_v', 'select=active_jobs')).length === 0)
+
+  // --------------------------------------------------- pay rates (schema_v24)
+  // The one the app never asked for and the API answered anyway. Checked
+  // through PostgREST on purpose: the leak was never in a screen, it was that
+  // anyone holding their own token could ask the REST layer directly.
+  ok('workers no longer carries a rate column',
+    typeof (await boss.get('workers', 'select=*&limit=1'))[0]?.rate === 'undefined')
+  ok('a captain reads no pay rate', (await captain.get('worker_pay', 'select=rate')).length === 0)
+  ok('a field worker reads no pay rate', (await field.get('worker_pay', 'select=rate')).length === 0)
+  ok('a captain gets the crew list with the rate null',
+    (await captain.get('crew_v', 'select=id,name,rate')).every((w) => w.rate === null))
+  ok('the office still reads rates through crew_v',
+    (await boss.get('crew_v', 'select=id,rate')).some((w) => w.rate !== null))
 
   // -------------------------------------------- site records (schema_v19)
   ok('anyone in the company can raise a defect',

@@ -457,13 +457,12 @@ export function Crew({ me, sites, workers, onChanged }: {
     }
     setMemberBusy(true)
     setMemberError(null)
-    const { error: err } = await supabase()
+    const { data: created, error: err } = await supabase()
       .from('workers')
       .insert({
         name: memberForm.name.trim(),
         initials: initialsFor(memberForm.name),
         trade: memberForm.trade.trim() || 'Crew',
-        rate: Number(memberForm.rate) || 0,
         invite_email: memberForm.email.trim().toLowerCase() || null,
         // The role is written, never is_office: the trigger derives the
         // boolean from it, and writing both invites them to disagree.
@@ -471,9 +470,34 @@ export function Crew({ me, sites, workers, onChanged }: {
         // RLS additionally checks this matches the caller's own company.
         company_id: me.company_id,
       })
-    setMemberBusy(false)
+      .select('id')
+      .single()
     if (err) {
+      setMemberBusy(false)
       setMemberError(err.message)
+      return
+    }
+
+    // Two writes because the wage lives in its own table — see schema_v24. It
+    // is separate precisely so that everyone can read the crew list without
+    // reading what anyone is paid, which RLS cannot do inside one row.
+    //
+    // Upsert rather than insert: schema_v24 gives every existing worker a
+    // worker_pay row, and a future trigger may well do the same for new ones,
+    // so "already there" must not read as a failure.
+    const { error: payErr } = await supabase()
+      .from('worker_pay')
+      .upsert(
+        { worker_id: created.id, company_id: me.company_id, rate: Number(memberForm.rate) || 0 },
+        { onConflict: 'worker_id' },
+      )
+    setMemberBusy(false)
+    if (payErr) {
+      // The person exists; only their rate did not save. Say exactly that,
+      // because "failed" would send someone off to add them a second time.
+      setMemberError(`${memberForm.name.trim()} was added, but their rate did not save: ${payErr.message}`)
+      await load()
+      onChanged()
       return
     }
     setMemberForm(null)

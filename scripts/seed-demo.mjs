@@ -213,8 +213,15 @@ try {
     ['labourer', 'Coby Anderson', 'CA', 'Labourer', 42],
   ]) {
     crew[key] = await ensureRow(boss, 'workers', `select=id&company_id=eq.${companyId}&name=eq.${encodeURIComponent(name)}`, {
-      company_id: companyId, name, initials, trade, rate, is_office: false, active: true,
+      company_id: companyId, name, initials, trade, is_office: false, active: true,
     }, `crew member (${name})`)
+
+    // The wage is a second write because it is a second table since
+    // schema_v24 — `workers` is readable by the whole company and a pay rate
+    // must not be, which RLS cannot express within one row.
+    await ensureRow(boss, 'worker_pay', `select=worker_id&worker_id=eq.${crew[key].id}`, {
+      worker_id: crew[key].id, company_id: companyId, rate,
+    }, `pay rate (${name})`)
   }
   console.log(`crew: ${OWNER_NAME} (office), ${Object.values(crew).length} field workers`)
 

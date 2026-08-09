@@ -93,7 +93,7 @@ const site = (await j(await fetch(`${SB}/rest/v1/job_sites`, { method: 'POST', h
 
 // --- a chippie joins from their phone
 const fEmail = `x-field-${stamp}@mailinator.com`
-const fw = (await j(await fetch(`${SB}/rest/v1/workers`, { method: 'POST', headers: boss.HR, body: JSON.stringify({ company_id: co, name: 'Kane Brooker', initials: 'KB', trade: 'Carpenter', rate: 52, is_office: false, invite_email: fEmail }) })))[0]
+const fw = (await j(await fetch(`${SB}/rest/v1/workers`, { method: 'POST', headers: boss.HR, body: JSON.stringify({ company_id: co, name: 'Kane Brooker', initials: 'KB', trade: 'Carpenter', is_office: false, invite_email: fEmail }) })))[0]
 const phone = await newConfirmedUser(fEmail)
 const claim = await j(await fetch(`${APP}/api/bootstrap`, { method: 'POST', headers: phone.H, body: JSON.stringify({}) }))
 ok('the phone claims the crew row the office created', claim.workerId === fw.id)

@@ -10,11 +10,11 @@ insert into auth.users (id, email) values
 
 insert into companies (id, name) values ('aaaaaaaa-0000-0000-0000-000000000022', 'Test Tiling 22');
 
-insert into workers (id, company_id, auth_user_id, name, initials, trade, rate, is_office) values
+insert into workers (id, company_id, auth_user_id, name, initials, trade, is_office) values
   ('bbbbbbbb-0000-0000-0000-000000000022', 'aaaaaaaa-0000-0000-0000-000000000022',
-   '11111111-2222-1111-1111-111111111111', 'Office', 'OF', 'admin', 0, true),
+   '11111111-2222-1111-1111-111111111111', 'Office', 'OF', 'admin', true),
   ('bbbbbbbb-0000-0000-0000-000000000023', 'aaaaaaaa-0000-0000-0000-000000000022',
-   '22222222-3333-2222-2222-222222222222', 'Chippie', 'CH', 'tiler', 55, false);
+   '22222222-3333-2222-2222-222222222222', 'Chippie', 'CH', 'tiler', false);
 
 -- One position well outside the 3-day window, one well inside it, and one on
 -- each side of the cutoff itself — the boundary is the only place this logic

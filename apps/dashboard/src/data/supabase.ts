@@ -27,7 +27,15 @@ export interface WorkerRow {
   name: string
   initials: string
   trade: string
-  rate: number
+  /**
+   * Null for anyone who is not office staff, and that is the security model
+   * rather than missing data. Since schema_v24 the wage lives in `worker_pay`,
+   * whose policy is office-only, and `crew_v` left-joins it — so a captain or a
+   * labourer querying the crew list gets every other column and a null here,
+   * decided by Postgres rather than by a screen remembering to check a role.
+   * Read it through crew_v; `workers` no longer has the column at all.
+   */
+  rate: number | null
   /**
    * Derived from `role` by trigger (schema_v18) and kept because every money
    * policy since schema_v14 keys off it. Writing either keeps the other in

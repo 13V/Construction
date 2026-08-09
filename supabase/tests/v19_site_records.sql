@@ -10,11 +10,11 @@ insert into auth.users (id, email) values
 
 insert into companies (id, name) values ('aaaaaaaa-0000-0000-0000-0000000000e1', 'Wet Co');
 
-insert into workers (id, company_id, auth_user_id, name, initials, trade, rate, role) values
+insert into workers (id, company_id, auth_user_id, name, initials, trade, role) values
   ('bbbbbbbb-0000-0000-0000-0000000000e1', 'aaaaaaaa-0000-0000-0000-0000000000e1',
-   '11111111-0000-0000-0000-0000000000b1', 'Owner', 'OW', 'admin', 0, 'owner'),
+   '11111111-0000-0000-0000-0000000000b1', 'Owner', 'OW', 'admin', 'owner'),
   ('bbbbbbbb-0000-0000-0000-0000000000e2', 'aaaaaaaa-0000-0000-0000-0000000000e1',
-   '11111111-0000-0000-0000-0000000000b2', 'Tiler', 'TL', 'tiler', 58, 'employee');
+   '11111111-0000-0000-0000-0000000000b2', 'Tiler', 'TL', 'tiler', 'employee');
 
 insert into job_sites (id, company_id, name, lat, lng) values
   ('cccccccc-0000-0000-0000-0000000000e1', 'aaaaaaaa-0000-0000-0000-0000000000e1', 'Lot 42', -34.9, 138.5),

@@ -39,7 +39,9 @@ const toWorker = (row: WorkerRow): Worker => ({
   name: row.name,
   initials: row.initials,
   trade: row.trade,
-  rate: Number(row.rate),
+  // Null when whoever is asking may not see wages. Zero is the honest local
+  // reading of that: no cost is attributed rather than an invented one.
+  rate: Number(row.rate ?? 0),
 })
 
 const toSite = (row: JobSiteRow): JobSite => ({
@@ -144,7 +146,10 @@ export function useLive(): LiveData {
     async function load() {
       const [company, workers, sites, positions, shifts, events] = await Promise.all([
         client.from('companies').select('name').maybeSingle(),
-        client.from('workers').select('*').eq('active', true).order('name'),
+        // crew_v, not workers: the pay rate moved to worker_pay in schema_v24
+        // and the view is what brings it back for the office. Selecting * off
+        // the table would silently drop `rate` from every costing screen.
+        client.from('crew_v').select('*').eq('active', true).order('name'),
         client.from('job_sites').select('*').neq('status', 'archived').order('name'),
         client
           .from('positions')

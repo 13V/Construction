@@ -70,7 +70,16 @@ Create a project, then run these in the SQL editor, in order:
 23. `supabase/schema_v23.sql` — in-app account deletion (App Store 5.1.1(v)).
     Severs the login and removes location data while preserving the timesheets
     the Fair Work Act requires an employer to keep for seven years
-24. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
+24. `supabase/schema_v24.sql` — closes two column-level leaks. Pay rates move
+    off `workers` into `worker_pay`, because `workers` is readable by the whole
+    company by design and RLS is row-level — it cannot return a row with one
+    column withheld, so anyone holding their own token could read every wage in
+    the business. Variations narrow to the office and captains get
+    `site_variations_v`, the same register with no money on it. **This file
+    drops `workers.rate`, so `schema.sql` has to be re-run before
+    `schema_v20.sql` in the same pass** — `worker_pay` is declared there and
+    `job_cost_v` reads it. `scripts/migrate.mjs` already does this
+25. `supabase/storage.sql` — the `site-files` and `receipts` buckets and their policies
 
 > **Run them in order, and never re-run one on its own.** Later files
 > deliberately tighten what earlier files created — `schema_v14` narrows read

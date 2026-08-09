@@ -28,7 +28,7 @@ create table if not exists workers (
   name          text not null,
   initials      text not null,
   trade         text not null,
-  rate          numeric(10,2) not null default 0,
+  -- No pay rate here. See worker_pay below.
   -- Office staff see the whole company; field staff see only themselves.
   is_office     boolean not null default false,
   active        boolean not null default true,
@@ -37,6 +37,29 @@ create table if not exists workers (
 create index if not exists workers_company_idx on workers (company_id);
 create unique index if not exists workers_invite_email_idx
   on workers (lower(invite_email)) where invite_email is not null;
+
+-- The pay rate lives in its own table, and that is the whole point of it.
+--
+-- `workers` has to stay readable by everybody: the crew list, chat authors, who
+-- is on site with you today. A pay rate must not be. Postgres RLS is ROW-level,
+-- so a policy on `workers` cannot show a row while hiding one column of it, and
+-- while the row is readable the rate is one `select=name,rate` away for anyone
+-- holding their own token.
+--
+-- schema_v14 saw this, added crew_v to drop the column in a view, and left a
+-- note to "revoke select on workers" once the office screens had moved off the
+-- table. That plan could never have worked: office and field staff are the SAME
+-- Postgres role, `authenticated`, so a column-level GRANT cannot tell them
+-- apart — revoking `rate` would have blinded the payroll screens too. Moving
+-- the column to a table with its own office-only policy is the fix that
+-- actually holds, because RLS distinguishes rows by who is asking.
+create table if not exists worker_pay (
+  worker_id   uuid primary key references workers(id) on delete cascade,
+  company_id  uuid not null references companies(id) on delete cascade,
+  rate        numeric(10,2) not null default 0,
+  updated_at  timestamptz not null default now()
+);
+create index if not exists worker_pay_company_idx on worker_pay (company_id);
 
 create table if not exists job_sites (
   id          uuid primary key default gen_random_uuid(),
@@ -147,6 +170,7 @@ $$;
 
 alter table companies      enable row level security;
 alter table workers        enable row level security;
+alter table worker_pay     enable row level security;
 alter table job_sites      enable row level security;
 alter table positions      enable row level security;
 alter table dwell_state    enable row level security;
@@ -160,6 +184,16 @@ create policy companies_read on companies
 drop policy if exists workers_read on workers;
 create policy workers_read on workers
   for select using (company_id = current_company_id());
+
+-- One policy, `for all`, and no read policy for anyone else. A worker cannot
+-- read their OWN rate here either, which is deliberate: what they are paid is
+-- on their payslip and in their employment agreement, both of which are the
+-- employer's to issue, and an app that displays a rate becomes the thing people
+-- argue with. Hours are the worker's own record and they see those in full.
+drop policy if exists worker_pay_office on worker_pay;
+create policy worker_pay_office on worker_pay
+  for all using (company_id = current_company_id() and current_is_office())
+  with check (company_id = current_company_id() and current_is_office());
 
 drop policy if exists workers_office_write on workers;
 create policy workers_office_write on workers

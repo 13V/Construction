@@ -25,6 +25,13 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Migrations in DEPLOY.md's order, with what each one should leave behind. */
 const MIGRATIONS = [
+  // schema.sql is in this list because schema_v24 changed it: worker_pay is
+  // declared there, next to workers, and schema_v20's job_cost_v reads it —
+  // so it has to exist before v20 runs, not after v24. The file is idempotent
+  // (create table if not exists throughout, and scripts/schema-check.sh
+  // applies the whole chain three times over to prove it), so re-running it on
+  // a database that is already at v23 is a no-op apart from the new table.
+  { file: 'schema.sql', proves: ['worker_pay'] },
   { file: 'schema_v17.sql', proves: ['contracts', 'job_value_v'] },
   { file: 'schema_v18.sql', proves: ['crews', 'crew_members'] },
   { file: 'schema_v19.sql', proves: ['defects', 'site_instructions', 'progress_entries', 'waterproofing'] },
@@ -35,6 +42,7 @@ const MIGRATIONS = [
   // themselves; `proves` is matched against functions as well as relations.
   { file: 'schema_v22.sql', proves: ['prune_positions'] },
   { file: 'schema_v23.sql', proves: ['delete_worker_account'] },
+  { file: 'schema_v24.sql', proves: ['crew_v', 'site_variations_v'] },
 ]
 
 // ------------------------------------------------------------- credentials

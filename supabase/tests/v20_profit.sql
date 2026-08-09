@@ -9,11 +9,19 @@ insert into auth.users (id, email) values
 
 insert into companies (id, name) values ('aaaaaaaa-0000-0000-0000-0000000000d1', 'Profit Co');
 
-insert into workers (id, company_id, auth_user_id, name, initials, trade, rate, role) values
+insert into workers (id, company_id, auth_user_id, name, initials, trade, role) values
   ('bbbbbbbb-0000-0000-0000-0000000000d1', 'aaaaaaaa-0000-0000-0000-0000000000d1',
-   '11111111-0000-0000-0000-0000000000c1', 'Owner', 'OW', 'admin', 0, 'owner'),
+   '11111111-0000-0000-0000-0000000000c1', 'Owner', 'OW', 'admin', 'owner'),
   ('bbbbbbbb-0000-0000-0000-0000000000d2', 'aaaaaaaa-0000-0000-0000-0000000000d1',
-   '11111111-0000-0000-0000-0000000000c2', 'Tiler', 'TL', 'tiler', 50, 'employee');
+   '11111111-0000-0000-0000-0000000000c2', 'Tiler', 'TL', 'tiler', 'employee');
+
+-- The wage lives in its own table since schema_v24, so that a captain reading
+-- the crew list cannot read what anyone is paid. job_cost_v prices labour from
+-- here now, which is what the $500 below is built from.
+insert into worker_pay (worker_id, company_id, rate) values
+  ('bbbbbbbb-0000-0000-0000-0000000000d1', 'aaaaaaaa-0000-0000-0000-0000000000d1', 0),
+  ('bbbbbbbb-0000-0000-0000-0000000000d2', 'aaaaaaaa-0000-0000-0000-0000000000d1', 50)
+  on conflict (worker_id) do update set rate = excluded.rate;
 
 insert into job_sites (id, company_id, name, lat, lng) values
   ('cccccccc-0000-0000-0000-0000000000d1', 'aaaaaaaa-0000-0000-0000-0000000000d1', 'Lot 42', -34.9, 138.5);

@@ -49,9 +49,19 @@ with labour as (
          sum(greatest(0, extract(epoch from (s.ended_at - s.started_at)) / 3600.0
                          - coalesce(s.break_minutes, 0) / 60.0))          as hours,
          sum(greatest(0, extract(epoch from (s.ended_at - s.started_at)) / 3600.0
-                         - coalesce(s.break_minutes, 0) / 60.0) * coalesce(w.rate, 0)) as cost
+                         - coalesce(s.break_minutes, 0) / 60.0) * coalesce(p.rate, 0)) as cost
     from shifts s
     join workers w on w.id = s.worker_id
+    -- LEFT join, and the reason is the security model rather than missing data.
+    -- This view is security_invoker, so worker_pay's office-only policy is
+    -- applied to whoever is asking. For the office every row matches and the
+    -- cost is real; for anyone else no row matches, and a left join turns that
+    -- into a zero rather than dropping the shift entirely and reporting hours
+    -- that silently exclude half the crew. Nobody but the office can read this
+    -- view at all — job_profit_v and the office screens are gated — but if that
+    -- ever changes, "zero cost" is a visibly wrong number and "quietly fewer
+    -- hours" is not.
+    left join worker_pay p on p.worker_id = w.id
    where s.site_id is not null
      and s.ended_at is not null
    group by s.site_id
