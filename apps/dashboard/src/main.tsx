@@ -2,6 +2,7 @@ import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Crash } from './ui/Crash.tsx'
 import { theme } from './theme.ts'
+import { apiConfigError } from './data/api.ts'
 import './index.css'
 
 /*
@@ -69,7 +70,49 @@ function officeSurface() {
   return <App />
 }
 
-const surface = isWorker ? <WorkerApp /> : officeSurface()
+/**
+ * A phone build with no server address is not a degraded app, it is a decoy:
+ * it opens, signs in, shows the clock and asks for location, and records
+ * nothing — because every `/api/...` call is answered by Capacitor's own
+ * bundled-asset handler instead of the server. The failure is invisible until
+ * someone relies on it for a day's pay.
+ *
+ * A missing environment variable must not be able to ship that, so it is fatal
+ * at startup and says so. In a browser the base is empty on purpose and this
+ * never fires.
+ */
+function ConfigError({ message }: { message: string }) {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 28,
+        background: theme.appBg,
+        color: theme.ink,
+        font: '15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        textAlign: 'center',
+      }}
+    >
+      <div style={{ maxWidth: 340 }}>
+        <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 10 }}>This app can't record anything</div>
+        <p style={{ margin: 0, color: theme.inkSoft, fontSize: 14 }}>{message}</p>
+      </div>
+    </div>
+  )
+}
+
+const configError = apiConfigError()
+
+const surface = configError ? (
+  <ConfigError message={configError} />
+) : isWorker ? (
+  <WorkerApp />
+) : (
+  officeSurface()
+)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { supabase, type WorkerRow } from '../data/supabase'
+import { api } from '../data/api'
 import { BUCKET_RECEIPTS, objectPath, uploadFile } from '../data/storage'
 import { costCodes } from '../data/seed'
 import { money2 as money } from '../format'
@@ -126,7 +127,7 @@ export function InvoiceDrop({
         const token = data.session?.access_token
         const base64 = await fileToBase64(file)
 
-        const res = await fetch('/api/parse-receipt', {
+        const res = await fetch(api('/api/parse-receipt'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({

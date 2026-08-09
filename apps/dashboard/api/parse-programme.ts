@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { callerWorker } from './_supabase.js'
+import { applyCors } from './_cors.js'
 
 /**
  * Reads a builder's construction programme out of a PDF and hands back dated
@@ -57,6 +58,7 @@ const isoDate = (v: unknown): string | null =>
   typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyCors(req, res)) return
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })

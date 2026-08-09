@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { AuthScreen } from '../auth/AuthScreen'
 import { useSession } from '../auth/useSession'
+import { api } from '../data/api'
 import { supabase, supabaseConfigured } from '../data/supabase'
 import type {
   AssignmentRow,
@@ -102,6 +103,9 @@ interface PingResponse {
   phase: DwellPhase
   sites: ServerSite[]
   events: PingEvent[]
+  /** Things the worker needs telling that aren't a clock event — e.g. why a
+   *  manual clock-in was refused, or that an earlier shift never closed. */
+  notes: string[]
 }
 
 export function WorkerApp() {
@@ -177,12 +181,12 @@ function Tracker({ me }: { me: WorkerRow }) {
     return () => window.clearTimeout(t)
   }, [celebration])
 
-  const send = useCallback(async (body: { lat: number; lng: number; accuracyM: number; at: number }) => {
+  const send = useCallback(async (body: { lat: number; lng: number; accuracyM: number; at: number; manual?: boolean }) => {
     const { data } = await supabase().auth.getSession()
     const token = data.session?.access_token
     if (!token) throw new Error('Session expired — sign in again.')
 
-    const res = await fetch('/api/ping', {
+    const res = await fetch(api('/api/ping'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
@@ -208,6 +212,10 @@ function Tracker({ me }: { me: WorkerRow }) {
         : null
       setCelebration({ siteId: clockIn.siteId, at: clockIn.at, marginM })
     }
+    // Returned so a deliberate tap (manual clock-in) can tell whether it
+    // actually produced a clock-in or was refused, rather than guessing from
+    // side effects the way the passive 20-second loop can afford to.
+    return payload
   }, [])
 
   const onFix = useCallback(
@@ -259,6 +267,33 @@ function Tracker({ me }: { me: WorkerRow }) {
       watch?.stop()
     }
   }, [tracking, onFix])
+
+  // "Clock in manually" is not a client-side clock — RLS and the
+  // shifts_worker_guard trigger refuse a direct insert, correctly, because a
+  // phone must never be the system of record for its own hours. What the tap
+  // does is send the same ping the 20-second loop sends, flagged `manual:
+  // true` so the server treats it as a deliberate request rather than
+  // passive tracking: still refused outside a site's fence, but not made to
+  // wait out the two-minute settle window inside one.
+  const manualClockIn = useCallback(async () => {
+    if (!fix) {
+      setNote("No GPS fix yet — wait a few seconds for the location dot to steady, then try again.")
+      return
+    }
+    setNote(null)
+    try {
+      const payload = await send({ lat: fix.pos.lat, lng: fix.pos.lng, accuracyM: fix.accuracyM, at: Date.now(), manual: true })
+      const clockedIn = payload.events.some((e) => e.kind === 'clock_in')
+      if (!clockedIn) {
+        // The server is the one that knows why, and should always say so via
+        // `notes` when it refuses a manual request — this generic line is
+        // only a fallback for a response that reached here without one.
+        setNote(payload.notes[0] ?? "That didn't clock you in — make sure you're inside the site's boundary and try again.")
+      }
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : String(err))
+    }
+  }, [fix, send])
 
   // The one thing this tap really does: stop sending location. It does NOT
   // write a clock-out — only the geofence (server-side, via /api/ping) may
@@ -410,11 +445,7 @@ function Tracker({ me }: { me: WorkerRow }) {
               note={note}
               onDismissNote={() => setNote(null)}
               onShowAccount={() => setShowAccount(true)}
-              onManualClockIn={() =>
-                setNote(
-                  "Manual clock-in isn't available on this phone. Ask your foreman, or just wait — you'll clock in automatically within a couple of minutes of arriving.",
-                )
-              }
+              onManualClockIn={() => void manualClockIn()}
               onOpenPanel={(k) => setScreen(k)}
             />
           )}
@@ -944,7 +975,8 @@ function PrivacyLine({ fix }: { fix: { pos: LatLng; accuracyM: number } | null }
     <p style={{ fontSize: 12, color: design.faint, textAlign: 'center', lineHeight: 1.5, margin: '10px 0 0' }}>
       {fix ? `GPS ±${Math.round(fix.accuracyM)} m · reporting every ${PING_INTERVAL_MS / 1000}s` : 'No fix yet'}
       <br />
-      Location is only recorded while tracking is on.
+      Location is only recorded while tracking is on — every report, not just arrivals, and your office can see it as
+      a trail on the map.
       {backend() === 'web' && (
         <>
           <br />
@@ -1220,7 +1252,8 @@ function ApproachingScreen({
         <ActionGrid onOpen={onOpenPanel} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <span style={{ fontSize: 13, color: design.faint, lineHeight: 1.45 }}>
-            Tracking is on — nothing is recorded except the two-minute settle window once you arrive.
+            Tracking is on, so your position is being sent to the office now, including the drive here — you're only
+            paid from two minutes after you've settled at the site.
           </span>
           <button onClick={onManualClockIn} style={ctaWhite(52)}>
             Clock in manually
@@ -1933,7 +1966,7 @@ function ReceiptScreen({
       const token = session?.access_token
       if (!token) throw new Error('Session expired — sign in again.')
 
-      const res = await fetch('/api/parse-receipt', {
+      const res = await fetch(api('/api/parse-receipt'), {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
         body: JSON.stringify({

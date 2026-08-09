@@ -103,7 +103,11 @@ async function startNative(
       // is a feature here, not a tax: the crew can see exactly when the app is
       // tracking them, and dismissing tracking is one tap away.
       backgroundTitle: 'Crewline is tracking your location',
-      backgroundMessage: 'Only while you are clocked on. Tap to open.',
+      // Was "Only while you are clocked on" — false. The watcher this
+      // notification belongs to runs from the START TRACKING tap, which is
+      // well before any clock-in (the drive to site, the arrival dwell), and
+      // every fix it produces is sent and stored, not just ones near a site.
+      backgroundMessage: 'Recording your location while tracking is on. Tap to open.',
       requestPermissions: true,
       // A stale fix is worse than none for a geofence decision.
       stale: false,

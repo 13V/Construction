@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { callerWorker } from './_supabase.js'
+import { applyCors } from './_cors.js'
 
 /**
  * Reads a receipt or supplier invoice with Claude and hands back structured
@@ -63,6 +64,7 @@ function stripFences(text: string): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyCors(req, res)) return
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })

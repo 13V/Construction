@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { api } from '../data/api'
 import { supabase, type DailyLogRow, type WorkerRow } from '../data/supabase'
 import { useSites } from './useSites'
 import { dayDate } from '../format'
@@ -80,7 +81,7 @@ export function DailyLogScreen({
     try {
       const { data } = await supabase().auth.getSession()
       const token = data.session?.access_token
-      const res = await fetch('/api/draft-log', {
+      const res = await fetch(api('/api/draft-log'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ siteId, date: today }),

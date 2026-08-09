@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { callerWorker, serviceClient } from './_supabase.js'
+import { applyCors } from './_cors.js'
 
 /**
  * Drafts a daily log from data we already have — nobody types a form at 4pm.
@@ -31,6 +32,7 @@ function hoursBetween(start: string, end: string): number {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyCors(req, res)) return
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })

@@ -7,6 +7,7 @@ import {
   type WorkerRow,
 } from '../data/supabase'
 import { extractProgramme, readCsv, readXlsx, type ProgrammeRow as SheetRow } from '../data/sheet'
+import { api } from '../data/api'
 import { fullDate } from '../format'
 import { theme } from '../theme'
 import type { JobSite } from '../types'
@@ -166,7 +167,7 @@ export function ProgrammeTab({
     const {
       data: { session },
     } = await supabase().auth.getSession()
-    const res = await fetch('/api/parse-programme', {
+    const res = await fetch(api('/api/parse-programme'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

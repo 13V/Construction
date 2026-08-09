@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../data/supabase'
+import { api } from '../data/api'
 import { theme } from '../theme'
 
 /**
@@ -29,7 +30,7 @@ export function FinishSetup({ session, onDone }: { session: Session; onDone: () 
     try {
       const { data } = await supabase().auth.getSession()
       const token = data.session?.access_token ?? session.access_token
-      const res = await fetch('/api/bootstrap', {
+      const res = await fetch(api('/api/bootstrap'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(joining ? {} : { companyName: company.trim(), name: name.trim() }),

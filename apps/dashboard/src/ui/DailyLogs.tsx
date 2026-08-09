@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase, type DailyLogRow, type WorkerRow } from '../data/supabase'
+import { api } from '../data/api'
 import { theme } from '../theme'
 import type { JobSite, Worker } from '../types'
 
@@ -200,7 +201,7 @@ export function DailyLogs({ me, sites, workers, onChanged }: {
       const token = session?.access_token
       if (!token) throw new Error('Not signed in')
 
-      const res = await fetch('/api/draft-log', {
+      const res = await fetch(api('/api/draft-log'), {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
         body: JSON.stringify({ siteId, date }),

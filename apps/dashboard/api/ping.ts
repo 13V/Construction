@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { advance, initialPhase, type DwellPhase } from '../src/geofence/dwell.js'
+import { advance, initialPhase, siteContaining, type DwellPhase } from '../src/geofence/dwell.js'
 import type { JobSite, Ping } from '../src/types.js'
 import { callerWorker, serviceClient } from './_supabase.js'
+import { applyCors } from './_cors.js'
 
 /**
  * Location ingest. A worker's phone POSTs here; the geofence engine runs on the
@@ -20,12 +21,20 @@ interface Body {
   accuracyM?: number
   /** Client timestamp, ISO or epoch ms. Clamped — never trusted outright. */
   at?: string | number
+  /**
+   * "Clock in manually" button in the worker app. Only the literal boolean
+   * `true` engages the manual path — a truthy string or 1 must not, or a
+   * client bug that mis-serialises the flag would silently switch every
+   * worker onto the no-dwell path.
+   */
+  manual?: boolean
 }
 
 const MAX_CLOCK_SKEW_MS = 5 * 60_000
 const SITE_TIME_ZONE = 'Australia/Adelaide'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyCors(req, res)) return
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
@@ -87,6 +96,131 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     progressPct: null,
     scheduleNote: null,
   }))
+
+  // "Clock in manually" bypasses the two-minute dwell, nothing else. The
+  // server is still the one deciding whether the worker is on site — a phone
+  // that lies about its coordinates gets refused exactly as it would on an
+  // automatic ping, and this branch never reads or trusts anything the client
+  // says about which site it's at. Handled entirely separately from the
+  // dwell engine below so the automatic path — the one running for every
+  // worker who never touches the button — is untouched by this feature.
+  if (body?.manual === true) {
+    // Still a location report, whatever the outcome — same as the automatic
+    // path a few lines down, and worth keeping even for a refused attempt.
+    const { error: positionError } = await db.from('positions').insert({
+      worker_id: worker.id,
+      at: new Date(at).toISOString(),
+      lat,
+      lng,
+      accuracy_m: Number(body.accuracyM) || 0,
+    })
+    if (positionError) console.error('[ping] position insert failed', positionError)
+
+    // Plain radius, not the buffered one used for exits — a manual clock-in
+    // is a new arrival, and arrivals use the same rule the automatic engine
+    // uses to start the dwell timer in the first place.
+    const site = siteContaining({ lat, lng }, sites)
+    if (!site) {
+      return res.status(409).json({
+        error: 'You need to be inside a job site to clock in. Move closer and try again.',
+      })
+    }
+
+    const { data: openShift, error: openShiftError } = await db
+      .from('shifts')
+      .select('id')
+      .eq('worker_id', worker.id)
+      .is('ended_at', null)
+      .maybeSingle()
+    if (openShiftError) {
+      console.error('[ping] open shift lookup failed', openShiftError)
+      return res.status(500).json({ error: 'Could not check your shift status' })
+    }
+    if (openShift) {
+      return res.status(409).json({ error: 'A shift is already open — clock out first.' })
+    }
+
+    const { error: insertError } = await db.from('shifts').insert({
+      company_id: worker.company_id,
+      worker_id: worker.id,
+      site_id: site.id,
+      started_at: new Date(at).toISOString(),
+      source: 'manual',
+    })
+    // Same race the automatic path guards against with the same codes — two
+    // pings landing together must not open two shifts. Whichever loses is
+    // told plainly rather than shown a bare 500.
+    if (insertError) {
+      if (insertError.code === '23505' || insertError.code === '23P01') {
+        return res.status(409).json({ error: 'A shift is already open — clock out first.' })
+      }
+      console.error('[ping] manual clock_in insert failed', insertError)
+      return res.status(500).json({ error: 'Could not open your shift' })
+    }
+
+    // Recorded as if the dwell engine had itself reached "onsite", so the
+    // very next automatic ping continues from here — extending lastInside,
+    // then clocking out after the normal exit dwell — instead of restarting
+    // a two-minute arrival timer for a worker who is plainly already there.
+    const onsitePhase: DwellPhase = { kind: 'onsite', siteId: site.id, since: at, lastInside: at }
+    const { error: stateError } = await db.from('dwell_state').upsert({
+      worker_id: worker.id,
+      phase: onsitePhase,
+      updated_at: new Date().toISOString(),
+    })
+    if (stateError) console.error('[ping] dwell_state upsert failed', stateError)
+
+    // Timezone reasoning matches the automatic path below: written on a
+    // server running UTC, read by a builder in Adelaide.
+    const hhmmAt = new Date(at).toLocaleTimeString('en-AU', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: SITE_TIME_ZONE,
+    })
+    const message = `${worker.name} clocked in at ${site.name} · ${hhmmAt} · manual`
+
+    await db.from('geofence_events').insert({
+      company_id: worker.company_id,
+      worker_id: worker.id,
+      site_id: site.id,
+      at: new Date(at).toISOString(),
+      kind: 'clock_in',
+      message,
+    })
+
+    // Mirrors the automatic path so a manual clock-in shows up in the site
+    // chat the same way an automatic one does — the crew shouldn't be able
+    // to tell which button someone pressed from the chat alone.
+    const { data: channel } = await db
+      .from('channels')
+      .select('id')
+      .eq('site_id', site.id)
+      .eq('kind', 'site')
+      .maybeSingle()
+    if (channel) {
+      await db.from('messages').insert({
+        company_id: worker.company_id,
+        channel_id: channel.id,
+        author_id: null,
+        kind: 'system',
+        body: message,
+      })
+    }
+
+    return res.status(200).json({
+      ok: true,
+      notes: [],
+      phase: onsitePhase,
+      events: [{ kind: 'clock_in', siteId: site.id, at }],
+      sites: sites.map((s) => ({
+        id: s.id,
+        name: s.name,
+        lat: s.center.lat,
+        lng: s.center.lng,
+        radiusM: s.radiusM,
+      })),
+    })
+  }
 
   const { data: stateRow } = await db
     .from('dwell_state')

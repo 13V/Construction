@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../data/supabase'
+import { api } from '../data/api'
 import { theme } from '../theme'
 
 const shell = {
@@ -80,7 +81,7 @@ export function AuthScreen() {
 
       // Invited crew claim the row the office already created for their
       // email, so they don't need to supply a company at all.
-      const res = await fetch('/api/bootstrap', {
+      const res = await fetch(api('/api/bootstrap'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

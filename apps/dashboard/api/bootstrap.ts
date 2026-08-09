@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { serviceClient } from './_supabase.js'
+import { applyCors } from './_cors.js'
 
 /**
  * First-run setup. Creates a company and links the signed-up user to an office
@@ -20,6 +21,7 @@ const initialsFor = (name: string) =>
     .join('') || '??'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (applyCors(req, res)) return
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
