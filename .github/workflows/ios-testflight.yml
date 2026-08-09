@@ -1,0 +1,172 @@
+name: iOS → TestFlight
+
+# Manual on purpose. macOS runners bill at 10x the Linux rate, and nothing about
+# this app benefits from a build on every push — the web deploy is what changes
+# hourly, and it does not reach installed phones anyway because the assets are
+# bundled. Run this when you actually want a build in testers' hands.
+on:
+  workflow_dispatch:
+    inputs:
+      api_base:
+        description: 'Backend the app talks to (must be absolute — see src/data/api.ts)'
+        required: true
+        default: 'https://construction-opal-three.vercel.app'
+      notes:
+        description: "What testers should look at in this build"
+        required: false
+        default: 'Automatic clock-in when you arrive at a job site.'
+
+# One build at a time. Two concurrent runs would race for the same build number
+# and the second upload would be rejected as a duplicate.
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    env:
+      # The worker surface only. The office dashboard is dropped from the bundle
+      # entirely by this flag — see the comment in src/main.tsx for why it is a
+      # build-time constant rather than a runtime check.
+      VITE_SURFACE: worker
+      VITE_API_BASE: ${{ inputs.api_base }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            apps/dashboard/package-lock.json
+            apps/mobile/package-lock.json
+
+      # BOTH installs are load-bearing. apps/mobile/node_modules is not just for
+      # the CLI: CapApp-SPM/Package.swift declares PATH dependencies pointing at
+      # ../../../node_modules/@capacitor-community/background-geolocation and
+      # @capacitor/app, so without it Swift Package Manager cannot resolve and
+      # the archive fails long before it reaches signing.
+      - name: Install dependencies
+        run: |
+          npm ci --prefix apps/dashboard
+          npm ci --prefix apps/mobile
+
+      - name: Build the worker web bundle
+        run: npm run build --prefix apps/dashboard
+
+      # Fail here rather than in review. A bundle built without VITE_API_BASE
+      # calls /api/... relative to capacitor://localhost, which Capacitor's own
+      # asset handler answers with index.html and a 200 — so the app installs,
+      # opens, asks for location and records nothing. The app now refuses to
+      # start in that state, but catching it in CI is cheaper than catching it
+      # on a phone.
+      - name: Verify the backend URL was baked in
+        run: |
+          if ! grep -rq "${VITE_API_BASE}" apps/dashboard/dist/assets/*.js; then
+            echo "::error::VITE_API_BASE (${VITE_API_BASE}) is not in the built bundle."
+            exit 1
+          fi
+          echo "Backend URL present in the bundle."
+
+      - name: Copy web assets into the native project
+        run: npx cap sync ios
+        working-directory: apps/mobile
+
+      # Every upload needs a build number higher than the last one App Store
+      # Connect saw. The run number is monotonic per workflow and needs no human
+      # to remember, and no commit to bump a file.
+      - name: Set the build number
+        run: |
+          agvtool new-version -all ${{ github.run_number }}
+          echo "Build ${{ github.run_number }}"
+        working-directory: apps/mobile/ios/App
+
+      # An App Store Connect API key rather than a distribution certificate and
+      # provisioning profile in secrets: the key is one file, does not expire
+      # annually, and lets xcodebuild create and update the profile itself with
+      # -allowProvisioningUpdates. Certificates in CI are the thing that breaks
+      # twelve months later when nobody remembers how they got there.
+      - name: Install the App Store Connect API key
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$PRIVATE_KEY" > ~/private_keys/AuthKey_${KEY_ID}.p8
+          chmod 600 ~/private_keys/AuthKey_${KEY_ID}.p8
+
+      - name: Archive
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild archive \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Crewline.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${KEY_ID}.p8 \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic
+        working-directory: apps/mobile/ios/App
+
+      - name: Write ExportOptions
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <!-- Upload straight from xcodebuild. altool's upload path still
+                 works but is the deprecated one, and this keeps the signing
+                 context that produced the archive. -->
+            <key>destination</key><string>upload</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Export and upload to TestFlight
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Crewline.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${KEY_ID}.p8 \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      # The key is a credential that can upload builds under this team. Leaving
+      # it on a runner that is about to be recycled is probably harmless; not
+      # leaving it costs one line.
+      - name: Remove the API key
+        if: always()
+        run: rm -rf ~/private_keys
+
+      - name: Keep the archive for debugging
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcarchive
+          path: ${{ runner.temp }}/Crewline.xcarchive
+          retention-days: 5
