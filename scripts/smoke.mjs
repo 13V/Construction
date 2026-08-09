@@ -2,7 +2,7 @@
 /**
  * Production smoke test.
  *
- *   SUPABASE_PAT=sbp_... node scripts/smoke.mjs
+ *   node scripts/smoke.mjs        # keys from apps/dashboard/.env.local
  *
  * Runs against the live database and the deployed functions, because the
  * things most worth checking here are RLS policies and database constraints,
@@ -17,14 +17,29 @@
  * printed, and neither is the key.
  */
 
-const SB = process.env.SUPABASE_URL ?? 'https://vkpdlsxiporsmqlfjvjw.supabase.co'
-const ANON = process.env.SUPABASE_ANON_KEY ?? ''
+import { readFileSync } from 'node:fs'
+
+/**
+ * Falls back to apps/dashboard/.env.local so neither key has to be typed onto a
+ * command line, where it would land in shell history.
+ */
+function fromEnvFile(key) {
+  try {
+    const url = new URL('../apps/dashboard/.env.local', import.meta.url)
+    return readFileSync(url, 'utf8').match(new RegExp(`^${key}=(.+)$`, 'm'))?.[1]?.trim()
+  } catch {
+    return undefined
+  }
+}
+
+const SB = process.env.SUPABASE_URL ?? fromEnvFile('VITE_SUPABASE_URL') ?? 'https://vkpdlsxiporsmqlfjvjw.supabase.co'
+const ANON = process.env.SUPABASE_ANON_KEY ?? fromEnvFile('VITE_SUPABASE_ANON_KEY') ?? ''
 const APP = process.env.APP_URL ?? 'https://construction-opal-three.vercel.app'
-const PAT = process.env.SUPABASE_PAT ?? ''
+const PAT = process.env.SUPABASE_PAT ?? fromEnvFile('SUPABASE_PAT') ?? ''
 const PROJECT = SB.replace(/^https:\/\//, '').split('.')[0]
 
 if (!ANON || !PAT) {
-  console.error('Set SUPABASE_ANON_KEY and SUPABASE_PAT (and optionally SUPABASE_URL / APP_URL).')
+  console.error('Need SUPABASE_ANON_KEY and SUPABASE_PAT — in the environment, or in apps/dashboard/.env.local.')
   process.exit(2)
 }
 
