@@ -576,6 +576,52 @@ try {
     if (!res.ok) throw new Error(`photos insert failed (${key}): HTTP ${res.status} ${await res.text()}`)
   }
 
+  // ------------------------------------------------------------------ chat
+  // The drawn job-channel threads. Messages are pinned to their author by
+  // RLS, so seeding other people's words goes through the service role. The
+  // drawn Marco (Kesselman) line is skipped — builders are not workers, and
+  // a message needs a real author.
+  const THREADS = [
+    ['lot42', [
+      ['sam', 0, '06:41', 'Screed to both ensuites still isn’t down. We can’t start Bath 2 tomorrow.'],
+      ['me', 0, '06:44', 'Photograph it and I’ll send it to Marco this morning.'],
+      ['sam', 0, '06:52', 'Sent — 3 photos on Ensuite 2.'],
+    ]],
+    ['hallett', [
+      ['nadia', 0, '11:20', 'Unit 4 grouted. Starting set-out in Unit 5 after lunch.'],
+      ['me', 0, '11:26', 'Good. Get a photo of the falls before you tile.'],
+    ]],
+    ['northgate', [
+      ['rob', -1, '21:58', 'Centre want Zone C kept open Thursday night. That pushes us a shift.'],
+      ['me', -1, '22:04', 'Raise it as a variation before you move anything.'],
+    ]],
+    ['glenelg', [
+      ['ben', 0, '08:12', 'B305 membrane is on. Flood test needs 24 hrs before the screed.'],
+      ['me', 0, '08:20', 'Do not let them screed before the test is photographed.'],
+    ]],
+    ['regency', [
+      ['me', -1, '15:00', 'Induction is 6:30 Monday. Everyone on site by 6:15.'],
+    ]],
+  ]
+  {
+    const key = await service()
+    const svcH = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
+    for (const [siteKey, msgs] of THREADS) {
+      const ch = await boss.get('channels', `select=id&site_id=eq.${site[siteKey].id}&kind=eq.site`)
+      const channel = Array.isArray(ch) ? ch[0] : null
+      if (!channel) continue
+      const have = await boss.get('messages', `select=id&channel_id=eq.${channel.id}&limit=1`)
+      if (Array.isArray(have) && have.length > 0) continue
+      const rows = msgs.map(([who, day, hm, text]) => ({
+        company_id: companyId, channel_id: channel.id,
+        author_id: who === 'me' ? me.id : crew[who].id,
+        kind: 'user', body: text, created_at: adAt(day, hm),
+      }))
+      const res = await fetch(`${SB}/rest/v1/messages`, { method: 'POST', headers: svcH, body: JSON.stringify(rows) })
+      if (!res.ok) throw new Error(`chat seed failed (${siteKey}): HTTP ${res.status} ${await res.text()}`)
+    }
+  }
+
   console.log('\nDemo account ready — the drawn world, live.')
   console.log(`  URL       ${APP}`)
   console.log(`  Email     ${DEMO_EMAIL}`)

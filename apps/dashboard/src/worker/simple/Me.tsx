@@ -1,17 +1,15 @@
 /**
- * Me — who you are, your hours, your account.
- *
- * The design draws Me as identity plus the personal surfaces. Hours moved
- * here from the old root tab: they are the worker's own record, which is
- * exactly what this tab is for. Account & privacy opens the existing sheet —
- * deletion, sign-out and the privacy policy all already live there.
+ * Me — the drawn identity card and the personal surface, transcribed from
+ * the isMe block: the 76px avatar on the dark gradient, the CONTACT card,
+ * and the settings rows. The drawing's MY DOCUMENTS section (tickets and
+ * licences) waits on a table to hold them — nothing is rendered that the
+ * database cannot back.
  */
-import { useState } from 'react'
-import type { WorkerRow } from '../../data/supabase'
+import { useEffect, useState } from 'react'
+import { supabase, type WorkerRow } from '../../data/supabase'
 import { HoursTab } from '../HoursTab'
 import { s } from './stheme'
 
-/** The shape HoursTab wants for the tracker's site list. */
 interface TrackerSite {
   id: string
   name: string
@@ -29,13 +27,35 @@ const ROLE_LABEL: Record<WorkerRow['role'], string> = {
 export function MeScreen({
   me,
   sites,
+  trackingOn,
+  onOpenClock,
   onShowAccount,
 }: {
   me: WorkerRow
   sites: TrackerSite[]
+  trackingOn: boolean
+  onOpenClock: () => void
   onShowAccount: () => void
 }) {
   const [showHours, setShowHours] = useState(false)
+  const [email, setEmail] = useState('')
+  const [company, setCompany] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    const client = supabase()
+    void Promise.all([
+      client.auth.getUser(),
+      client.from('companies').select('name').maybeSingle(),
+    ]).then(([u, c]) => {
+      if (cancelled) return
+      setEmail(u.data.user?.email ?? '')
+      setCompany((c.data as { name: string } | null)?.name ?? '')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [me.id])
 
   if (showHours) {
     return (
@@ -54,40 +74,59 @@ export function MeScreen({
     )
   }
 
-  const row = (label: string, sub: string, onTap: () => void) => (
-    <button
-      onClick={onTap}
-      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '15px 16px', background: s.panel, border: `1px solid ${s.border}`, borderRadius: 12, textAlign: 'left', fontFamily: 'inherit', cursor: 'pointer' }}
+  const settingsRow = (k: string, v: string, opts: { red?: boolean; onTap?: () => void; last?: boolean } = {}) => (
+    <span
+      key={k}
+      onClick={opts.onTap}
+      style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, padding: '11px 15px', borderBottom: opts.last ? 'none' : '1px solid #EDEFF1', cursor: opts.onTap ? 'pointer' : 'default' }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: s.ink }}>{label}</div>
-        <div style={{ fontSize: 12.5, color: s.muted }}>{sub}</div>
-      </div>
-      <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none' }}>
-        <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke={s.ghost} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </button>
+      <span style={{ flex: 1, fontSize: 15.5, color: opts.red ? '#A3282E' : s.ink, fontWeight: opts.red ? 600 : 500 }}>{k}</span>
+      <span style={{ fontSize: 14, color: '#8B9096' }}>{v}</span>
+    </span>
   )
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: s.appBg }}>
-      <div style={{ padding: '14px 20px 10px' }}>
-        <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: '-.02em', color: s.ink }}>Me</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '4px 20px 14px', padding: 16, background: s.inkDeep, borderRadius: 14 }}>
-        <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 52, height: 52, borderRadius: '50%', background: s.charcoal, color: '#fff', fontSize: 17, fontWeight: 700 }}>
-          {me.initials}
-        </span>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>{me.name}</div>
-          <div style={{ fontSize: 13, color: s.onDarkMuted }}>
-            {[ROLE_LABEL[me.role], me.trade].filter(Boolean).join(' · ')}
-          </div>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#F5F6F7' }}>
+      {/* Identity — the 76px avatar on the dark gradient card. */}
+      <div style={{ padding: '6px 18px 4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: 18, borderRadius: 14, background: 'linear-gradient(#23272C,#15181C)', boxShadow: '0 10px 24px rgba(16,20,24,.20), 0 1px 0 rgba(255,255,255,.06) inset' }}>
+          <span style={{ flex: 'none', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 76, height: 76, borderRadius: '50%', background: '#4A5057', color: '#fff', fontSize: 23, fontWeight: 600, letterSpacing: '.02em' }}>
+            {me.initials}
+            <span style={{ position: 'absolute', right: -2, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', background: '#fff', border: '2.5px solid #1B1F23' }}>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#14171A" strokeWidth="1.7" strokeLinejoin="round">
+                <path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z" />
+                <circle cx="10" cy="10.8" r="3" />
+              </svg>
+            </span>
+          </span>
+          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 21, fontWeight: 600, letterSpacing: '-.02em', color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me.name}</span>
+            <span style={{ fontSize: 14, lineHeight: 1.35, color: '#98A0A8' }}>
+              {[ROLE_LABEL[me.role], company || me.trade].filter(Boolean).join(' · ')}
+            </span>
+          </span>
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 20px 20px' }}>
-        {row('My hours', 'Every shift, and how it was recorded', () => setShowHours(true))}
-        {row('Account & privacy', 'Tracking, your data, sign out', onShowAccount)}
+
+      {/* CONTACT. */}
+      <div style={{ padding: '16px 18px 9px' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>CONTACT</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', margin: '0 18px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, overflow: 'hidden' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 60, padding: '11px 15px' }}>
+          <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '.05em', color: '#7B838B' }}>EMAIL</span>
+            <span style={{ fontSize: 15.5, color: s.ink }}>{email || '—'}</span>
+          </span>
+        </span>
+      </div>
+
+      {/* Settings — the drawn rows, plus the personal surfaces they open. */}
+      <div style={{ display: 'flex', flexDirection: 'column', margin: 18, background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, overflow: 'hidden' }}>
+        {settingsRow('My hours', 'Every shift', { onTap: () => setShowHours(true) })}
+        {settingsRow('Location while working', trackingOn ? 'On' : 'Off', { onTap: onOpenClock })}
+        {settingsRow('Account & privacy', '', { onTap: onShowAccount })}
+        {settingsRow('Sign out', '', { red: true, last: true, onTap: () => void supabase().auth.signOut() })}
       </div>
     </div>
   )

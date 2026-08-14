@@ -38,6 +38,8 @@ export interface SimpleData {
    * test is the one mistake this trade cannot photograph its way out of.
    */
   floodHold: Map<string, number>
+  /** site_id → the held areas' names, for notes like "Flood test on B305…". */
+  floodAreas: Map<string, string[]>
   refresh: () => void
 }
 
@@ -60,7 +62,7 @@ export function useSimpleData(me: WorkerRow): SimpleData {
   const [bookings, setBookings] = useState<AssignmentRow[]>([])
   const [pendingVariations, setPendingVariations] = useState(0)
   const [variationRows, setVariationRows] = useState<Array<{ id: string; site_id: string | null }>>([])
-  const [wpRows, setWpRows] = useState<Array<{ site_id: string; status: string; flood_tested: boolean }>>([])
+  const [wpRows, setWpRows] = useState<Array<{ site_id: string; area: string; status: string; flood_tested: boolean }>>([])
 
   useEffect(() => {
     let cancelled = false
@@ -84,7 +86,7 @@ export function useSimpleData(me: WorkerRow): SimpleData {
         .order('starts_at'),
       client.from('change_orders').select('id, site_id').eq('status', 'pending_client'),
       client.from('crew_v').select('id, name, initials'),
-      client.from('waterproofing').select('site_id, status, flood_tested').in('status', ['complete', 'signed_off']).eq('flood_tested', false),
+      client.from('waterproofing').select('site_id, area, status, flood_tested').in('status', ['complete', 'signed_off']).eq('flood_tested', false),
     ]).then(([st, pr, df, sh, asg, co, cv, wp]) => {
       if (cancelled) return
       const firstError = st.error || pr.error || df.error || sh.error || asg.error
@@ -99,7 +101,7 @@ export function useSimpleData(me: WorkerRow): SimpleData {
       setPendingVariations(co.error ? 0 : (co.data?.length ?? 0))
       setVariationRows(co.error ? [] : ((co.data as Array<{ id: string; site_id: string | null }>) ?? []))
       setRoster((cv.data as Array<{ id: string; name: string; initials: string }>) ?? [])
-      setWpRows(wp.error ? [] : ((wp.data as Array<{ site_id: string; status: string; flood_tested: boolean }>) ?? []))
+      setWpRows(wp.error ? [] : ((wp.data as Array<{ site_id: string; area: string; status: string; flood_tested: boolean }>) ?? []))
       setLoading(false)
     })
     return () => {
@@ -155,6 +157,12 @@ export function useSimpleData(me: WorkerRow): SimpleData {
     return m
   }, [wpRows])
 
+  const floodAreas = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const r of wpRows) m.set(r.site_id, [...(m.get(r.site_id) ?? []), r.area])
+    return m
+  }, [wpRows])
+
   const { today, tomorrow } = useMemo(() => {
     const t1 = dayStart(1).getTime()
     const today: AssignmentRow[] = []
@@ -182,6 +190,7 @@ export function useSimpleData(me: WorkerRow): SimpleData {
     pendingVariationsBySite,
     crewOnSite,
     floodHold,
+    floodAreas,
     refresh: useCallback(() => setNonce((n) => n + 1), []),
   }
 }
