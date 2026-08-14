@@ -7,7 +7,7 @@
  */
 import { useState } from 'react'
 import type { JobSiteRow, WorkerRow } from '../../data/supabase'
-import { jobColour, s } from './stheme'
+import { avatarGrey, railOf, s } from './stheme'
 import type { SimpleData } from './data'
 
 const DAY = 86_400_000
@@ -76,7 +76,7 @@ export function HomeScreen({
         // same way people do out loud: "Lot 42", not "Lot 42, Kentish Ave".
         name: site.name.split(',')[0],
         time: `${clockTime(b.starts_at)} – ${clockTime(b.ends_at)}`,
-        rail: jobColour(site.id),
+        rail: railOf(site),
       })
     }
     return [...seen.values()]
@@ -271,7 +271,7 @@ export function HomeScreen({
                   onClick={() => onOpenJob(site)}
                   style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, minHeight: 64, padding: '11px 13px 11px 19px', borderTop: `1px solid ${i === 0 ? 'transparent' : '#EDEFF1'}`, cursor: 'pointer' }}
                 >
-                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: jobColour(site.id) }} />
+                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site) }} />
                   <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.01em', color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {site.name}
@@ -331,14 +331,14 @@ export function HomeScreen({
                     onClick={() => { setWhoOpen(false); onOpenJob(site, 'crew') }}
                     style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, minHeight: 70, padding: '12px 18px 12px 24px', borderTop: '1px solid #EDEFF1', cursor: 'pointer' }}
                   >
-                    <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: jobColour(siteId) }} />
+                    <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site) }} />
                     <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                       <span style={{ fontSize: 15.5, fontWeight: 600, color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
                       <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{who}</span>
                     </span>
                     <span style={{ flex: 'none', display: 'flex', alignItems: 'center' }}>
                       {crew.slice(0, 4).map((c, i) => (
-                        <span key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, marginRight: -7, borderRadius: '50%', border: '2px solid #fff', background: s.charcoal, color: '#fff', fontSize: 10.5, fontWeight: 700 }}>
+                        <span key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, marginRight: -7, borderRadius: '50%', border: '2px solid #fff', background: avatarGrey(i), color: '#fff', fontSize: 10.5, fontWeight: 700 }}>
                           {c.initials}
                         </span>
                       ))}
@@ -392,7 +392,7 @@ export function HomeScreen({
                   onClick={() => { setAttnOpen(false); onOpenJob(site, tab) }}
                   style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, minHeight: 72, padding: '12px 16px 12px 24px', background: '#fff', borderBottom: '1px solid #EDEFF1', cursor: 'pointer' }}
                 >
-                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: jobColour(site.id) }} />
+                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site) }} />
                   <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.01em', color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
                     <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -420,7 +420,7 @@ export function HomeScreen({
                     onClick={() => { setAttnOpen(false); onOpenJob(site) }}
                     style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, minHeight: 66, padding: '11px 16px 11px 24px', background: '#fff', borderTop: '1px solid #EDEFF1', cursor: 'pointer' }}
                   >
-                    <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: jobColour(site.id) }} />
+                    <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site) }} />
                     <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                       <span style={{ fontSize: 15.5, fontWeight: 600, color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
                       <span style={{ fontSize: 13, color: '#7B838B' }}>{state}</span>

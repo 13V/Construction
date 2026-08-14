@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow, type WorkerRow } from '../../data/supabase'
-import { jobColour, s } from './stheme'
+import { avatarGrey, railOf, s } from './stheme'
 import type { SimpleData } from './data'
 
 const money0 = (v: number) =>
@@ -286,7 +286,7 @@ export function ProjectsScreen({
             const sub = [localeOf(site), site.job_type, site.client_name].filter(Boolean).join(' · ')
             return (
               <div key={site.id} style={{ position: 'relative', display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, boxShadow: '0 1px 2px rgba(16,20,24,.05)', overflow: 'hidden' }}>
-                <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: jobColour(site.id), zIndex: 1 }} />
+                <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site), zIndex: 1 }} />
                 <span onClick={() => onOpenJob(site)} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 14px 13px 19px', cursor: 'pointer' }}>
                   <span style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -302,7 +302,7 @@ export function ProjectsScreen({
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                     <span style={{ flex: 1, display: 'block', height: 4, borderRadius: 2, background: '#EDEFF1', overflow: 'hidden' }}>
-                      <span style={{ display: 'block', height: 4, borderRadius: 2, background: jobColour(site.id), width: `${pct}%` }} />
+                      <span style={{ display: 'block', height: 4, borderRadius: 2, background: railOf(site), width: `${pct}%` }} />
                     </span>
                     <span style={{ flex: 'none', fontSize: 13, fontWeight: 600, color: '#5B6169' }}>{pct}%</span>
                   </span>
@@ -312,8 +312,8 @@ export function ProjectsScreen({
                   style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 52, padding: '8px 14px 8px 19px', borderTop: '1px solid #EDEFF1', cursor: 'pointer' }}
                 >
                   <span style={{ flex: 'none', display: 'flex', alignItems: 'center' }}>
-                    {people.slice(0, 4).map((p) => (
-                      <span key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, marginRight: -7, borderRadius: '50%', border: '2px solid #fff', background: p.onClock ? s.charcoal : '#8B9096', color: '#fff', fontSize: 10, fontWeight: 700 }}>
+                    {people.slice(0, 4).map((p, i) => (
+                      <span key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, marginRight: -7, borderRadius: '50%', border: '2px solid #fff', background: p.onClock ? avatarGrey(i) : '#8B9096', color: '#fff', fontSize: 10, fontWeight: 700 }}>
                         {p.initials}
                       </span>
                     ))}
@@ -325,9 +325,9 @@ export function ProjectsScreen({
                 </span>
                 {isOpen && (
                   <span style={{ display: 'flex', flexDirection: 'column', background: '#FAFBFC', borderTop: '1px solid #EDEFF1' }}>
-                    {people.map((p) => (
+                    {people.map((p, i) => (
                       <span key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 56, padding: '9px 14px 9px 19px', borderBottom: '1px solid #EDEFF1' }}>
-                        <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: p.onClock ? s.charcoal : '#8B9096', color: '#fff', fontSize: 11, fontWeight: 700 }}>
+                        <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: p.onClock ? avatarGrey(i) : '#8B9096', color: '#fff', fontSize: 11, fontWeight: 700 }}>
                           {p.initials}
                         </span>
                         <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -381,7 +381,7 @@ export function ProjectsScreen({
                   onClick={() => onOpenJob(site, 'crew')}
                   style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, minHeight: 68, padding: '11px 14px 11px 19px', borderTop: `1px solid ${i === 0 ? 'transparent' : '#EDEFF1'}`, cursor: 'pointer' }}
                 >
-                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: jobColour(site.id) }} />
+                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site) }} />
                   <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ fontSize: 15.5, fontWeight: 600, color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
                     <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

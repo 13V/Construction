@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
-import { jobColour, s } from './stheme'
+import { railOf, s } from './stheme'
 import type { SimpleData } from './data'
 
 /** "Lot 42, Kentish Ave" → "L42"; "Hallett Cove" → "HC" — the drawn tiles. */
@@ -116,7 +116,7 @@ export function SimpleChat({
   const unreadTotal = unreadList.reduce((a, c) => a + c.waiting, 0)
 
   const tile = (site: JobSiteRow, size: number) => (
-    <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, borderRadius: 11, background: jobColour(site.id), color: '#fff', fontSize: size > 40 ? 13.5 : 13, fontWeight: 700, letterSpacing: '-.01em' }}>
+    <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, borderRadius: 11, background: railOf(site), color: '#fff', fontSize: size > 40 ? 13.5 : 13, fontWeight: 700, letterSpacing: '-.01em' }}>
       {jobInit(site.name)}
     </span>
   )

@@ -10,7 +10,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow } from '../../data/supabase'
-import { jobColour, s } from './stheme'
+import { avatarGrey, railOf, s } from './stheme'
 import type { SimpleData } from './data'
 
 const DAY = 86_400_000
@@ -160,7 +160,7 @@ export function SimpleSchedule({
                 onClick={() => onOpenJob(site)}
                 style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 15px 14px 19px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, boxShadow: '0 1px 2px rgba(16,20,24,.05)', cursor: 'pointer', overflow: 'hidden' }}
               >
-                <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: jobColour(siteId) }} />
+                <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site) }} />
                 <span style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                   <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ fontSize: 16.5, fontWeight: 600, letterSpacing: '-.01em', color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
@@ -176,7 +176,7 @@ export function SimpleSchedule({
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ flex: 'none', display: 'flex', alignItems: 'center' }}>
                     {crew.slice(0, 5).map((w, i) => (
-                      <span key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, marginRight: -7, borderRadius: '50%', border: '2px solid #fff', background: s.charcoal, color: '#fff', fontSize: 10.5, fontWeight: 700 }}>
+                      <span key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, marginRight: -7, borderRadius: '50%', border: '2px solid #fff', background: avatarGrey(i), color: '#fff', fontSize: 10.5, fontWeight: 700 }}>
                         {w.initials}
                       </span>
                     ))}

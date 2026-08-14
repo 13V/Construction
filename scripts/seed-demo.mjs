@@ -226,26 +226,27 @@ try {
   // street when the job is named after its suburb ("18 Sandison Rd"), and
   // nothing when the address is just the job ("Glenelg Marina 3B").
   const startMon = nextMonday()
+  // Colours are the drawing's own RAIL map — chosen, not hashed.
   const SITES = {
     lot42: {
       name: 'Lot 42, Kentish Ave', address: '42 Kentish Ave, Prospect SA 5082',
       job_type: 'Tiling', client_name: 'Kesselman Homes', status: 'active',
-      lat: -34.8843, lng: 138.5946, radius_m: 150,
+      lat: -34.8843, lng: 138.5946, radius_m: 150, colour: '#4C7FB8',
     },
     hallett: {
       name: 'Hallett Cove', address: '18 Sandison Rd, Hallett Cove SA 5158',
       job_type: 'Bathroom refit × 6', client_name: '', status: 'active',
-      lat: -35.0777, lng: 138.5083, radius_m: 120,
+      lat: -35.0777, lng: 138.5083, radius_m: 120, colour: '#5C8A63',
     },
     northgate: {
       name: 'Northgate Plaza', address: 'Food court, Northgate Plaza SA 5085',
       job_type: 'Floor tiling · Night works', client_name: '', status: 'active',
-      lat: -34.8551, lng: 138.6253, radius_m: 200,
+      lat: -34.8551, lng: 138.6253, radius_m: 200, colour: '#A5714A',
     },
     glenelg: {
       name: 'Glenelg Marina 3B', address: 'Glenelg Marina 3B SA 5045',
       job_type: 'Balcony waterproofing · Level 3', client_name: '', status: 'active',
-      lat: -34.9698, lng: 138.5090, radius_m: 120,
+      lat: -34.9698, lng: 138.5090, radius_m: 120, colour: '#8B8375',
     },
   }
   const site = {}
@@ -253,6 +254,8 @@ try {
     site[key] = await ensureRow(boss, 'job_sites', `select=id&company_id=eq.${companyId}&name=eq.${encodeURIComponent(def.name)}`, {
       company_id: companyId, ...def,
     }, `job site (${def.name})`)
+    // ensureRow never updates an existing row; the colour must land either way.
+    await boss.patch('job_sites', `id=eq.${site[key].id}`, { colour: def.colour })
   }
   await boss.patch('job_sites', `id=eq.${site.lot42.id}`, { captain_id: crew.sam.id })
   await boss.patch('job_sites', `id=eq.${site.northgate.id}`, { captain_id: crew.rob.id })
@@ -265,12 +268,12 @@ try {
     const regencyDef = {
       name: 'Regency Park Storage', address: 'Warehouse floor, Regency Park Storage SA 5010',
       job_type: 'Epoxy & sealing', client_name: '', status: 'starting_soon',
-      schedule_note: `Starts ${fmtDay(startMon)}`,
+      schedule_note: `Starts ${fmtDay(startMon)}`, colour: '#6E7B86',
     }
     const existing = await boss.get('job_sites', `select=id&company_id=eq.${companyId}&name=eq.${encodeURIComponent('Regency Park Storage')}`)
     if (Array.isArray(existing) && existing.length > 0) {
       site.regency = existing[0]
-      await boss.patch('job_sites', `id=eq.${site.regency.id}`, { schedule_note: regencyDef.schedule_note, status: 'starting_soon' })
+      await boss.patch('job_sites', `id=eq.${site.regency.id}`, { schedule_note: regencyDef.schedule_note, status: 'starting_soon', colour: regencyDef.colour })
     } else {
       const old = await boss.get('job_sites', `select=id&company_id=eq.${companyId}&name=eq.${encodeURIComponent('App Review demo site')}`)
       if (Array.isArray(old) && old.length > 0) {

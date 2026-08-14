@@ -45,14 +45,26 @@ export const s = {
   onDarkFaint: '#5B6169', // ×15
 } as const
 
-/** Job colour edges, as drawn: blue, green, brown, ochre. Stable per site. */
-export const JOB_COLOURS = ['#4C7FB8', '#5C8A63', '#A5714A', '#8B6E3F', '#7A6BA8', '#3F7A75']
+/** The drawing's rail palette — the swatches its New-project form offers. */
+export const JOB_COLOURS = ['#4C7FB8', '#5C8A63', '#A5714A', '#8B8375', '#6E7B86']
 
 export function jobColour(siteId: string): string {
   let h = 0
   for (let i = 0; i < siteId.length; i++) h = (h * 31 + siteId.charCodeAt(i)) >>> 0
   return JOB_COLOURS[h % JOB_COLOURS.length]
 }
+
+/**
+ * A job's rail: the colour somebody chose for it, or the hash when nobody
+ * has. Everything that draws a job edge, bar or tile goes through this.
+ */
+export function railOf(site: { id: string; colour?: string | null }): string {
+  return site.colour || jobColour(site.id)
+}
+
+/** The drawing's avatar greys — stacks cycle these so heads stay separable. */
+export const AV_GREYS = ['#2B2F33', '#4A5057', '#696D74', '#7B838B']
+export const avatarGrey = (i: number) => AV_GREYS[i % AV_GREYS.length]
 
 export const sFont =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'

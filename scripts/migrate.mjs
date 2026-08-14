@@ -43,6 +43,8 @@ const MIGRATIONS = [
   { file: 'schema_v22.sql', proves: ['prune_positions'] },
   { file: 'schema_v23.sql', proves: ['delete_worker_account'] },
   { file: 'schema_v24.sql', proves: ['crew_v', 'site_variations_v'] },
+  // Column-only migration: proven by table.column, which the probe also lists.
+  { file: 'schema_v25.sql', proves: ['job_sites.colour'] },
 ]
 
 // ------------------------------------------------------------- credentials
@@ -122,7 +124,10 @@ try {
                  union all
                  select p.proname as n from pg_proc p
                    join pg_namespace ns on ns.oid = p.pronamespace
-                  where ns.nspname = 'public'`)
+                  where ns.nspname = 'public'
+                 union all
+                 select table_name || '.' || column_name as n
+                   from information_schema.columns where table_schema = 'public'`)
     ).map((r) => r.n),
   )
 
@@ -169,7 +174,10 @@ try {
                  union all
                  select p.proname as n from pg_proc p
                    join pg_namespace ns on ns.oid = p.pronamespace
-                  where ns.nspname = 'public'`)
+                  where ns.nspname = 'public'
+                 union all
+                 select table_name || '.' || column_name as n
+                   from information_schema.columns where table_schema = 'public'`)
     ).map((r) => r.n),
   )
   const missing = MIGRATIONS.flatMap((m) => m.proves).filter((t) => !after.has(t))

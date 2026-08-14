@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, type JobSiteRow, type SiteFileRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
 import { PlansScreen } from '../PlansScreen'
-import { s } from './stheme'
+import { avatarGrey, s } from './stheme'
 
 type JobTab = 'photos' | 'plans' | 'waterproofing' | 'chat' | 'money' | 'crew'
 
@@ -574,7 +574,7 @@ function CrewTab({ site }: { site: JobSiteRow }) {
     <div style={{ height: '100%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 16px 20px' }}>
       {rows.map((r, i) => (
         <div key={i} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, minHeight: 58, padding: '11px 13px 11px 15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, boxShadow: '0 1px 2px rgba(16,20,24,.04)' }}>
-          <span style={{ position: 'relative', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: s.charcoal, color: '#fff', fontSize: 11.5, fontWeight: 700 }}>
+          <span style={{ position: 'relative', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: avatarGrey(i), color: '#fff', fontSize: 11.5, fontWeight: 700 }}>
             {r.initials}
             <span style={{ position: 'absolute', right: -1, bottom: -1, width: 10, height: 10, borderRadius: '50%', border: '2px solid #fff', background: '#4CC38A' }} />
           </span>

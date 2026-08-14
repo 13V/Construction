@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { AuthScreen } from '../auth/AuthScreen'
 import { useSession } from '../auth/useSession'
 import { api } from '../data/api'
 import { DeleteAccount } from './DeleteAccount'
@@ -24,6 +23,8 @@ import { DailyLogScreen } from './DailyLogScreen'
 import { useSites } from './useSites'
 import { SimpleChat } from './simple/Chat'
 import { HomeScreen } from './simple/Home'
+import { PhoneFrame } from './simple/PhoneFrame'
+import { SimpleSignIn } from './simple/SignIn'
 import { JobScreen } from './simple/Job'
 import { MeScreen } from './simple/Me'
 import { ProjectsScreen } from './simple/Projects'
@@ -116,13 +117,21 @@ interface PingResponse {
 }
 
 export function WorkerApp() {
+  return (
+    <PhoneFrame>
+      <WorkerSurface />
+    </PhoneFrame>
+  )
+}
+
+function WorkerSurface() {
   const { loading, session, me } = useSession()
 
   if (!supabaseConfigured) {
     return <Notice title="Not configured">This build has no Supabase credentials.</Notice>
   }
   if (loading) return <Notice title="Loading…">One moment.</Notice>
-  if (!session) return <AuthScreen />
+  if (!session) return <SimpleSignIn />
   if (!me) {
     return (
       <Notice title="Not linked to a company">
@@ -355,9 +364,10 @@ function Tracker({ me }: { me: WorkerRow }) {
   return (
     <div
       style={{
-        height: '100dvh',
-        minHeight: '100vh',
-        maxWidth: 480,
+        // The frame (or the phone itself) owns the viewport; the shell just
+        // fills it. 430 is the widest real phone, and the drawing is 390.
+        height: '100%',
+        maxWidth: 430,
         margin: '0 auto',
         background: theme.panel,
         display: 'flex',
@@ -552,11 +562,12 @@ function Tracker({ me }: { me: WorkerRow }) {
       {screen === 'tracker' && error && <Banner tone="error">{error}</Banner>}
       {screen === 'tracker' && showAccount && <AccountSheet me={me} onClose={() => setShowAccount(false)} />}
 
-      {/* The bar is the app. It shows on every tab and never on a panel that
-          was opened from one — a panel is a trip you come back from. */}
-      {screen === 'tracker' && (
+      {/* The bar is the app. It shows on every tab and never over a push —
+          an open job and the clock cover it, exactly as the drawing renders
+          them, and the back chevron is the way home. */}
+      {screen === 'tracker' && !(tab === 'home' && (openJob || clockOpen)) && (
         <TabBar
-          active={openJob && tab === 'home' ? 'projects' : tab}
+          active={tab}
           unread={0}
           onPick={(k) => {
             setOpenJobId(null)
@@ -1695,7 +1706,7 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        height: '100%',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
