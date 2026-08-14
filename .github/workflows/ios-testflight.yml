@@ -23,6 +23,14 @@ on:
         description: 'Backend the app talks to (must be absolute — see src/data/api.ts)'
         required: true
         default: 'https://construction-opal-three.vercel.app'
+  # A push to this one branch is the same button. It exists because the
+  # GitHub App that automates this repo can push but cannot fire
+  # workflow_dispatch (no actions:write) — so "release to TestFlight" is
+  # `git push origin <commit>:release/testflight`. The branch carries no
+  # development; it only ever points at whatever should be built next, and
+  # a push-triggered run uses the default api_base below.
+  push:
+    branches: [release/testflight]
 
 # One build at a time. Two concurrent runs would race for the same build number
 # and the second upload would be rejected as a duplicate.
@@ -44,7 +52,7 @@ jobs:
       # entirely by this flag — see the comment in src/main.tsx for why it is a
       # build-time constant rather than a runtime check.
       VITE_SURFACE: worker
-      VITE_API_BASE: ${{ inputs.api_base }}
+      VITE_API_BASE: ${{ inputs.api_base || 'https://construction-opal-three.vercel.app' }}
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
