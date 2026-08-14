@@ -172,7 +172,7 @@ function Tracker({ me }: { me: WorkerRow }) {
   const [tab, setTab] = useState<Tab>('home')
   /** The job open over Home, and whether the full clock surface is up. */
   const [openJobId, setOpenJobId] = useState<string | null>(null)
-  const [clockOpen, setClockOpen] = useState(false)
+  const [clockOpen, setClockOpen] = useState(() => !me.is_office)
   const [celebration, setCelebration] = useState<Celebration | null>(null)
   const [clockOutConfirm, setClockOutConfirm] = useState(false)
   const [note, setNote] = useState<string | null>(null)
@@ -349,53 +349,6 @@ function Tracker({ me }: { me: WorkerRow }) {
     if (celebration) setClockOpen(true)
   }, [celebration])
 
-  /** The tracker's live state as Home's strip — colour and copy per phase. */
-  const clockStrip = (() => {
-    const base: CSSProperties = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 9,
-      margin: '2px 20px 0',
-      padding: '11px 14px',
-      borderRadius: 12,
-      border: '1px solid',
-      fontFamily: 'inherit',
-      fontSize: 13,
-      fontWeight: 600,
-      textAlign: 'left' as const,
-      cursor: 'pointer',
-      width: 'calc(100% - 40px)',
-    }
-    const open = () => setClockOpen(true)
-    if (!tracking)
-      return (
-        <button onClick={open} style={{ ...base, background: simple.amberFill, borderColor: '#F0DCA8', color: simple.amber }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: simple.amber }} />
-          Tracking is off — you will not be clocked on
-        </button>
-      )
-    if (onClock && site)
-      return (
-        <button onClick={open} style={{ ...base, background: simple.greenFill, borderColor: '#C6E5CC', color: simple.green }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: simple.green }} />
-          On the clock at {site.name} · {(elapsed / 3_600_000).toFixed(1)} hrs
-        </button>
-      )
-    if (confirming && site)
-      return (
-        <button onClick={open} style={{ ...base, background: '#EEEAFB', borderColor: '#D8CFF4', color: simple.accent }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: simple.accent }} />
-          Confirming you&rsquo;re on site at {site.name}…
-        </button>
-      )
-    return (
-      <button onClick={open} style={{ ...base, background: simple.panel, borderColor: simple.border, color: simple.body }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: simple.green }} />
-        Tracking on{nearest ? ` · headed to ${nearest.s.name}` : ''}
-      </button>
-    )
-  })()
-
   return (
     <div
       style={{
@@ -478,6 +431,7 @@ function Tracker({ me }: { me: WorkerRow }) {
           )}
           onBack={() => setOpenJobId(null)}
           onTakePhoto={() => setScreen('photo')}
+          onAddInvoice={() => setScreen('receipt')}
         />
       )}
 
@@ -485,10 +439,10 @@ function Tracker({ me }: { me: WorkerRow }) {
         <HomeScreen
           me={me}
           data={simpleData}
-          clockStrip={clockStrip}
           onOpenJob={(x) => setOpenJobId(x.id)}
           onOpenSchedule={() => setTab('schedule')}
           onOpenClock={() => setClockOpen(true)}
+          onOpenNotifications={() => setTab('projects')}
           onShowAccount={() => setShowAccount(true)}
         />
       )}
@@ -566,7 +520,17 @@ function Tracker({ me }: { me: WorkerRow }) {
 
       {/* The bar is the app. It shows on every tab and never on a panel that
           was opened from one — a panel is a trip you come back from. */}
-      {screen === 'tracker' && <TabBar active={tab} unread={0} onPick={setTab} />}
+      {screen === 'tracker' && (
+        <TabBar
+          active={openJob && tab === 'home' ? 'projects' : tab}
+          unread={0}
+          onPick={(k) => {
+            setOpenJobId(null)
+            setClockOpen(false)
+            setTab(k)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -580,66 +544,68 @@ function TabBar({
   unread: number
   onPick: (t: Tab) => void
 }) {
-  const items: Array<{ key: Tab; label: string; icon: (c: string) => ReactNode }> = [
-    { key: 'home', label: 'Home', icon: (c) => <HouseIcon color={c} /> },
-    { key: 'projects', label: 'Projects', icon: (c) => <FolderIcon color={c} /> },
-    { key: 'schedule', label: 'Schedule', icon: (c) => <CalendarTabIcon color={c} /> },
-    { key: 'chat', label: 'Chat', icon: (c) => <ChatBubbleIcon color={c} size={22} /> },
-    { key: 'me', label: 'Me', icon: (c) => <PersonIcon color={c} /> },
+  // Icon paths lifted from the design's rootBar — 20-unit viewBox, stroke 1.7.
+  const items: Array<{ key: Tab; label: string; d: string }> = [
+    { key: 'home', label: 'Home', d: 'M3 9.2 10 3.6l7 5.6V17H3z' },
+    { key: 'projects', label: 'Projects', d: 'M2.5 5.5h5l1.5 2h8.5v9.5h-15z' },
+    { key: 'schedule', label: 'Schedule', d: 'M3.5 4.5h13v13h-13zM3.5 8.5h13M7 2.5v3M13 2.5v3' },
+    { key: 'chat', label: 'Chat', d: 'M3 4.5h14v9h-8l-4 3.5v-3.5h-2z' },
+    { key: 'me', label: 'Me', d: 'M10 10.5a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3.8 17.2c0-3 2.8-4.7 6.2-4.7s6.2 1.7 6.2 4.7' },
   ]
   return (
     <div
       style={{
         flex: 'none',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(5, 1fr)',
+        display: 'flex',
+        alignItems: 'stretch',
+        height: 58,
+        background: '#fff',
         borderTop: `1px solid ${theme.border}`,
-        background: theme.panel,
-        // 56px plus the home-indicator inset, per the design note.
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
       {items.map((it) => {
         const on = active === it.key
-        // The Simple design's accent — purple, exact-as-drawn.
-        const colour = on ? simple.accent : theme.inkFaint
+        const colour = on ? simple.accent : '#8B9096'
         return (
           <button
             key={it.key}
             onClick={() => onPick(it.key)}
             style={{
               position: 'relative',
+              flex: 1,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 3,
-              height: 56,
               border: 'none',
               background: 'transparent',
               font: 'inherit',
               cursor: 'pointer',
             }}
           >
-            {it.icon(colour)}
-            <span style={{ fontSize: 10.5, fontWeight: on ? 700 : 500, color: colour }}>{it.label}</span>
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="none" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" stroke={colour}>
+              <path d={it.d} />
+            </svg>
+            <span style={{ fontSize: 11, fontWeight: on ? 700 : 500, color: colour }}>{it.label}</span>
             {it.key === 'chat' && unread > 0 && (
               <span
                 style={{
                   position: 'absolute',
-                  top: 6,
+                  top: 8,
                   left: 'calc(50% + 6px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   minWidth: 16,
                   height: 16,
                   padding: '0 4px',
                   borderRadius: 8,
-                  background: theme.alert,
+                  background: '#A3282E',
                   color: '#fff',
                   fontSize: 10,
                   fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                 }}
               >
                 {unread}
@@ -649,40 +615,6 @@ function TabBar({
         )
       })}
     </div>
-  )
-}
-
-function HouseIcon({ color }: { color: string }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
-      <path d="M4 10.5L12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-4V14h-5v6.5h-4A1.5 1.5 0 0 1 4 19z" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function CalendarTabIcon({ color }: { color: string }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
-      <rect x="3.5" y="5.5" width="17" height="15" rx="1.8" />
-      <path d="M3.5 10h17M8 3.5v3.6M16 3.5v3.6" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function PersonIcon({ color }: { color: string }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
-      <circle cx="12" cy="8.4" r="3.6" />
-      <path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function FolderIcon({ color }: { color: string }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
-      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.8 2.2h9.2A1.5 1.5 0 0 1 21 9.7v7.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
-    </svg>
   )
 }
 
@@ -1172,15 +1104,6 @@ function ReceiptIcon({ color = theme.ink, size = 24 }: { color?: string; size?: 
     </svg>
   )
 }
-
-function ChatBubbleIcon({ color = theme.ink, size = 24 }: { color?: string; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth={1.3}>
-      <path d="M2.4 3.4h11.2v7.4H7.2L4.2 13.4v-2.6H2.4z" strokeLinejoin="round" />
-    </svg>
-  )
-}
-// Re-exported under the name the action grid expects.
 
 function WifiOffIcon() {
   return (
