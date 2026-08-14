@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html><head>
+<html>
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
@@ -26,8 +27,8 @@ input::placeholder{color:#A7ADB4}
 <span style="width:1px;height:18px;background:rgba(255,255,255,.18)"></span>
 <span style="font-size:12px;color:#9AA1A9">{{ hint }}</span>
 <span style="flex:1"></span>
-<button sc-camel-on-click="{{ goShot }}" style-hover="filter:brightness(1.4)" style="display:flex;align-items:center;height:26px;padding:0 11px;margin-right:6px;border:0;border-radius:3px;background:rgba(255,255,255,.14);color:#fff;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Sign-up flow</button>
-<button sc-camel-on-click="{{ goHome }}" style-hover="filter:brightness(1.4)" style="display:flex;align-items:center;height:26px;padding:0 11px;border:0;border-radius:3px;background:rgba(255,255,255,.14);color:#fff;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Back to jobs</button>
+<button onClick="{{ goShot }}" style-hover="filter:brightness(1.4)" style="display:flex;align-items:center;height:26px;padding:0 11px;margin-right:6px;border:0;border-radius:3px;background:rgba(255,255,255,.14);color:#fff;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Sign-up flow</button>
+<button onClick="{{ goHome }}" style-hover="filter:brightness(1.4)" style="display:flex;align-items:center;height:26px;padding:0 11px;border:0;border-radius:3px;background:rgba(255,255,255,.14);color:#fff;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Back to jobs</button>
 </div>
 
 <div style="flex:1;min-height:0;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:22px 20px 28px">
@@ -35,22 +36,22 @@ input::placeholder{color:#A7ADB4}
 <div style="position:relative;width:100%;height:100%;border-radius:34px;overflow:hidden;display:flex;flex-direction:column;background:#F5F6F7">
 
 <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:none;display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 20px;background:#fff">
 <span style="font-size:21px;font-weight:600;letter-spacing:-.015em">Home</span>
 <span style="display:flex;align-items:center;gap:4px">
-<span style="position:relative;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="22" height="22" sc-camel-view-box="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.7" stroke-linecap="round"><path d="M10 3.2a4.6 4.6 0 0 0-4.6 4.6c0 4-1.6 5.2-1.6 5.2h12.4s-1.6-1.2-1.6-5.2A4.6 4.6 0 0 0 10 3.2z"></path><path d="M8.4 15.6a1.9 1.9 0 0 0 3.2 0"></path></svg><span style="position:absolute;top:9px;right:9px;width:8px;height:8px;border-radius:50%;background:#E5484D;border:1.5px solid #fff"></span></span>
+<span style="position:relative;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.7" stroke-linecap="round"><path d="M10 3.2a4.6 4.6 0 0 0-4.6 4.6c0 4-1.6 5.2-1.6 5.2h12.4s-1.6-1.2-1.6-5.2A4.6 4.6 0 0 0 10 3.2z"></path><path d="M8.4 15.6a1.9 1.9 0 0 0 3.2 0"></path></svg><span style="position:absolute;top:9px;right:9px;width:8px;height:8px;border-radius:50%;background:#E5484D;border:1.5px solid #fff"></span></span>
 <span style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#2B2F33;color:#fff;font-size:11px;font-weight:700;cursor:pointer">DM</span>
 </span>
 </div>
 
 <div style="flex:1;min-height:0;overflow:auto;background:#F5F6F7">
 <div style="padding:6px 18px 0">
-<div sc-camel-on-click="{{ goSchedule }}" style-hover="filter:brightness(1.16)" style="display:flex;flex-direction:column;border-radius:14px;overflow:hidden;background:linear-gradient(#23272C,#15181C);box-shadow:0 10px 24px rgba(16,20,24,.20),0 1px 0 rgba(255,255,255,.06) inset;cursor:pointer">
+<div onClick="{{ goSchedule }}" style-hover="filter:brightness(1.16)" style="display:flex;flex-direction:column;border-radius:14px;overflow:hidden;background:linear-gradient(#23272C,#15181C);box-shadow:0 10px 24px rgba(16,20,24,.20),0 1px 0 rgba(255,255,255,.06) inset;cursor:pointer">
 <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px 10px">
 <span style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#8A929B">CALENDAR</span>
-<span style="display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;color:#B4BBC2">Open schedule<svg width="10" height="10" sc-camel-view-box="0 0 10 10"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B4BBC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+<span style="display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;color:#B4BBC2">Open schedule<svg width="10" height="10" viewBox="0 0 10 10"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B4BBC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
 </div>
 <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid rgba(255,255,255,.08)">
 <sc-for list="{{ calCols }}" as="c" hint-placeholder-count="2">
@@ -76,12 +77,12 @@ input::placeholder{color:#A7ADB4}
 </div>
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 18px 0">
-<span sc-camel-on-click="{{ openWho }}" style-hover="border-color:#C3C9D0;box-shadow:0 4px 12px rgba(16,20,24,.09)" style="display:flex;flex-direction:column;gap:5px;padding:13px 14px 14px;background:#fff;border:1px solid #E1E5E9;border-radius:12px;box-shadow:0 1px 2px rgba(16,20,24,.05);cursor:pointer">
-<span style="display:flex;align-items:center;justify-content:space-between;gap:6px"><span style="font-size:11px;font-weight:700;letter-spacing:.11em;color:#7B838B">ON SITE</span><svg width="10" height="10" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+<span onClick="{{ openWho }}" style-hover="border-color:#C3C9D0;box-shadow:0 4px 12px rgba(16,20,24,.09)" style="display:flex;flex-direction:column;gap:5px;padding:13px 14px 14px;background:#fff;border:1px solid #E1E5E9;border-radius:12px;box-shadow:0 1px 2px rgba(16,20,24,.05);cursor:pointer">
+<span style="display:flex;align-items:center;justify-content:space-between;gap:6px"><span style="font-size:11px;font-weight:700;letter-spacing:.11em;color:#7B838B">ON SITE</span><svg width="10" height="10" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
 <span style="font-size:30px;font-weight:600;letter-spacing:-.03em;line-height:1.05">{{ onsiteN }}</span>
 </span>
-<span sc-camel-on-click="{{ openAttn }}" style-hover="box-shadow:0 4px 12px rgba(16,20,24,.09)" style="display:flex;flex-direction:column;gap:5px;padding:13px 14px 14px;background:#fff;border:1px solid {{ attnBd }};border-radius:12px;box-shadow:0 1px 2px rgba(16,20,24,.05);cursor:pointer">
-<span style="display:flex;align-items:center;justify-content:space-between;gap:6px"><span style="font-size:11px;font-weight:700;letter-spacing:.11em;color:{{ attnFg }}">ATTENTION</span><svg width="10" height="10" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="{{ attnFg }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+<span onClick="{{ openAttn }}" style-hover="box-shadow:0 4px 12px rgba(16,20,24,.09)" style="display:flex;flex-direction:column;gap:5px;padding:13px 14px 14px;background:#fff;border:1px solid {{ attnBd }};border-radius:12px;box-shadow:0 1px 2px rgba(16,20,24,.05);cursor:pointer">
+<span style="display:flex;align-items:center;justify-content:space-between;gap:6px"><span style="font-size:11px;font-weight:700;letter-spacing:.11em;color:{{ attnFg }}">ATTENTION</span><svg width="10" height="10" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="{{ attnFg }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
 <span style="font-size:30px;font-weight:600;letter-spacing:-.03em;line-height:1.05;color:{{ attnFg }}">{{ attnN }}</span>
 </span>
 </div>
@@ -94,14 +95,14 @@ input::placeholder{color:#A7ADB4}
 <div style="padding:0 18px 20px">
 <div style="display:flex;flex-direction:column;background:#fff;border:1px solid #E1E5E9;border-radius:12px;box-shadow:0 1px 2px rgba(16,20,24,.05);overflow:hidden">
 <sc-for list="{{ todayRows }}" as="r" hint-placeholder-count="4">
-<span sc-camel-on-click="{{ r.go }}" style-hover="background:#FAFBFC" style="position:relative;display:flex;align-items:center;gap:10px;min-height:64px;padding:11px 13px 11px 19px;border-top:1px solid {{ r.bd }};cursor:pointer">
+<span onClick="{{ r.go }}" style-hover="background:#FAFBFC" style="position:relative;display:flex;align-items:center;gap:10px;min-height:64px;padding:11px 13px 11px 19px;border-top:1px solid {{ r.bd }};cursor:pointer">
 <span style="position:absolute;left:0;top:0;bottom:0;width:5px;background:{{ r.rail }}"></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
 <span style="font-size:16px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}</span>
 <span style="font-size:13px;color:#7B838B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.where }}</span>
 </span>
 <span style="display:{{ r.chipShow }};flex:none;align-items:center;gap:5px;height:23px;padding:0 9px;border-radius:12px;font-size:11px;font-weight:700;background:{{ r.chipBg }};color:{{ r.chipFg }}"><span style="width:5px;height:5px;border-radius:50%;background:{{ r.chipFg }}"></span>{{ r.chip }}</span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </sc-for>
 </div>
@@ -109,16 +110,16 @@ input::placeholder{color:#A7ADB4}
 </div>
 
 <sc-if value="{{ whoOpen }}" hint-placeholder-val="{{ false }}">
-<div sc-camel-on-click="{{ closeWho }}" style="position:absolute;inset:0;background:rgba(20,23,26,.52);z-index:40"></div>
+<div onClick="{{ closeWho }}" style="position:absolute;inset:0;background:rgba(20,23,26,.52);z-index:40"></div>
 <div style="position:absolute;left:0;right:0;bottom:0;z-index:41;display:flex;flex-direction:column;max-height:560px;background:#fff;border-radius:18px 18px 34px 34px;box-shadow:0 -10px 30px rgba(16,20,24,.28)">
 <div style="flex:none;display:flex;justify-content:center;padding:9px 0 3px"><span style="width:36px;height:5px;border-radius:3px;background:#DCE0E6"></span></div>
 <div style="flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:8px 20px 14px">
 <span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:18px;font-weight:600;letter-spacing:-.015em">Who is where</span><span style="font-size:13.5px;color:#7B838B">{{ onsiteN }} on the clock {{ onsiteSub }}</span></span>
-<span sc-camel-on-click="{{ closeWho }}" style="flex:none;font-size:13.5px;font-weight:600;color:#5B6169;cursor:pointer">Close</span>
+<span onClick="{{ closeWho }}" style="flex:none;font-size:13.5px;font-weight:600;color:#5B6169;cursor:pointer">Close</span>
 </div>
 <div style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 0 24px">
 <sc-for list="{{ whoRows }}" as="w" hint-placeholder-count="4">
-<span sc-camel-on-click="{{ w.go }}" style-hover="background:#FAFBFC" style="position:relative;display:flex;align-items:center;gap:11px;min-height:70px;padding:12px 18px 12px 24px;border-top:1px solid #EDEFF1;cursor:pointer">
+<span onClick="{{ w.go }}" style-hover="background:#FAFBFC" style="position:relative;display:flex;align-items:center;gap:11px;min-height:70px;padding:12px 18px 12px 24px;border-top:1px solid #EDEFF1;cursor:pointer">
 <span style="position:absolute;left:0;top:0;bottom:0;width:5px;background:{{ w.rail }}"></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
 <span style="font-size:15.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ w.name }}</span>
@@ -129,7 +130,7 @@ input::placeholder{color:#A7ADB4}
 <span style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;margin-right:-7px;border-radius:50%;border:2px solid #fff;background:{{ c.avBg }};color:#fff;font-size:10.5px;font-weight:700">{{ c.init }}</span>
 </sc-for>
 </span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none;margin-left:12px"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none;margin-left:12px"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </sc-for>
 </div>
@@ -137,35 +138,35 @@ input::placeholder{color:#A7ADB4}
 </sc-if>
 
 <sc-if value="{{ attnOpen }}" hint-placeholder-val="{{ false }}">
-<div sc-camel-on-click="{{ closeAttn }}" style="position:absolute;inset:0;background:rgba(20,23,26,.52);z-index:40"></div>
+<div onClick="{{ closeAttn }}" style="position:absolute;inset:0;background:rgba(20,23,26,.52);z-index:40"></div>
 <div style="position:absolute;left:0;right:0;bottom:0;z-index:41;display:flex;flex-direction:column;max-height:640px;background:#F5F6F7;border-radius:18px 18px 34px 34px;box-shadow:0 -10px 30px rgba(16,20,24,.28);overflow:hidden">
 <div style="flex:none;display:flex;justify-content:center;padding:9px 0 3px;background:#fff"><span style="width:36px;height:5px;border-radius:3px;background:#DCE0E6"></span></div>
 <div style="flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:8px 20px 14px;background:#fff">
 <span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:18px;font-weight:600;letter-spacing:-.015em">Active jobs</span><span style="font-size:13.5px;color:#7B838B">{{ attnSheetSub }}</span></span>
-<span sc-camel-on-click="{{ closeAttn }}" style="flex:none;font-size:13.5px;font-weight:600;color:#5B6169;cursor:pointer">Close</span>
+<span onClick="{{ closeAttn }}" style="flex:none;font-size:13.5px;font-weight:600;color:#5B6169;cursor:pointer">Close</span>
 </div>
 <div style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 0 24px">
 <span style="display:flex;align-items:center;gap:8px;padding:13px 20px 11px;background:#14171A"><span style="flex:none;width:7px;height:7px;border-radius:50%;background:#E5484D"></span><span style="font-size:11.5px;font-weight:700;letter-spacing:.13em;color:#fff">NEEDS YOU</span></span>
 <sc-for list="{{ attnNeeds }}" as="a" hint-placeholder-count="3">
-<span sc-camel-on-click="{{ a.go }}" style-hover="background:#FAFBFC" style="position:relative;display:flex;align-items:center;gap:10px;min-height:72px;padding:12px 16px 12px 24px;background:#fff;border-bottom:1px solid #EDEFF1;cursor:pointer">
+<span onClick="{{ a.go }}" style-hover="background:#FAFBFC" style="position:relative;display:flex;align-items:center;gap:10px;min-height:72px;padding:12px 16px 12px 24px;background:#fff;border-bottom:1px solid #EDEFF1;cursor:pointer">
 <span style="position:absolute;left:0;top:0;bottom:0;width:5px;background:{{ a.rail }}"></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
 <span style="font-size:16px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a.name }}</span>
 <span style="font-size:13px;color:#7B838B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a.sub }}</span>
 </span>
 <span style="display:{{ a.chipShow }};flex:none;align-items:center;gap:5px;height:23px;padding:0 9px;border-radius:12px;font-size:11px;font-weight:700;background:{{ a.chipBg }};color:{{ a.chipFg }}"><span style="width:5px;height:5px;border-radius:50%;background:{{ a.chipFg }}"></span>{{ a.chip }}</span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </sc-for>
 <span style="display:{{ attnOkShow }};align-items:center;gap:8px;padding:15px 20px 10px"><span style="flex:none;width:7px;height:7px;border-radius:50%;background:#4CC38A"></span><span style="font-size:11.5px;font-weight:700;letter-spacing:.13em;color:#7B838B">RUNNING TO PLAN</span></span>
 <sc-for list="{{ attnOk }}" as="a" hint-placeholder-count="2">
-<span sc-camel-on-click="{{ a.go }}" style-hover="background:#FAFBFC" style="position:relative;display:flex;align-items:center;gap:10px;min-height:66px;padding:11px 16px 11px 24px;background:#fff;border-top:1px solid #EDEFF1;cursor:pointer">
+<span onClick="{{ a.go }}" style-hover="background:#FAFBFC" style="position:relative;display:flex;align-items:center;gap:10px;min-height:66px;padding:11px 16px 11px 24px;background:#fff;border-top:1px solid #EDEFF1;cursor:pointer">
 <span style="position:absolute;left:0;top:0;bottom:0;width:5px;background:{{ a.rail }}"></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
 <span style="font-size:15.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a.name }}</span>
 <span style="font-size:13px;color:#7B838B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a.state }}</span>
 </span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </sc-for>
 </div>
@@ -174,8 +175,8 @@ input::placeholder{color:#A7ADB4}
 
 <div style="flex:none;display:flex;align-items:stretch;height:58px;background:#fff;border-top:1px solid #DCE0E6">
 <sc-for list="{{ rootBar }}" as="b" hint-placeholder-count="4">
-<span sc-camel-on-click="{{ b.go }}" style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
-<svg width="22" height="22" sc-camel-view-box="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke="{{ b.fg }}"><path d="{{ b.d }}"></path></svg>
+<span onClick="{{ b.go }}" style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
+<svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke="{{ b.fg }}"><path d="{{ b.d }}"></path></svg>
 <span style="font-size:11px;color:{{ b.fg }};font-weight:{{ b.w }}">{{ b.label }}</span>
 <span style="display:{{ b.badgeShow }};position:absolute;top:8px;left:calc(50% + 6px);align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#A3282E;color:#fff;font-size:10px;font-weight:700">{{ b.badge }}</span>
 </span>
@@ -184,10 +185,10 @@ input::placeholder{color:#A7ADB4}
 </sc-if>
 
 <sc-if value="{{ isNewJob }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#14171A;color:#fff"><span style="font-size:13.5px;font-weight:600">7:06</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#FFFFFF"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#FFFFFF" stroke-opacity=".5"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#FFFFFF"></rect><path d="M21.5 4.5v3" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#14171A;color:#fff"><span style="font-size:13.5px;font-weight:600">7:06</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#FFFFFF"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#FFFFFF" stroke-opacity=".5"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#FFFFFF"></rect><path d="M21.5 4.5v3" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:none;display:flex;align-items:center;gap:4px;height:48px;padding:0 8px 0 4px;background:#14171A;color:#fff">
-<span sc-camel-on-click="{{ closeNew }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
+<span onClick="{{ closeNew }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
 <span style="font-size:16px;font-weight:600;letter-spacing:-.01em">New project</span>
 <span style="font-size:12.5px;color:#8A929B">{{ njSub }}</span>
@@ -197,20 +198,20 @@ input::placeholder{color:#A7ADB4}
 <div style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:16px;padding:16px 18px 20px;background:#F5F6F7">
 <label style="flex:none;display:flex;flex-direction:column;gap:7px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Job name</span>
-<input type="text" value="{{ njName }}" sc-camel-on-change="{{ onNjName }}" placeholder="e.g. Lot 9, Harvest Rise" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
+<input type="text" value="{{ njName }}" onChange="{{ onNjName }}" placeholder="e.g. Lot 9, Harvest Rise" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
 </label>
 
 <label style="flex:none;display:flex;flex-direction:column;gap:7px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Site address</span>
-<input type="text" value="{{ njAddr }}" sc-camel-on-change="{{ onNjAddr }}" placeholder="Street, suburb" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
+<input type="text" value="{{ njAddr }}" onChange="{{ onNjAddr }}" placeholder="Street, suburb" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
 </label>
 
 <div style="flex:none;display:flex;flex-direction:column;gap:8px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Client</span>
-<input type="text" value="{{ njClient }}" sc-camel-on-change="{{ onNjClient }}" placeholder="Builder, strata or owner" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
+<input type="text" value="{{ njClient }}" onChange="{{ onNjClient }}" placeholder="Builder, strata or owner" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
 <span style="display:flex;flex-wrap:wrap;gap:7px">
 <sc-for list="{{ njClients }}" as="c" hint-placeholder-count="3">
-<span sc-camel-on-click="{{ c.pick }}" style-hover="border-color:#B7BCC2" style="display:inline-flex;align-items:center;height:34px;padding:0 12px;background:{{ c.bg }};border:1px solid {{ c.bd }};border-radius:17px;font-size:13px;font-weight:600;color:{{ c.fg }};cursor:pointer">{{ c.name }}</span>
+<span onClick="{{ c.pick }}" style-hover="border-color:#B7BCC2" style="display:inline-flex;align-items:center;height:34px;padding:0 12px;background:{{ c.bg }};border:1px solid {{ c.bd }};border-radius:17px;font-size:13px;font-weight:600;color:{{ c.fg }};cursor:pointer">{{ c.name }}</span>
 </sc-for>
 </span>
 </div>
@@ -219,28 +220,28 @@ input::placeholder{color:#A7ADB4}
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Scope</span>
 <span style="display:flex;flex-wrap:wrap;gap:7px">
 <sc-for list="{{ njScope }}" as="s" hint-placeholder-count="6">
-<span sc-camel-on-click="{{ s.toggle }}" style-hover="border-color:#B7BCC2" style="display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 13px;background:{{ s.bg }};border:1px solid {{ s.bd }};border-radius:19px;font-size:13.5px;font-weight:600;color:{{ s.fg }};cursor:pointer"><span style="display:{{ s.tickShow }};align-items:center"><svg width="13" height="13" sc-camel-view-box="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>{{ s.name }}</span>
+<span onClick="{{ s.toggle }}" style-hover="border-color:#B7BCC2" style="display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 13px;background:{{ s.bg }};border:1px solid {{ s.bd }};border-radius:19px;font-size:13.5px;font-weight:600;color:{{ s.fg }};cursor:pointer"><span style="display:{{ s.tickShow }};align-items:center"><svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>{{ s.name }}</span>
 </sc-for>
 </span>
 </div>
 
 <label style="flex:none;display:flex;flex-direction:column;gap:7px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Contract value ex GST</span>
-<input type="text" value="{{ njValue }}" sc-camel-on-change="{{ onNjValue }}" placeholder="$0" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
+<input type="text" value="{{ njValue }}" onChange="{{ onNjValue }}" placeholder="$0" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
 <span style="font-size:13px;line-height:1.45;color:#7B838B">Margin only works once this is in. You can change it when the contract is signed.</span>
 </label>
 
 <div style="flex:none;display:flex;flex-direction:column;gap:8px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Start date</span>
 <label style="position:relative;display:flex;align-items:center;gap:11px;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;cursor:pointer">
-<svg width="19" height="19" sc-camel-view-box="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.6" stroke-linecap="round" style="flex:none"><path d="M3.5 4.8h13v12h-13zM3.5 8.4h13M7 2.8v3M13 2.8v3"></path></svg>
+<svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.6" stroke-linecap="round" style="flex:none"><path d="M3.5 4.8h13v12h-13zM3.5 8.4h13M7 2.8v3M13 2.8v3"></path></svg>
 <span style="flex:1;font-size:15.5px;color:{{ njDateFg }}">{{ njDateLabel }}</span>
 <span style="flex:none;font-size:13px;font-weight:600;color:{{ accent }}">{{ njDateBtn }}</span>
-<input type="date" value="{{ njDate }}" sc-camel-on-change="{{ onNjDate }}" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;cursor:pointer">
+<input type="date" value="{{ njDate }}" onChange="{{ onNjDate }}" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;cursor:pointer">
 </label>
 <span style="display:flex;flex-wrap:wrap;gap:7px">
 <sc-for list="{{ njQuickDates }}" as="q" hint-placeholder-count="3">
-<span sc-camel-on-click="{{ q.pick }}" style-hover="border-color:#B7BCC2" style="display:inline-flex;align-items:center;height:34px;padding:0 12px;background:{{ q.bg }};border:1px solid {{ q.bd }};border-radius:17px;font-size:13px;font-weight:600;color:{{ q.fg }};cursor:pointer">{{ q.name }}</span>
+<span onClick="{{ q.pick }}" style-hover="border-color:#B7BCC2" style="display:inline-flex;align-items:center;height:34px;padding:0 12px;background:{{ q.bg }};border:1px solid {{ q.bd }};border-radius:17px;font-size:13px;font-weight:600;color:{{ q.fg }};cursor:pointer">{{ q.name }}</span>
 </sc-for>
 </span>
 </div>
@@ -248,31 +249,31 @@ input::placeholder{color:#A7ADB4}
 <div style="flex:none;display:flex;flex-direction:column;gap:8px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Contract</span>
 <span style="display:{{ njUpShow }};gap:9px">
-<span sc-camel-on-click="{{ attachContract }}" style-hover="filter:brightness(1.35)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;background:#1A1D21;border-radius:10px;font-size:13.5px;font-weight:700;letter-spacing:.02em;color:#fff;cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>PHOTO</span>
-<span sc-camel-on-click="{{ attachContract }}" style-hover="background:#F0F2F4" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;font-size:13.5px;font-weight:700;letter-spacing:.02em;color:#1A1D21;cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14.5V4.8M6.4 8.2 10 4.6l3.6 3.6M4 15.5h12"></path></svg>UPLOAD</span>
+<span onClick="{{ attachContract }}" style-hover="filter:brightness(1.35)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;background:#1A1D21;border-radius:10px;font-size:13.5px;font-weight:700;letter-spacing:.02em;color:#fff;cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>PHOTO</span>
+<span onClick="{{ attachContract }}" style-hover="background:#F0F2F4" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;font-size:13.5px;font-weight:700;letter-spacing:.02em;color:#1A1D21;cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14.5V4.8M6.4 8.2 10 4.6l3.6 3.6M4 15.5h12"></path></svg>UPLOAD</span>
 </span>
 <span style="display:{{ njFileShow }};align-items:center;gap:12px;padding:11px 13px;background:#fff;border:1px solid #E1E5E9;border-radius:10px">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:38px;border-radius:6px;background:#E7EAEE;border:1px solid #DCE0E6"><svg width="19" height="19" sc-camel-view-box="0 0 20 20" fill="none" stroke="#7B838B" stroke-width="1.5" stroke-linejoin="round"><path d="M5 3.5h7l3.5 3.5v9.5H5zM12 3.5V7h3.5M7.4 10.4h5.2M7.4 13.2h3.4"></path></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:38px;border-radius:6px;background:#E7EAEE;border:1px solid #DCE0E6"><svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="#7B838B" stroke-width="1.5" stroke-linejoin="round"><path d="M5 3.5h7l3.5 3.5v9.5H5zM12 3.5V7h3.5M7.4 10.4h5.2M7.4 13.2h3.4"></path></svg></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
 <span style="font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Contract-{{ njFileTag }}.pdf</span>
 <span style="font-size:12.5px;color:#1F7A4D;font-weight:600">Attached · 4 pages</span>
 </span>
-<span sc-camel-on-click="{{ clearContract }}" style-hover="background:#F5F6F7" style="flex:none;display:flex;align-items:center;height:34px;padding:0 12px;border:1px solid #DCE0E6;border-radius:17px;font-size:12.5px;font-weight:700;color:#5B6169;cursor:pointer">REPLACE</span>
+<span onClick="{{ clearContract }}" style-hover="background:#F5F6F7" style="flex:none;display:flex;align-items:center;height:34px;padding:0 12px;border:1px solid #DCE0E6;border-radius:17px;font-size:12.5px;font-weight:700;color:#5B6169;cursor:pointer">REPLACE</span>
 </span>
-<textarea value="{{ njTerms }}" sc-camel-on-change="{{ onNjTerms }}" placeholder="Or type the terms — rates, inclusions, retention, anything the crew or office needs to know." style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;min-height:96px;padding:13px 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;font-family:inherit;font-size:15px;line-height:1.45;color:#1A1D21;outline:none;resize:none"></textarea>
+<textarea value="{{ njTerms }}" onChange="{{ onNjTerms }}" placeholder="Or type the terms — rates, inclusions, retention, anything the crew or office needs to know." style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;min-height:96px;padding:13px 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;font-family:inherit;font-size:15px;line-height:1.45;color:#1A1D21;outline:none;resize:none"></textarea>
 </div>
 
 <div style="flex:none;display:flex;flex-direction:column;gap:8px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Who is on it</span>
 <div style="display:flex;flex-direction:column;background:#fff;border:1px solid #E1E5E9;border-radius:10px;overflow:hidden">
 <sc-for list="{{ njCrew }}" as="p" hint-placeholder-count="5">
-<span sc-camel-on-click="{{ p.toggle }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 13px;border-bottom:1px solid #EDEFF1;cursor:pointer">
+<span onClick="{{ p.toggle }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 13px;border-bottom:1px solid #EDEFF1;cursor:pointer">
 <span style="flex:none;display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:{{ p.avBg }};color:#fff;font-size:12.5px;font-weight:700">{{ p.init }}</span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
 <span style="font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.name }}</span>
 <span style="font-size:12.5px;color:#8B9096;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.where }}</span>
 </span>
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:{{ p.boxBg }};border:1.5px solid {{ p.boxBd }}"><svg width="14" height="14" sc-camel-view-box="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="display:{{ p.tickShow }}"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:{{ p.boxBg }};border:1.5px solid {{ p.boxBd }}"><svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" style="display:{{ p.tickShow }}"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
 </span>
 </sc-for>
 </div>
@@ -282,31 +283,31 @@ input::placeholder{color:#A7ADB4}
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Job colour</span>
 <span style="display:flex;gap:10px">
 <sc-for list="{{ njRails }}" as="r" hint-placeholder-count="5">
-<span sc-camel-on-click="{{ r.pick }}" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:12px;background:{{ r.c }};box-shadow:{{ r.sh }};cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:{{ r.tickShow }}"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
+<span onClick="{{ r.pick }}" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:12px;background:{{ r.c }};box-shadow:{{ r.sh }};cursor:pointer"><svg width="17" height="17" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:{{ r.tickShow }}"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
 </sc-for>
 </span>
 </div>
 </div>
 
 <div style="flex:none;display:flex;flex-direction:column;gap:9px;padding:12px 18px 16px;background:#fff;border-top:1px solid #DCE0E6">
-<button sc-camel-on-click="{{ createJob }}" style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;background:{{ njBtnBg }};border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:15.5px;font-weight:700;letter-spacing:.03em;cursor:{{ njBtnCur }}">CREATE PROJECT</button>
+<button onClick="{{ createJob }}" style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;background:{{ njBtnBg }};border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:15.5px;font-weight:700;letter-spacing:.03em;cursor:{{ njBtnCur }}">CREATE PROJECT</button>
 <span style="font-size:12.5px;line-height:1.45;color:#8B9096;text-align:center">{{ njHint }}</span>
 </div>
 </sc-if>
 
 <sc-if value="{{ isProjects }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:none;display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 20px;background:#fff">
 <span style="font-size:21px;font-weight:600;letter-spacing:-.015em">Projects</span>
-<span sc-camel-on-click="{{ openNew }}" style-hover="filter:brightness(1.6)" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><span style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#14171A;box-shadow:0 2px 6px rgba(16,20,24,.22)"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"></path></svg></span></span>
+<span onClick="{{ openNew }}" style-hover="filter:brightness(1.6)" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><span style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#14171A;box-shadow:0 2px 6px rgba(16,20,24,.22)"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"></path></svg></span></span>
 </div>
 
 <div style="flex:1;min-height:0;overflow:auto;background:#F5F6F7">
 <span style="display:{{ njMsgShow }};align-items:center;gap:11px;margin:12px 18px 0;padding:13px 14px;background:#EAF6EF;border:1px solid #C8E6D5;border-radius:10px">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#1F7A4D"><svg width="14" height="14" sc-camel-view-box="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#1F7A4D"><svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
 <span style="flex:1;font-size:13.5px;line-height:1.4;color:#14532B;text-wrap:pretty">{{ njMsg }}</span>
-<span sc-camel-on-click="{{ dismissNjMsg }}" style="flex:none;font-size:12.5px;font-weight:700;color:#2C6B45;cursor:pointer">OK</span>
+<span onClick="{{ dismissNjMsg }}" style="flex:none;font-size:12.5px;font-weight:700;color:#2C6B45;cursor:pointer">OK</span>
 </span>
 <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 9px">
 <span style="font-size:12px;font-weight:700;letter-spacing:.12em;color:#7B838B">NOTIFICATIONS</span>
@@ -314,16 +315,16 @@ input::placeholder{color:#A7ADB4}
 </div>
 <div style="margin:0 18px;display:flex;flex-direction:column;border-radius:12px;overflow:hidden;background:linear-gradient(#23272C,#15181C);box-shadow:0 10px 24px rgba(16,20,24,.20),0 1px 0 rgba(255,255,255,.06) inset">
 <sc-for list="{{ notifs }}" as="n" hint-placeholder-count="3">
-<span sc-camel-on-click="{{ n.go }}" style-hover="background:rgba(255,255,255,.05)" style="display:flex;align-items:center;gap:11px;min-height:58px;padding:11px 15px;border-top:1px solid {{ n.bdDark }};cursor:pointer">
+<span onClick="{{ n.go }}" style-hover="background:rgba(255,255,255,.05)" style="display:flex;align-items:center;gap:11px;min-height:58px;padding:11px 15px;border-top:1px solid {{ n.bdDark }};cursor:pointer">
 <span style="flex:none;width:8px;height:8px;border-radius:50%;background:{{ n.dot }};box-shadow:0 0 0 4px {{ n.halo }}"></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
 <span style="font-size:14.5px;font-weight:600;line-height:1.3;color:#fff;text-wrap:pretty">{{ n.text }}</span>
 <span style="font-size:12.5px;color:#8A929B">{{ n.meta }}</span>
 </span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#6D757D" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#6D757D" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </sc-for>
-<span sc-camel-on-click="{{ toggleNotifs }}" style-hover="background:rgba(255,255,255,.05)" style="display:{{ notifMoreShow }};align-items:center;justify-content:center;min-height:44px;border-top:1px solid rgba(255,255,255,.08);font-size:13.5px;font-weight:600;color:#B4BBC2;cursor:pointer">{{ notifMore }}</span>
+<span onClick="{{ toggleNotifs }}" style-hover="background:rgba(255,255,255,.05)" style="display:{{ notifMoreShow }};align-items:center;justify-content:center;min-height:44px;border-top:1px solid rgba(255,255,255,.08);font-size:13.5px;font-weight:600;color:#B4BBC2;cursor:pointer">{{ notifMore }}</span>
 </div>
 
 <div style="display:flex;align-items:baseline;justify-content:space-between;padding:20px 18px 9px">
@@ -334,7 +335,7 @@ input::placeholder{color:#A7ADB4}
 <sc-for list="{{ projects }}" as="p" hint-placeholder-count="4">
 <div style="position:relative;display:flex;flex-direction:column;background:#fff;border:1px solid #E1E5E9;border-radius:12px;box-shadow:0 1px 2px rgba(16,20,24,.05);overflow:hidden">
 <span style="position:absolute;left:0;top:0;bottom:0;width:5px;background:{{ p.rail }}"></span>
-<span sc-camel-on-click="{{ p.go }}" style-hover="background:#FAFBFC" style="display:flex;flex-direction:column;gap:9px;padding:14px 14px 13px 19px;cursor:{{ p.cur }}">
+<span onClick="{{ p.go }}" style-hover="background:#FAFBFC" style="display:flex;flex-direction:column;gap:9px;padding:14px 14px 13px 19px;cursor:{{ p.cur }}">
 <span style="display:flex;align-items:flex-start;gap:10px">
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
 <span style="font-size:17px;font-weight:600;letter-spacing:-.015em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.name }}</span>
@@ -347,7 +348,7 @@ input::placeholder{color:#A7ADB4}
 <span style="flex:none;font-size:13px;font-weight:600;color:#5B6169">{{ p.progW }}</span>
 </span>
 </span>
-<span sc-camel-on-click="{{ p.toggle }}" style-hover="background:#FAFBFC" style="display:{{ p.stripShow }};align-items:center;gap:10px;min-height:52px;padding:8px 14px 8px 19px;border-top:1px solid #EDEFF1;cursor:pointer">
+<span onClick="{{ p.toggle }}" style-hover="background:#FAFBFC" style="display:{{ p.stripShow }};align-items:center;gap:10px;min-height:52px;padding:8px 14px 8px 19px;border-top:1px solid #EDEFF1;cursor:pointer">
 <span style="flex:none;display:flex;align-items:center">
 <sc-for list="{{ p.avatars }}" as="a" hint-placeholder-count="3">
 <span style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-right:-7px;border-radius:50%;border:2px solid #fff;background:{{ a.avBg }};color:#fff;font-size:10px;font-weight:700">{{ a.init }}</span>
@@ -364,12 +365,12 @@ input::placeholder{color:#A7ADB4}
 <span style="font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ q.name }}</span>
 <span style="font-size:12.5px;color:#8B9096;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ q.where }}</span>
 </span>
-<span sc-camel-on-click="{{ q.remove }}" style-hover="background:#FDECEE" style="flex:none;display:flex;align-items:center;height:30px;padding:0 11px;border:1px solid #E7CBCD;border-radius:15px;font-size:12.5px;font-weight:700;color:#A3282E;cursor:pointer">Remove</span>
+<span onClick="{{ q.remove }}" style-hover="background:#FDECEE" style="flex:none;display:flex;align-items:center;height:30px;padding:0 11px;border:1px solid #E7CBCD;border-radius:15px;font-size:12.5px;font-weight:700;color:#A3282E;cursor:pointer">Remove</span>
 </span>
 </sc-for>
 <span style="display:{{ p.emptyShow }};padding:14px 19px;font-size:13.5px;color:#8B9096">Nobody assigned to this project yet.</span>
-<span sc-camel-on-click="{{ p.add }}" style-hover="background:#F0F2F4" style="display:{{ p.addShow }};align-items:center;gap:11px;min-height:52px;padding:9px 14px 9px 19px;cursor:pointer">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#14171A"><svg width="16" height="16" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"></path></svg></span>
+<span onClick="{{ p.add }}" style-hover="background:#F0F2F4" style="display:{{ p.addShow }};align-items:center;gap:11px;min-height:52px;padding:9px 14px 9px 19px;cursor:pointer">
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#14171A"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"></path></svg></span>
 <span style="flex:1;font-size:14.5px;font-weight:600;color:#14171A">Assign personnel</span>
 </span>
 </span>
@@ -383,14 +384,14 @@ input::placeholder{color:#A7ADB4}
 </div>
 <div style="margin:0 18px 22px;display:flex;flex-direction:column;background:#fff;border:1px solid #E1E5E9;border-radius:12px;box-shadow:0 1px 2px rgba(16,20,24,.05);overflow:hidden">
 <sc-for list="{{ future }}" as="f" hint-placeholder-count="2">
-<span sc-camel-on-click="{{ f.go }}" style-hover="background:#FAFBFC" style="position:relative;display:flex;align-items:center;gap:10px;min-height:68px;padding:11px 14px 11px 19px;border-top:1px solid {{ f.bd }};cursor:{{ f.cur }}">
+<span onClick="{{ f.go }}" style-hover="background:#FAFBFC" style="position:relative;display:flex;align-items:center;gap:10px;min-height:68px;padding:11px 14px 11px 19px;border-top:1px solid {{ f.bd }};cursor:{{ f.cur }}">
 <span style="position:absolute;left:0;top:0;bottom:0;width:5px;background:{{ f.rail }}"></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
 <span style="font-size:15.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.name }}</span>
 <span style="font-size:13px;color:#7B838B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.sub }}</span>
 </span>
 <span style="flex:none;display:flex;align-items:center;gap:5px;height:23px;padding:0 9px;border-radius:12px;font-size:11px;font-weight:700;background:#FFF6E3;color:#8A6100"><span style="width:5px;height:5px;border-radius:50%;background:#8A6100"></span>{{ f.starts }}</span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none;display:{{ f.chevShow }}"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none;display:{{ f.chevShow }}"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </sc-for>
 </div>
@@ -398,8 +399,8 @@ input::placeholder{color:#A7ADB4}
 
 <div style="flex:none;display:flex;align-items:stretch;height:58px;background:#fff;border-top:1px solid #DCE0E6">
 <sc-for list="{{ rootBar }}" as="b" hint-placeholder-count="4">
-<span sc-camel-on-click="{{ b.go }}" style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
-<svg width="22" height="22" sc-camel-view-box="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke="{{ b.fg }}"><path d="{{ b.d }}"></path></svg>
+<span onClick="{{ b.go }}" style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
+<svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke="{{ b.fg }}"><path d="{{ b.d }}"></path></svg>
 <span style="font-size:11px;color:{{ b.fg }};font-weight:{{ b.w }}">{{ b.label }}</span>
 <span style="display:{{ b.badgeShow }};position:absolute;top:8px;left:calc(50% + 6px);align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#A3282E;color:#fff;font-size:10px;font-weight:700">{{ b.badge }}</span>
 </span>
@@ -408,19 +409,19 @@ input::placeholder{color:#A7ADB4}
 </sc-if>
 
 <sc-if value="{{ isSchedule }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:none;display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 20px;background:#fff">
 <span style="font-size:21px;font-weight:600;letter-spacing:-.015em">Schedule</span>
 <span style="display:flex;align-items:center;gap:4px">
-<span style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="21" height="21" sc-camel-view-box="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.7" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"></path></svg></span>
+<span style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.7" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"></path></svg></span>
 </span>
 </div>
 
 <div style="flex:none;padding:2px 18px 14px;background:#fff">
 <div style="display:flex;align-items:stretch;gap:2px;padding:7px;border-radius:14px;background:linear-gradient(#23272C,#15181C);box-shadow:0 8px 20px rgba(16,20,24,.20),0 1px 0 rgba(255,255,255,.06) inset">
 <sc-for list="{{ week }}" as="d" hint-placeholder-count="7">
-<button sc-camel-on-click="{{ d.go }}" style-hover="filter:brightness(1.25)" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:44px;height:58px;padding:0;border:0;border-radius:10px;background:{{ d.bg }};font-family:inherit;cursor:pointer">
+<button onClick="{{ d.go }}" style-hover="filter:brightness(1.25)" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:44px;height:58px;padding:0;border:0;border-radius:10px;background:{{ d.bg }};font-family:inherit;cursor:pointer">
 <span style="font-size:11.5px;font-weight:600;letter-spacing:.06em;color:{{ d.dowFg }}">{{ d.dow }}</span>
 <span style="font-size:16.5px;font-weight:600;letter-spacing:-.01em;color:{{ d.numFg }}">{{ d.num }}</span>
 <span style="width:5px;height:5px;border-radius:50%;background:{{ d.mark }}"></span>
@@ -437,7 +438,7 @@ input::placeholder{color:#A7ADB4}
 
 <div style="display:flex;flex-direction:column;gap:10px;padding:0 18px 20px">
 <sc-for list="{{ dayRows }}" as="r" hint-placeholder-count="3">
-<div sc-camel-on-click="{{ r.go }}" style-hover="border-color:#C3C9D0;box-shadow:0 4px 12px rgba(16,20,24,.09)" style="position:relative;display:flex;flex-direction:column;gap:10px;padding:14px 15px 14px 19px;background:#fff;border:1px solid #E1E5E9;border-radius:12px;box-shadow:0 1px 2px rgba(16,20,24,.05);cursor:pointer;overflow:hidden">
+<div onClick="{{ r.go }}" style-hover="border-color:#C3C9D0;box-shadow:0 4px 12px rgba(16,20,24,.09)" style="position:relative;display:flex;flex-direction:column;gap:10px;padding:14px 15px 14px 19px;background:#fff;border:1px solid #E1E5E9;border-radius:12px;box-shadow:0 1px 2px rgba(16,20,24,.05);cursor:pointer;overflow:hidden">
 <span style="position:absolute;left:0;top:0;bottom:0;width:5px;background:{{ r.rail }}"></span>
 <span style="display:flex;align-items:flex-start;gap:10px">
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
@@ -453,7 +454,7 @@ input::placeholder{color:#A7ADB4}
 </sc-for>
 </span>
 <span style="flex:1;padding-left:12px;font-size:13.5px;color:#4A5057;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.who }}</span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 <span style="display:{{ r.noteShow }};padding:9px 11px;border-radius:8px;background:{{ r.noteBg }};font-size:13.5px;line-height:1.4;color:{{ r.noteFg }}">{{ r.note }}</span>
 </div>
@@ -461,7 +462,7 @@ input::placeholder{color:#A7ADB4}
 
 <sc-if value="{{ dayEmpty }}" hint-placeholder-val="{{ false }}">
 <div style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:52px 24px">
-<svg width="30" height="30" sc-camel-view-box="0 0 20 20" fill="none" stroke="#B7BCC2" stroke-width="1.4" stroke-linecap="round"><path d="M3.5 4.5h13v13h-13zM3.5 8.5h13M7 2.5v3M13 2.5v3"></path></svg>
+<svg width="30" height="30" viewBox="0 0 20 20" fill="none" stroke="#B7BCC2" stroke-width="1.4" stroke-linecap="round"><path d="M3.5 4.5h13v13h-13zM3.5 8.5h13M7 2.5v3M13 2.5v3"></path></svg>
 <span style="font-size:16px;font-weight:600;color:#4A5057">Nobody rostered</span>
 <span style="font-size:14px;line-height:1.45;color:#7B838B;text-align:center;text-wrap:pretty">{{ emptyNote }}</span>
 </div>
@@ -471,8 +472,8 @@ input::placeholder{color:#A7ADB4}
 
 <div style="flex:none;display:flex;align-items:stretch;height:58px;background:#fff;border-top:1px solid #DCE0E6">
 <sc-for list="{{ rootBar }}" as="b" hint-placeholder-count="4">
-<span sc-camel-on-click="{{ b.go }}" style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
-<svg width="22" height="22" sc-camel-view-box="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke="{{ b.fg }}"><path d="{{ b.d }}"></path></svg>
+<span onClick="{{ b.go }}" style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
+<svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke="{{ b.fg }}"><path d="{{ b.d }}"></path></svg>
 <span style="font-size:11px;color:{{ b.fg }};font-weight:{{ b.w }}">{{ b.label }}</span>
 <span style="display:{{ b.badgeShow }};position:absolute;top:8px;left:calc(50% + 6px);align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#A3282E;color:#fff;font-size:10px;font-weight:700">{{ b.badge }}</span>
 </span>
@@ -481,13 +482,13 @@ input::placeholder{color:#A7ADB4}
 </sc-if>
 
 <sc-if value="{{ isMe }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:1;min-height:0;overflow:auto;background:#F5F6F7">
 <div style="padding:6px 18px 4px">
 <div style="display:flex;align-items:center;gap:15px;padding:18px;border-radius:14px;background:linear-gradient(#23272C,#15181C);box-shadow:0 10px 24px rgba(16,20,24,.20),0 1px 0 rgba(255,255,255,.06) inset">
 <span style="flex:none;position:relative;display:flex;align-items:center;justify-content:center;width:76px;height:76px;border-radius:50%;background:#4A5057;color:#fff;font-size:23px;font-weight:600;letter-spacing:.02em">{{ me.init }}
-<span style="position:absolute;right:-2px;bottom:0;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fff;border:2.5px solid #1B1F23;cursor:pointer"><svg width="14" height="14" sc-camel-view-box="0 0 20 20" fill="none" stroke="#14171A" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg></span>
+<span style="position:absolute;right:-2px;bottom:0;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fff;border:2.5px solid #1B1F23;cursor:pointer"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#14171A" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg></span>
 </span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
 <span style="font-size:21px;font-weight:600;letter-spacing:-.02em;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ me.name }}</span>
@@ -501,7 +502,7 @@ input::placeholder{color:#A7ADB4}
 <sc-for list="{{ meContact }}" as="c" hint-placeholder-count="2">
 <span style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:60px;padding:11px 15px;border-bottom:1px solid #EDEFF1;cursor:pointer">
 <span style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:12.5px;font-weight:600;letter-spacing:.05em;color:#7B838B">{{ c.k }}</span><span style="font-size:15.5px">{{ c.v }}</span></span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </sc-for>
 </div>
@@ -513,16 +514,16 @@ input::placeholder{color:#A7ADB4}
 <div style="display:flex;flex-direction:column;margin:0 18px;background:#fff;border:1px solid #E1E5E9;border-radius:12px;overflow:hidden">
 <sc-for list="{{ meDocs }}" as="d" hint-placeholder-count="4">
 <span style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:68px;padding:12px 15px;border-bottom:1px solid #EDEFF1;cursor:pointer">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:34px;border-radius:5px;background:#E7EAEE;border:1px solid #DCE0E6"><svg width="18" height="18" sc-camel-view-box="0 0 20 20" fill="none" stroke="#8B9096" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="5" width="14" height="10" rx="1.6"></rect><circle cx="7.6" cy="9.2" r="1.6"></circle><path d="M11 8.4h4M11 11.4h4"></path></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:34px;border-radius:5px;background:#E7EAEE;border:1px solid #DCE0E6"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#8B9096" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="5" width="14" height="10" rx="1.6"></rect><circle cx="7.6" cy="9.2" r="1.6"></circle><path d="M11 8.4h4M11 11.4h4"></path></svg></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
 <span style="font-size:15.5px;font-weight:600">{{ d.name }}</span>
 <span style="display:flex;align-items:center;gap:7px"><span style="flex:none;width:7px;height:7px;border-radius:50%;background:{{ d.dot }};box-shadow:0 0 0 3px {{ d.halo }}"></span><span style="font-size:13.5px;color:{{ d.fg }}">{{ d.state }}</span></span>
 </span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </sc-for>
-<span sc-camel-on-click="{{ goSignup }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:60px;padding:12px 15px;cursor:pointer">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:34px"><svg width="19" height="19" sc-camel-view-box="0 0 20 20" fill="none" stroke="{{ accent }}" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"></path></svg></span>
+<span onClick="{{ goSignup }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:60px;padding:12px 15px;cursor:pointer">
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:34px"><svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="{{ accent }}" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"></path></svg></span>
 <span style="flex:1;font-size:15.5px;font-weight:600;color:{{ accent }}">Add a document</span>
 </span>
 </div>
@@ -539,8 +540,8 @@ input::placeholder{color:#A7ADB4}
 
 <div style="flex:none;display:flex;align-items:stretch;height:58px;background:#fff;border-top:1px solid #DCE0E6">
 <sc-for list="{{ rootBar }}" as="b" hint-placeholder-count="4">
-<span sc-camel-on-click="{{ b.go }}" style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
-<svg width="22" height="22" sc-camel-view-box="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke="{{ b.fg }}"><path d="{{ b.d }}"></path></svg>
+<span onClick="{{ b.go }}" style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
+<svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke="{{ b.fg }}"><path d="{{ b.d }}"></path></svg>
 <span style="font-size:11px;color:{{ b.fg }};font-weight:{{ b.w }}">{{ b.label }}</span>
 <span style="display:{{ b.badgeShow }};position:absolute;top:8px;left:calc(50% + 6px);align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#A3282E;color:#fff;font-size:10px;font-weight:700">{{ b.badge }}</span>
 </span>
@@ -549,11 +550,11 @@ input::placeholder{color:#A7ADB4}
 </sc-if>
 
 <sc-if value="{{ isShot }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#14171A;color:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#FFFFFF"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#FFFFFF" stroke-opacity=".5"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#FFFFFF"></rect><path d="M21.5 4.5v3" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#14171A;color:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#FFFFFF"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#FFFFFF" stroke-opacity=".5"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#FFFFFF"></rect><path d="M21.5 4.5v3" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:#14171A">
 <div style="flex:none;display:flex;align-items:center;gap:10px;height:48px;padding:0 8px 0 4px">
-<span sc-camel-on-click="{{ goMe }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
+<span onClick="{{ goMe }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
 <span style="flex:1;font-size:12px;font-weight:700;letter-spacing:.12em;color:#8A929B">STEP 1 OF 3</span>
 </div>
 <div style="flex:none;display:flex;gap:4px;padding:0 20px 18px">
@@ -567,23 +568,23 @@ input::placeholder{color:#A7ADB4}
 </div>
 <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#0E1113">
 <span style="position:relative;display:flex;align-items:center;justify-content:center;width:236px;height:236px;border-radius:50%;background:#20252A;border:2px dashed rgba(255,255,255,.30)">
-<svg width="96" height="96" sc-camel-view-box="0 0 20 20" fill="none" stroke="rgba(255,255,255,.34)" stroke-width="1.1"><path d="M10 10.6a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8z"></path><path d="M3.6 17.6c0-3.1 2.9-4.9 6.4-4.9s6.4 1.8 6.4 4.9"></path></svg>
+<svg width="96" height="96" viewBox="0 0 20 20" fill="none" stroke="rgba(255,255,255,.34)" stroke-width="1.1"><path d="M10 10.6a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8z"></path><path d="M3.6 17.6c0-3.1 2.9-4.9 6.4-4.9s6.4 1.8 6.4 4.9"></path></svg>
 <span style="position:absolute;left:-1px;top:-1px;width:34px;height:34px;border-top:3px solid #fff;border-left:3px solid #fff;border-radius:14px 0 0 0"></span>
 <span style="position:absolute;right:-1px;bottom:-1px;width:34px;height:34px;border-bottom:3px solid #fff;border-right:3px solid #fff;border-radius:0 0 14px 0"></span>
 </span>
 </div>
 <div style="flex:none;display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px 24px 26px;background:#0E1113">
-<button sc-camel-on-click="{{ goDetails }}" style-hover="filter:brightness(.92)" style="display:flex;align-items:center;justify-content:center;width:74px;height:74px;padding:0;border:3px solid rgba(255,255,255,.34);border-radius:50%;background:none;cursor:pointer"><span style="width:58px;height:58px;border-radius:50%;background:#fff"></span></button>
+<button onClick="{{ goDetails }}" style-hover="filter:brightness(.92)" style="display:flex;align-items:center;justify-content:center;width:74px;height:74px;padding:0;border:3px solid rgba(255,255,255,.34);border-radius:50%;background:none;cursor:pointer"><span style="width:58px;height:58px;border-radius:50%;background:#fff"></span></button>
 <span style="font-size:13.5px;color:#8A929B">Only your employer and the site office see this photo.</span>
 </div>
 </div>
 </sc-if>
 
 <sc-if value="{{ isDetails }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:05</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:05</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:none;display:flex;align-items:center;gap:10px;height:48px;padding:0 8px 0 4px;background:#fff">
-<span sc-camel-on-click="{{ goShot }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
+<span onClick="{{ goShot }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
 <span style="flex:1;font-size:12px;font-weight:700;letter-spacing:.12em;color:#7B838B">STEP 2 OF 3</span>
 </div>
 <div style="flex:none;display:flex;gap:4px;padding:0 20px 16px;background:#fff">
@@ -595,12 +596,12 @@ input::placeholder{color:#A7ADB4}
 <div style="flex:1;min-height:0;overflow:auto;background:#F5F6F7">
 <div style="display:flex;align-items:center;gap:14px;padding:0 20px 20px;background:#fff;border-bottom:1px solid #E3E7EB">
 <span style="flex:none;position:relative;display:flex;align-items:center;justify-content:center;width:66px;height:66px;border-radius:50%;background:#C9CFD5">
-<svg width="34" height="34" sc-camel-view-box="0 0 20 20" fill="none" stroke="#FFFFFF" stroke-opacity=".75" stroke-width="1.2"><path d="M10 10.6a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8z"></path><path d="M3.6 17.6c0-3.1 2.9-4.9 6.4-4.9s6.4 1.8 6.4 4.9"></path></svg>
-<span style="position:absolute;right:-2px;bottom:-2px;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1F7A4D;border:2px solid #fff"><svg width="12" height="12" sc-camel-view-box="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
+<svg width="34" height="34" viewBox="0 0 20 20" fill="none" stroke="#FFFFFF" stroke-opacity=".75" stroke-width="1.2"><path d="M10 10.6a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8z"></path><path d="M3.6 17.6c0-3.1 2.9-4.9 6.4-4.9s6.4 1.8 6.4 4.9"></path></svg>
+<span style="position:absolute;right:-2px;bottom:-2px;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1F7A4D;border:2px solid #fff"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
 </span>
 <span style="flex:1;display:flex;flex-direction:column;gap:3px">
 <span style="font-size:15.5px;font-weight:600">Photo taken</span>
-<span sc-camel-on-click="{{ goShot }}" style="font-size:14px;font-weight:600;color:{{ accent }};cursor:pointer">Retake</span>
+<span onClick="{{ goShot }}" style="font-size:14px;font-weight:600;color:{{ accent }};cursor:pointer">Retake</span>
 </span>
 </div>
 
@@ -613,7 +614,7 @@ input::placeholder{color:#A7ADB4}
 <sc-for list="{{ fields }}" as="f" hint-placeholder-count="3">
 <label style="display:flex;flex-direction:column;gap:7px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">{{ f.label }}</span>
-<input type="{{ f.type }}" value="{{ f.value }}" sc-camel-on-change="{{ f.onChange }}" placeholder="{{ f.ph }}" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
+<input type="{{ f.type }}" value="{{ f.value }}" onChange="{{ f.onChange }}" placeholder="{{ f.ph }}" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
 <span style="display:{{ f.noteShow }};font-size:13px;line-height:1.45;color:#7B838B">{{ f.note }}</span>
 </label>
 </sc-for>
@@ -621,15 +622,15 @@ input::placeholder{color:#A7ADB4}
 </div>
 
 <div style="flex:none;display:flex;flex-direction:column;gap:8px;padding:12px 20px 20px;background:#fff;border-top:1px solid #E3E7EB">
-<button sc-camel-on-click="{{ goDocs }}" style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;background:{{ nextBg }};border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:15.5px;font-weight:700;letter-spacing:.03em;cursor:pointer">CONTINUE</button>
+<button onClick="{{ goDocs }}" style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;background:{{ nextBg }};border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:15.5px;font-weight:700;letter-spacing:.03em;cursor:pointer">CONTINUE</button>
 </div>
 </sc-if>
 
 <sc-if value="{{ isDocs }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:07</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:07</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:none;display:flex;align-items:center;gap:10px;height:48px;padding:0 8px 0 4px;background:#fff">
-<span sc-camel-on-click="{{ goDetails }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
+<span onClick="{{ goDetails }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
 <span style="flex:1;font-size:12px;font-weight:700;letter-spacing:.12em;color:#7B838B">STEP 3 OF 3</span>
 </div>
 <div style="flex:none;display:flex;gap:4px;padding:0 20px 16px;background:#fff">
@@ -652,12 +653,12 @@ input::placeholder{color:#A7ADB4}
 <span style="display:flex;align-items:center;gap:8px"><span style="font-size:16px;font-weight:600">{{ d.name }}</span><span style="display:{{ d.reqShow }};align-items:center;height:21px;padding:0 8px;border-radius:11px;background:#F1F3F5;font-size:11px;font-weight:700;letter-spacing:.04em;color:#5B6169">{{ d.req }}</span></span>
 <span style="font-size:13.5px;line-height:1.4;color:#7B838B">{{ d.note }}</span>
 </span>
-<span style="display:{{ d.tickShow }};flex:none;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#EAF6EF"><svg width="14" height="14" sc-camel-view-box="0 0 12 12" fill="none" stroke="#1F7A4D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
+<span style="display:{{ d.tickShow }};flex:none;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#EAF6EF"><svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="#1F7A4D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
 </span>
 <span style="display:flex;align-items:center;gap:10px">
-<span style="display:{{ d.thumbShow }};flex:none;align-items:center;justify-content:center;width:56px;height:40px;border-radius:6px;background:#C9CFD5"><svg width="18" height="18" sc-camel-view-box="0 0 20 20" fill="none" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="5" width="14" height="10" rx="1.6"></rect><circle cx="7.6" cy="9.2" r="1.6"></circle><path d="M11 8.4h4M11 11.4h4"></path></svg></span>
-<button sc-camel-on-click="{{ d.go }}" style-hover="filter:brightness(.97)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:0 12px;background:{{ d.btnBg }};border:1px solid {{ d.btnBd }};border-radius:9px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;white-space:nowrap;color:{{ d.btnFg }};cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="{{ d.btnFg }}" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>{{ d.btn }}</button>
-<button sc-camel-on-click="{{ d.go2 }}" style-hover="filter:brightness(.97)" style="display:{{ d.fileShow }};flex:1;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:0 12px;background:#fff;border:1px solid #DCE0E6;border-radius:9px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;color:#1A1D21;cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13V4.4M6.8 7.2 10 4l3.2 3.2M4 12.6V16h12v-3.4"></path></svg>UPLOAD</button>
+<span style="display:{{ d.thumbShow }};flex:none;align-items:center;justify-content:center;width:56px;height:40px;border-radius:6px;background:#C9CFD5"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="5" width="14" height="10" rx="1.6"></rect><circle cx="7.6" cy="9.2" r="1.6"></circle><path d="M11 8.4h4M11 11.4h4"></path></svg></span>
+<button onClick="{{ d.go }}" style-hover="filter:brightness(.97)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:0 12px;background:{{ d.btnBg }};border:1px solid {{ d.btnBd }};border-radius:9px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;white-space:nowrap;color:{{ d.btnFg }};cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="{{ d.btnFg }}" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>{{ d.btn }}</button>
+<button onClick="{{ d.go2 }}" style-hover="filter:brightness(.97)" style="display:{{ d.fileShow }};flex:1;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:0 12px;background:#fff;border:1px solid #DCE0E6;border-radius:9px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;color:#1A1D21;cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13V4.4M6.8 7.2 10 4l3.2 3.2M4 12.6V16h12v-3.4"></path></svg>UPLOAD</button>
 </span>
 <span style="display:{{ d.fileShow }};font-size:12.5px;line-height:1.4;color:#8B9096">Photo, PDF or a file from your phone.</span>
 </div>
@@ -673,12 +674,12 @@ input::placeholder{color:#A7ADB4}
 <div style="display:flex;flex-direction:column;gap:10px;padding:14px 15px;background:#fff;border:1px dashed {{ o.bd }};border-radius:12px">
 <label style="display:flex;flex-direction:column;gap:7px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">{{ o.label }}</span>
-<input type="text" value="{{ o.value }}" sc-camel-on-change="{{ o.onChange }}" placeholder="e.g. First aid, EWP, forklift" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:52px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
+<input type="text" value="{{ o.value }}" onChange="{{ o.onChange }}" placeholder="e.g. First aid, EWP, forklift" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:52px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
 </label>
 <span style="display:{{ o.upShow }};align-items:center;gap:10px">
-<span style="display:{{ o.thumbShow }};flex:none;align-items:center;justify-content:center;width:56px;height:40px;border-radius:6px;background:#C9CFD5"><svg width="18" height="18" sc-camel-view-box="0 0 20 20" fill="none" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="5" width="14" height="10" rx="1.6"></rect><circle cx="7.6" cy="9.2" r="1.6"></circle><path d="M11 8.4h4M11 11.4h4"></path></svg></span>
-<button sc-camel-on-click="{{ o.go }}" style-hover="filter:brightness(.97)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:0 12px;background:{{ o.btnBg }};border:1px solid {{ o.btnBd }};border-radius:9px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;white-space:nowrap;color:{{ o.btnFg }};cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="{{ o.btnFg }}" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>{{ o.btn }}</button>
-<button sc-camel-on-click="{{ o.go2 }}" style-hover="filter:brightness(.97)" style="display:{{ o.fileShow }};flex:1;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:0 12px;background:#fff;border:1px solid #DCE0E6;border-radius:9px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;color:#1A1D21;cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13V4.4M6.8 7.2 10 4l3.2 3.2M4 12.6V16h12v-3.4"></path></svg>UPLOAD</button>
+<span style="display:{{ o.thumbShow }};flex:none;align-items:center;justify-content:center;width:56px;height:40px;border-radius:6px;background:#C9CFD5"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#FFFFFF" stroke-opacity=".8" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="5" width="14" height="10" rx="1.6"></rect><circle cx="7.6" cy="9.2" r="1.6"></circle><path d="M11 8.4h4M11 11.4h4"></path></svg></span>
+<button onClick="{{ o.go }}" style-hover="filter:brightness(.97)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:0 12px;background:{{ o.btnBg }};border:1px solid {{ o.btnBd }};border-radius:9px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;white-space:nowrap;color:{{ o.btnFg }};cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="{{ o.btnFg }}" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>{{ o.btn }}</button>
+<button onClick="{{ o.go2 }}" style-hover="filter:brightness(.97)" style="display:{{ o.fileShow }};flex:1;align-items:center;justify-content:center;gap:7px;min-height:48px;padding:0 12px;background:#fff;border:1px solid #DCE0E6;border-radius:9px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;color:#1A1D21;cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13V4.4M6.8 7.2 10 4l3.2 3.2M4 12.6V16h12v-3.4"></path></svg>UPLOAD</button>
 </span>
 </div>
 </sc-for>
@@ -688,16 +689,16 @@ input::placeholder{color:#A7ADB4}
 
 <div style="flex:none;display:flex;flex-direction:column;gap:9px;padding:12px 20px 20px;background:#fff;border-top:1px solid #E3E7EB">
 <span style="font-size:13.5px;color:#7B838B">{{ docsSummary }}</span>
-<button sc-camel-on-click="{{ finish }}" style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;background:#1A1D21;border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:15.5px;font-weight:700;letter-spacing:.03em;cursor:pointer">FINISH AND SIGN IN</button>
+<button onClick="{{ finish }}" style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;background:#1A1D21;border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:15.5px;font-weight:700;letter-spacing:.03em;cursor:pointer">FINISH AND SIGN IN</button>
 </div>
 </sc-if>
 
 <sc-if value="{{ isChat }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#fff"><span style="font-size:13.5px;font-weight:600">7:04</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#1A1D21"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#1A1D21" stroke-opacity=".4"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#1A1D21"></rect><path d="M21.5 4.5v3" stroke="#1A1D21" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:none;display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 20px;background:#fff">
 <span style="font-size:21px;font-weight:600;letter-spacing:-.015em">Chat</span>
-<span style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="21" height="21" sc-camel-view-box="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h14v9h-8l-4 3.5v-3.5h-2z"></path><path d="M10 6.6v4.4M7.8 8.8h4.4"></path></svg></span>
+<span style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h14v9h-8l-4 3.5v-3.5h-2z"></path><path d="M10 6.6v4.4M7.8 8.8h4.4"></path></svg></span>
 </div>
 
 <div style="flex:1;min-height:0;overflow:auto;background:#F5F6F7">
@@ -705,7 +706,7 @@ input::placeholder{color:#A7ADB4}
 <div style="display:flex;flex-direction:column;border-radius:14px;overflow:hidden;background:linear-gradient(#23272C,#15181C);box-shadow:0 10px 24px rgba(16,20,24,.20),0 1px 0 rgba(255,255,255,.06) inset">
 <span style="display:flex;align-items:baseline;justify-content:space-between;padding:14px 17px 12px"><span style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#8A929B">NEEDS A REPLY</span><span style="font-size:12.5px;font-weight:600;color:#98A0A8">{{ unreadCount }}</span></span>
 <sc-for list="{{ chatUnread }}" as="c" hint-placeholder-count="3">
-<span sc-camel-on-click="{{ c.go }}" style-hover="background:rgba(255,255,255,.05)" style="display:flex;align-items:center;gap:12px;min-height:74px;padding:12px 17px;border-top:1px solid rgba(255,255,255,.08);cursor:pointer">
+<span onClick="{{ c.go }}" style-hover="background:rgba(255,255,255,.05)" style="display:flex;align-items:center;gap:12px;min-height:74px;padding:12px 17px;border-top:1px solid rgba(255,255,255,.08);cursor:pointer">
 <span style="flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:11px;background:{{ c.avBg }};color:#fff;font-size:13px;font-weight:700;letter-spacing:-.01em">{{ c.init }}</span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
 <span style="display:flex;align-items:baseline;gap:8px"><span style="flex:1;font-size:15.5px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.name }}</span><span style="flex:none;font-size:12px;font-weight:600;color:#98A0A8">{{ c.time }}</span></span>
@@ -722,7 +723,7 @@ input::placeholder{color:#A7ADB4}
 <div style="display:flex;align-items:baseline;justify-content:space-between;padding:18px 18px 9px"><span style="font-size:12px;font-weight:700;letter-spacing:.12em;color:#7B838B">ALL ACTIVE JOBS</span><span style="font-size:12.5px;color:#7B838B">{{ chatReadSum }}</span></div>
 <div style="display:flex;flex-direction:column;background:#fff;border-top:1px solid #E3E7EB;border-bottom:1px solid #E3E7EB">
 <sc-for list="{{ chatRead }}" as="c" hint-placeholder-count="2">
-<div sc-camel-on-click="{{ c.go }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:76px;padding:13px 16px;border-bottom:1px solid #EDEFF1;cursor:pointer">
+<div onClick="{{ c.go }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:76px;padding:13px 16px;border-bottom:1px solid #EDEFF1;cursor:pointer">
 <span style="flex:none;display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:11px;background:{{ c.avBg }};color:#fff;font-size:13.5px;font-weight:700;letter-spacing:-.01em">{{ c.init }}</span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
 <span style="display:flex;align-items:baseline;gap:8px"><span style="flex:1;font-size:16px;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:{{ c.nameW }}">{{ c.name }}</span><span style="flex:none;font-size:12.5px;color:{{ c.timeFg }};font-weight:{{ c.timeW }}">{{ c.time }}</span></span>
@@ -740,8 +741,8 @@ input::placeholder{color:#A7ADB4}
 
 <div style="flex:none;display:flex;align-items:stretch;height:58px;background:#fff;border-top:1px solid #DCE0E6">
 <sc-for list="{{ rootBar }}" as="b" hint-placeholder-count="4">
-<span sc-camel-on-click="{{ b.go }}" style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
-<svg width="22" height="22" sc-camel-view-box="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke="{{ b.fg }}"><path d="{{ b.d }}"></path></svg>
+<span onClick="{{ b.go }}" style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer">
+<svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" stroke="{{ b.fg }}"><path d="{{ b.d }}"></path></svg>
 <span style="font-size:11px;color:{{ b.fg }};font-weight:{{ b.w }}">{{ b.label }}</span>
 <span style="display:{{ b.badgeShow }};position:absolute;top:8px;left:calc(50% + 6px);align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#A3282E;color:#fff;font-size:10px;font-weight:700">{{ b.badge }}</span>
 </span>
@@ -750,16 +751,16 @@ input::placeholder{color:#A7ADB4}
 </sc-if>
 
 <sc-if value="{{ isDm }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#2B2F33;color:#fff"><span style="font-size:13.5px;font-weight:600">7:06</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#FFFFFF"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#FFFFFF" stroke-opacity=".5"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#FFFFFF"></rect><path d="M21.5 4.5v3" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#2B2F33;color:#fff"><span style="font-size:13.5px;font-weight:600">7:06</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#FFFFFF"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#FFFFFF" stroke-opacity=".5"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#FFFFFF"></rect><path d="M21.5 4.5v3" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:none;display:flex;align-items:center;gap:8px;height:48px;padding:0 8px 0 4px;background:#2B2F33;color:#fff">
-<span sc-camel-on-click="{{ goChat }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
+<span onClick="{{ goChat }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
 <span style="flex:none;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:11.5px;font-weight:700">{{ dm.init }}</span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
 <span style="font-size:16px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ dm.name }}</span>
 <span style="font-size:12.5px;color:#A7AEB6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ dm.role }}</span>
 </span>
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 3.6h3l1.4 3.4-1.8 1.2a9 9 0 0 0 4.6 4.6l1.2-1.8 3.4 1.4v3a1.4 1.4 0 0 1-1.5 1.4A13.4 13.4 0 0 1 3.2 5.1a1.4 1.4 0 0 1 1.4-1.5z"></path></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 3.6h3l1.4 3.4-1.8 1.2a9 9 0 0 0 4.6 4.6l1.2-1.8 3.4 1.4v3a1.4 1.4 0 0 1-1.5 1.4A13.4 13.4 0 0 1 3.2 5.1a1.4 1.4 0 0 1 1.4-1.5z"></path></svg></span>
 </div>
 
 <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:#F5F6F7">
@@ -773,22 +774,22 @@ input::placeholder{color:#A7ADB4}
 </sc-for>
 </div>
 <div style="flex:none;display:flex;align-items:center;gap:9px;padding:10px 14px 14px;background:#fff;border-top:1px solid #DCE0E6">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:8px;background:#F1F3F5;cursor:pointer"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.6" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:8px;background:#F1F3F5;cursor:pointer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.6" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg></span>
 <span style="flex:1;display:flex;align-items:center;height:44px;padding:0 13px;background:#F5F6F7;border:1px solid #DCE0E6;border-radius:22px;font-size:14.5px;color:#A7ADB4">Message {{ dm.first }}</span>
 </div>
 </div>
 </sc-if>
 
 <sc-if value="{{ isJob }}">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#2B2F33;color:#fff"><span style="font-size:13.5px;font-weight:600">7:06</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#FFFFFF"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#FFFFFF" stroke-opacity=".5"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#FFFFFF"></rect><path d="M21.5 4.5v3" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#2B2F33;color:#fff"><span style="font-size:13.5px;font-weight:600">7:06</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#FFFFFF"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#FFFFFF" stroke-opacity=".5"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#FFFFFF"></rect><path d="M21.5 4.5v3" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 
 <div style="flex:none;display:flex;align-items:center;gap:4px;height:48px;padding:0 8px 0 4px;background:#2B2F33;color:#fff">
-<span sc-camel-on-click="{{ jobBack }}" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
+<span onClick="{{ jobBack }}" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
 <span style="font-size:16px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ job.name }}</span>
 <span style="font-size:12.5px;color:#A7AEB6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ job.sub }}</span>
 </span>
-<span style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="21" height="21" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg></span>
+<span style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg></span>
 </div>
 
 <div style="flex:none;display:flex;align-items:center;gap:9px;padding:4px 20px 13px;background:#2B2F33">
@@ -799,7 +800,7 @@ input::placeholder{color:#A7ADB4}
 
 <div style="flex:none;display:flex;align-items:stretch;justify-content:space-between;gap:2px;height:58px;padding:0 6px;background:#2B2F33;box-shadow:0 6px 16px rgba(16,20,24,.16)">
 <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="6">
-<button sc-camel-on-click="{{ t.go }}" style-hover="color:#FFFFFF" style="position:relative;flex:none;display:flex;align-items:center;justify-content:center;gap:5px;height:58px;padding:0 3px;background:none;border:0;font-family:inherit;font-size:13px;letter-spacing:-.02em;white-space:nowrap;cursor:pointer;color:{{ t.fg }};font-weight:{{ t.w }}">
+<button onClick="{{ t.go }}" style-hover="color:#FFFFFF" style="position:relative;flex:none;display:flex;align-items:center;justify-content:center;gap:5px;height:58px;padding:0 3px;background:none;border:0;font-family:inherit;font-size:13px;letter-spacing:-.02em;white-space:nowrap;cursor:pointer;color:{{ t.fg }};font-weight:{{ t.w }}">
 {{ t.label }}
 <span style="display:{{ t.badgeShow }};flex:none;width:7px;height:7px;border-radius:50%;background:#A3282E"></span>
 <span style="position:absolute;left:0;right:0;bottom:0;height:3px;border-radius:2px 2px 0 0;background:{{ t.bar }}"></span>
@@ -813,7 +814,7 @@ input::placeholder{color:#A7ADB4}
 <div style="height:100%;overflow:auto;display:flex;flex-direction:column">
 <div style="flex:none;display:flex;align-items:center;gap:10px;padding:13px 20px;background:#fff;border-bottom:1px solid #ECEFF2">
 <span style="flex:1;font-size:14px;color:#4A5057">{{ job.photoCount }}</span>
-<button style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;gap:7px;height:44px;padding:0 15px;background:#1A1D21;border:0;border-radius:8px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.03em;cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>Add</button>
+<button style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;gap:7px;height:44px;padding:0 15px;background:#1A1D21;border:0;border-radius:8px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.03em;cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>Add</button>
 </div>
 <sc-for list="{{ photoGroups }}" as="g" hint-placeholder-count="2">
 <div style="flex:none;display:flex;flex-direction:column;gap:8px;padding:14px 16px 4px">
@@ -821,7 +822,7 @@ input::placeholder{color:#A7ADB4}
 <span style="display:flex;flex-wrap:wrap;gap:6px">
 <sc-for list="{{ g.tiles }}" as="p" hint-placeholder-count="6">
 <span style="position:relative;flex:none;width:calc((100% - 12px) / 3);aspect-ratio:1;border-radius:8px;overflow:hidden;background:{{ p.bg }};cursor:pointer">
-<svg width="26" height="26" sc-camel-view-box="0 0 20 20" fill="none" stroke="#FFFFFF" stroke-opacity=".55" stroke-width="1.3" stroke-linejoin="round" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>
+<svg width="26" height="26" viewBox="0 0 20 20" fill="none" stroke="#FFFFFF" stroke-opacity=".55" stroke-width="1.3" stroke-linejoin="round" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>
 <span style="display:{{ p.tagShow }};position:absolute;left:5px;bottom:5px;right:5px;align-items:center;height:20px;padding:0 7px;border-radius:10px;background:rgba(20,23,26,.72);color:#fff;font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.tag }}</span>
 </span>
 </sc-for>
@@ -837,7 +838,7 @@ input::placeholder{color:#A7ADB4}
 <div style="flex:none;display:flex;flex-direction:column;background:#fff;border-bottom:1px solid #DCE0E6">
 <sc-for list="{{ plans }}" as="p" hint-placeholder-count="4">
 <div style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:13px;min-height:76px;padding:12px 16px;border-bottom:1px solid #EDEFF1;cursor:pointer">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:6px;background:#E7EAEE;border:1px solid #DCE0E6"><svg width="26" height="26" sc-camel-view-box="0 0 24 24" fill="none" stroke="#8B9096" stroke-width="1.3"><path d="M3 5h18v14H3z"></path><path d="M3 9h18M9 9v10M15 9v10"></path></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:6px;background:#E7EAEE;border:1px solid #DCE0E6"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8B9096" stroke-width="1.3"><path d="M3 5h18v14H3z"></path><path d="M3 9h18M9 9v10M15 9v10"></path></svg></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
 <span style="font-size:15.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.name }}</span>
 <span style="font-size:13.5px;color:#696D74">{{ p.meta }}</span>
@@ -879,7 +880,7 @@ input::placeholder{color:#A7ADB4}
 </sc-for>
 <span style="display:{{ wp.emptyShow }};padding:20px 15px;font-size:13.5px;line-height:1.5;color:#8B9096;text-wrap:pretty">{{ wp.empty }}</span>
 </div>
-<button style-hover="filter:brightness(1.35)" style="flex:none;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:54px;background:#1A1D21;border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:14.5px;font-weight:700;letter-spacing:.03em;cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>PHOTOGRAPH A COAT</button>
+<button style-hover="filter:brightness(1.35)" style="flex:none;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:54px;background:#1A1D21;border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:14.5px;font-weight:700;letter-spacing:.03em;cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>PHOTOGRAPH A COAT</button>
 <span style="flex:none;font-size:13px;line-height:1.5;color:#696D74">Every coat and flood test is stamped with the area, the date and who applied it. No flood test, no sign-off, nothing claimable on that area.</span>
 </div>
 </sc-if>
@@ -896,7 +897,7 @@ input::placeholder{color:#A7ADB4}
 </sc-for>
 </div>
 <div style="flex:none;display:flex;align-items:center;gap:9px;padding:10px 14px 14px;background:#fff;border-top:1px solid #DCE0E6">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:8px;background:#F1F3F5;cursor:pointer"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.6" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:8px;background:#F1F3F5;cursor:pointer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#4A5057" stroke-width="1.6" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg></span>
 <span style="flex:1;display:flex;align-items:center;height:44px;padding:0 13px;background:#F5F6F7;border:1px solid #DCE0E6;border-radius:22px;font-size:14.5px;color:#A7ADB4">Message the crew on this job</span>
 </div>
 </div>
@@ -917,13 +918,13 @@ input::placeholder{color:#A7ADB4}
 </div>
 <sc-for list="{{ moneyRows }}" as="m" hint-placeholder-count="5">
 <div style="flex:none;display:flex;flex-direction:column;background:#fff;border:1px solid {{ m.bd }};border-radius:10px;box-shadow:0 1px 2px rgba(16,20,24,.04);overflow:hidden">
-<span sc-camel-on-click="{{ m.toggle }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:11px;min-height:58px;padding:11px 13px 11px 15px;cursor:pointer">
+<span onClick="{{ m.toggle }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:11px;min-height:58px;padding:11px 13px 11px 15px;cursor:pointer">
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
 <span style="font-size:15px;font-weight:600;letter-spacing:-.005em">{{ m.k }}</span>
 <span style="font-size:12.5px;color:{{ m.noteFg }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.note }}</span>
 </span>
 <span style="flex:none;font-size:16px;font-weight:600;color:{{ m.fg }}">{{ m.v }}</span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none;transform:rotate({{ m.rot }})"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none;transform:rotate({{ m.rot }})"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 <span style="display:{{ m.openShow }};flex-direction:column;background:#FAFBFC;border-top:1px solid #EDEFF1">
 <span style="display:{{ m.banShow }};padding:11px 15px;font-size:13px;line-height:1.45;background:{{ m.banBg }};color:{{ m.banFg }};border-bottom:1px solid #EDEFF1">{{ m.ban }}</span>
@@ -940,8 +941,8 @@ input::placeholder{color:#A7ADB4}
 </sc-for>
 
 <div style="flex:none;display:flex;gap:9px;padding-top:3px">
-<button style-hover="filter:brightness(1.35)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 12px;background:#1A1D21;border:0;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;white-space:nowrap;color:#fff;cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>ADD INVOICE</button>
-<button style-hover="background:#F5F6F7" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 12px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;white-space:nowrap;color:#1A1D21;cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.6v10.8M4.6 10h10.8"></path></svg>ADD A COST</button>
+<button style-hover="filter:brightness(1.35)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 12px;background:#1A1D21;border:0;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;white-space:nowrap;color:#fff;cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z"></path><circle cx="10" cy="10.8" r="3"></circle></svg>ADD INVOICE</button>
+<button style-hover="background:#F5F6F7" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 12px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;white-space:nowrap;color:#1A1D21;cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.6v10.8M4.6 10h10.8"></path></svg>ADD A COST</button>
 </div>
 <span style="flex:none;font-size:13px;line-height:1.5;color:#696D74">Tap any line for the full rundown. Photograph a supplier invoice and Crewline reads the total, then files it against this job. Only owners and the office see this tab.</span>
 </div>
@@ -957,21 +958,21 @@ input::placeholder{color:#A7ADB4}
 </span>
 <span style="flex:none;font-size:13.5px;font-weight:700;color:{{ safety.signFg }}">{{ safety.signed }}</span>
 </span>
-<span sc-camel-on-click="{{ openSign }}" style-hover="background:rgba(255,255,255,.05)" style="display:{{ signBtnShow }};align-items:center;justify-content:center;gap:8px;min-height:50px;border-top:1px solid rgba(255,255,255,.1);font-size:14px;font-weight:700;letter-spacing:.04em;color:#fff;cursor:pointer"><svg width="16" height="16" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"><path d="M3 15.5c2.6.4 4-1 4.6-3.4.5-2.4 1.4-6.6 3.2-6.6 1.6 0 1 3.2-.4 5.6-1 1.8.4 2.6 1.6 1.6.9-.7 1.8-2 2.6-2 1 0 .8 1.4 2.4 1.2"></path></svg>SIGN THE SWMS</span>
+<span onClick="{{ openSign }}" style-hover="background:rgba(255,255,255,.05)" style="display:{{ signBtnShow }};align-items:center;justify-content:center;gap:8px;min-height:50px;border-top:1px solid rgba(255,255,255,.1);font-size:14px;font-weight:700;letter-spacing:.04em;color:#fff;cursor:pointer"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"><path d="M3 15.5c2.6.4 4-1 4.6-3.4.5-2.4 1.4-6.6 3.2-6.6 1.6 0 1 3.2-.4 5.6-1 1.8.4 2.6 1.6 1.6.9-.7 1.8-2 2.6-2 1 0 .8 1.4 2.4 1.2"></path></svg>SIGN THE SWMS</span>
 <span style="display:{{ signedShow }};align-items:center;gap:10px;padding:12px 15px;border-top:1px solid rgba(255,255,255,.1)">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1F7A4D"><svg width="13" height="13" sc-camel-view-box="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1F7A4D"><svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
 <span style="flex:1;font-size:13.5px;color:#B4BBC2">You signed it today at 7:12 am</span>
 </span>
 </div>
 <div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 14px 8px 16px">
 <span style="font-size:12px;font-weight:700;letter-spacing:.11em;color:#7B838B">ON SITE NOW</span>
-<span sc-camel-on-click="{{ openAdd }}" style-hover="filter:brightness(1.6)" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer">
-<span style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#14171A;box-shadow:0 2px 6px rgba(16,20,24,.22)"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"></path></svg></span>
+<span onClick="{{ openAdd }}" style-hover="filter:brightness(1.6)" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer">
+<span style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#14171A;box-shadow:0 2px 6px rgba(16,20,24,.22)"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><path d="M10 4.4v11.2M4.4 10h11.2"></path></svg></span>
 </span>
 </div>
 <div style="flex:none;display:flex;flex-direction:column;margin:0 16px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;overflow:hidden">
 <sc-for list="{{ crewOn }}" as="c" hint-placeholder-count="3">
-<span sc-camel-on-click="{{ c.open }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:70px;padding:11px 13px 11px 14px;border-bottom:1px solid #EDEFF1;cursor:pointer">
+<span onClick="{{ c.open }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:70px;padding:11px 13px 11px 14px;border-bottom:1px solid #EDEFF1;cursor:pointer">
 <span style="flex:none;display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:{{ c.avBg }};color:#fff;font-size:13px;font-weight:700">{{ c.init }}</span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
 <span style="font-size:15.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.name }}</span>
@@ -981,22 +982,22 @@ input::placeholder{color:#A7ADB4}
 </span>
 </span>
 <span style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="font-size:15.5px;font-weight:600">{{ c.hrs }}</span><span style="font-size:12px;color:#7B838B">today</span></span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </sc-for>
 <span style="display:{{ crewOnEmptyShow }};align-items:center;gap:12px;min-height:66px;padding:13px 14px">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#F5F6F7;border:1px dashed #C3C9D0"><svg width="18" height="18" sc-camel-view-box="0 0 20 20" fill="none" stroke="#B7BCC2" stroke-width="1.6" stroke-linecap="round"><path d="M10 10.5a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3.8 17.2c0-3 2.8-4.7 6.2-4.7s6.2 1.7 6.2 4.7"></path></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#F5F6F7;border:1px dashed #C3C9D0"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#B7BCC2" stroke-width="1.6" stroke-linecap="round"><path d="M10 10.5a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3.8 17.2c0-3 2.8-4.7 6.2-4.7s6.2 1.7 6.2 4.7"></path></svg></span>
 <span style="flex:1;font-size:14px;line-height:1.4;color:#7B838B;text-wrap:pretty">{{ crewOnEmpty }}</span>
 </span>
 </div>
 <div style="flex:none;padding:16px 16px 8px"><span style="font-size:12px;font-weight:700;letter-spacing:.11em;color:#7B838B">{{ crewOffLabel }}</span></div>
 <div style="flex:none;display:flex;flex-direction:column;margin:0 16px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;overflow:hidden">
 <sc-for list="{{ crewOff }}" as="c" hint-placeholder-count="2">
-<span sc-camel-on-click="{{ c.open }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:62px;padding:11px 13px 11px 14px;border-bottom:1px solid #EDEFF1;cursor:pointer">
+<span onClick="{{ c.open }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:62px;padding:11px 13px 11px 14px;border-bottom:1px solid #EDEFF1;cursor:pointer">
 <span style="flex:none;display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#E7EAEE;color:#7B838B;font-size:13px;font-weight:700">{{ c.init }}</span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:15.5px;font-weight:600;color:#4A5057;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.name }}</span><span style="font-size:13.5px;color:#8B9096;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.role }}</span></span>
 <span style="flex:none;font-size:13.5px;color:#8B9096">{{ c.note }}</span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </sc-for>
 <span style="display:{{ crewOffEmptyShow }};align-items:center;gap:12px;min-height:62px;padding:13px 14px;font-size:14px;line-height:1.4;color:#7B838B">Nobody else is attached to this job yet.</span>
@@ -1019,9 +1020,9 @@ input::placeholder{color:#A7ADB4}
 
 <sc-if value="{{ personOpen }}" hint-placeholder-val="{{ false }}">
 <div style="position:absolute;inset:0;z-index:45;display:flex;flex-direction:column;background:#F5F6F7">
-<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#14171A;color:#fff"><span style="font-size:13.5px;font-weight:600">7:06</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" sc-camel-view-box="0 0 16 11" fill="#FFFFFF"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" sc-camel-view-box="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#FFFFFF" stroke-opacity=".5"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#FFFFFF"></rect><path d="M21.5 4.5v3" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
+<div style="flex:none;display:flex;align-items:flex-end;justify-content:space-between;height:46px;padding:0 24px 6px;background:#14171A;color:#fff"><span style="font-size:13.5px;font-weight:600">7:06</span><span style="display:flex;align-items:center;gap:5px"><svg width="16" height="11" viewBox="0 0 16 11" fill="#FFFFFF"><rect x="0" y="7" width="2.6" height="4" rx=".6"></rect><rect x="4" y="5" width="2.6" height="6" rx=".6"></rect><rect x="8" y="2.6" width="2.6" height="8.4" rx=".6"></rect><rect x="12" y="0" width="2.6" height="11" rx=".6" opacity=".3"></rect></svg><svg width="22" height="11" viewBox="0 0 24 12" fill="none"><rect x="1" y="1" width="19" height="10" rx="3" stroke="#FFFFFF" stroke-opacity=".5"></rect><rect x="2.5" y="2.5" width="14" height="7" rx="1.8" fill="#FFFFFF"></rect><path d="M21.5 4.5v3" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="1.6" stroke-linecap="round"></path></svg></span></div>
 <div style="flex:none;display:flex;align-items:center;gap:4px;height:48px;padding:0 8px 0 4px;background:#14171A;color:#fff">
-<span sc-camel-on-click="{{ closePerson }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
+<span onClick="{{ closePerson }}" style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
 <span style="flex:1;min-width:0;font-size:16px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ person.name }}</span>
 </div>
 <div style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:9px;padding:0 0 22px">
@@ -1034,7 +1035,7 @@ input::placeholder{color:#A7ADB4}
 </span>
 </div>
 <div style="flex:none;display:flex;align-items:center;gap:11px;margin:5px 16px 0;padding:13px 14px;background:{{ person.swBg }};border:1px solid {{ person.swBd }};border-radius:10px">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:{{ person.swFg }}"><svg width="15" height="15" sc-camel-view-box="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ person.swIcon }}"></path></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:{{ person.swFg }}"><svg width="15" height="15" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ person.swIcon }}"></path></svg></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
 <span style="font-size:14.5px;font-weight:600;color:{{ person.swFg }}">{{ person.swTitle }}</span>
 <span style="font-size:13px;line-height:1.4;color:#5B6169;text-wrap:pretty">{{ person.swNote }}</span>
@@ -1044,7 +1045,7 @@ input::placeholder{color:#A7ADB4}
 <div style="flex:none;display:flex;flex-direction:column;margin:0 16px;background:#fff;border:1px solid #E1E5E9;border-radius:10px;overflow:hidden">
 <sc-for list="{{ person.tickets }}" as="t" hint-placeholder-count="3">
 <span style="display:flex;align-items:center;gap:12px;min-height:68px;padding:11px 14px;border-bottom:1px solid #EDEFF1">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:34px;border-radius:5px;background:{{ t.thumbBg }};border:1px solid {{ t.thumbBd }}"><svg width="18" height="18" sc-camel-view-box="0 0 20 20" fill="none" stroke="{{ t.thumbFg }}" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="5" width="14" height="10" rx="1.6"></rect><circle cx="7.6" cy="9.2" r="1.6"></circle><path d="M11 8.4h4M11 11.4h4"></path></svg></span>
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:34px;border-radius:5px;background:{{ t.thumbBg }};border:1px solid {{ t.thumbBd }}"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="{{ t.thumbFg }}" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="5" width="14" height="10" rx="1.6"></rect><circle cx="7.6" cy="9.2" r="1.6"></circle><path d="M11 8.4h4M11 11.4h4"></path></svg></span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
 <span style="font-size:15px;font-weight:600;color:{{ t.nameFg }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.name }}</span>
 <span style="font-size:12.5px;color:{{ t.noFg }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.no }}</span>
@@ -1066,8 +1067,8 @@ input::placeholder{color:#A7ADB4}
 </sc-for>
 </div>
 <div style="flex:none;display:flex;gap:9px;padding:12px 16px 0">
-<span style-hover="filter:brightness(1.35)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;background:#1A1D21;border-radius:10px;font-size:14px;font-weight:700;letter-spacing:.02em;color:#fff;cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M3 4.6h4l1.4 3.4-2 1.3a9 9 0 0 0 4.7 4.7l1.3-2 3.4 1.4v4c-5.6.5-12.3-6.2-11.8-11.8z"></path></svg>CALL</span>
-<span style-hover="background:#F0F2F4" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;font-size:14px;font-weight:700;letter-spacing:.02em;color:#1A1D21;cursor:pointer"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.7" stroke-linejoin="round"><path d="M3 4.5h14v9h-8l-4 3.5v-3.5h-2z"></path></svg>MESSAGE</span>
+<span style-hover="filter:brightness(1.35)" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;background:#1A1D21;border-radius:10px;font-size:14px;font-weight:700;letter-spacing:.02em;color:#fff;cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M3 4.6h4l1.4 3.4-2 1.3a9 9 0 0 0 4.7 4.7l1.3-2 3.4 1.4v4c-5.6.5-12.3-6.2-11.8-11.8z"></path></svg>CALL</span>
+<span style-hover="background:#F0F2F4" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;font-size:14px;font-weight:700;letter-spacing:.02em;color:#1A1D21;cursor:pointer"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.7" stroke-linejoin="round"><path d="M3 4.5h14v9h-8l-4 3.5v-3.5h-2z"></path></svg>MESSAGE</span>
 </div>
 <span style="flex:none;padding:4px 20px 0;font-size:13px;line-height:1.5;color:#696D74">{{ person.mobile }} · tickets are theirs, they carry across every job they are on.</span>
 </div>
@@ -1075,11 +1076,11 @@ input::placeholder{color:#A7ADB4}
 </sc-if>
 
 <sc-if value="{{ addOpen }}">
-<div sc-camel-on-click="{{ closeAdd }}" style="position:absolute;inset:0;background:rgba(20,23,26,.52);z-index:40"></div>
+<div onClick="{{ closeAdd }}" style="position:absolute;inset:0;background:rgba(20,23,26,.52);z-index:40"></div>
 <div style="position:absolute;left:0;right:0;bottom:0;z-index:41;display:flex;flex-direction:column;max-height:520px;background:#fff;border-radius:18px 18px 34px 34px;box-shadow:0 -10px 30px rgba(16,20,24,.28)">
 <div style="flex:none;display:flex;justify-content:center;padding:9px 0 3px"><span style="width:36px;height:5px;border-radius:3px;background:#DCE0E6"></span></div>
 <div style="flex:none;display:flex;align-items:flex-start;gap:8px;padding:8px 20px 14px">
-<span sc-camel-on-click="{{ backToPick }}" style="display:{{ addBackShow }};flex:none;align-items:center;justify-content:center;width:34px;height:34px;margin:-4px 0 0 -8px;cursor:pointer"><svg width="19" height="19" sc-camel-view-box="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
+<span onClick="{{ backToPick }}" style="display:{{ addBackShow }};flex:none;align-items:center;justify-content:center;width:34px;height:34px;margin:-4px 0 0 -8px;cursor:pointer"><svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="#1A1D21" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 4.4 6.6 10l5.6 5.6"></path></svg></span>
 <span style="flex:1;display:flex;flex-direction:column;gap:3px">
 <span style="font-size:19px;font-weight:600;letter-spacing:-.015em">{{ addTitle }}</span>
 <span style="font-size:13.5px;line-height:1.4;color:#7B838B">{{ addSub }}</span>
@@ -1090,11 +1091,11 @@ input::placeholder{color:#A7ADB4}
 <div style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:16px;padding:4px 20px 18px;border-top:1px solid #ECEFF2">
 <label style="display:flex;flex-direction:column;gap:7px;padding-top:14px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Their name</span>
-<input type="text" value="{{ inviteName }}" sc-camel-on-change="{{ onInviteName }}" placeholder="e.g. Jarrah Willis" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
+<input type="text" value="{{ inviteName }}" onChange="{{ onInviteName }}" placeholder="e.g. Jarrah Willis" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
 </label>
 <label style="display:flex;flex-direction:column;gap:7px">
 <span style="font-size:13px;font-weight:600;letter-spacing:.03em;color:#4A5057">Their mobile</span>
-<input type="tel" value="{{ invitePhone }}" sc-camel-on-change="{{ onInvitePhone }}" placeholder="04__ ___ ___" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
+<input type="tel" value="{{ invitePhone }}" onChange="{{ onInvitePhone }}" placeholder="04__ ___ ___" style-focus="border-color:{{ accent }};box-shadow:0 0 0 3px rgba(110,86,207,.14)" style="width:100%;height:56px;padding:0 14px;background:#fff;border:1px solid #DCE0E6;border-radius:10px;color:#1A1D21;outline:none">
 </label>
 <div style="display:flex;flex-direction:column;border:1px solid #E1E5E9;border-radius:10px;overflow:hidden">
 <span style="padding:11px 14px 9px;background:#FAFBFC;border-bottom:1px solid #EDEFF1;font-size:12px;font-weight:700;letter-spacing:.11em;color:#7B838B">WHAT THEY GET</span>
@@ -1107,7 +1108,7 @@ input::placeholder{color:#A7ADB4}
 
 <sc-if value="{{ addSent }}" hint-placeholder-val="{{ false }}">
 <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;padding:20px 28px 24px;border-top:1px solid #ECEFF2">
-<span style="display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#EAF6EF"><svg width="27" height="27" sc-camel-view-box="0 0 12 12" fill="none" stroke="#1F7A4D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
+<span style="display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#EAF6EF"><svg width="27" height="27" viewBox="0 0 12 12" fill="none" stroke="#1F7A4D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.6l4.5-5"></path></svg></span>
 <span style="font-size:18px;font-weight:600;letter-spacing:-.015em;text-align:center">{{ sentTitle }}</span>
 <span style="font-size:14px;line-height:1.5;color:#5B6169;text-align:center;text-wrap:pretty">{{ sentNote }}</span>
 </div>
@@ -1119,24 +1120,24 @@ input::placeholder{color:#A7ADB4}
 <span style="display:flex;align-items:center;gap:12px;min-height:70px;padding:11px 20px;border-bottom:1px solid #EDEFF1">
 <span style="flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:{{ p.avBg }};color:#fff;font-size:13px;font-weight:700">{{ p.init }}</span>
 <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:15.5px;font-weight:600">{{ p.name }}</span><span style="font-size:13.5px;color:#7B838B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.where }}</span></span>
-<button sc-camel-on-click="{{ p.go }}" style-hover="filter:brightness(.97)" style="flex:none;display:flex;align-items:center;justify-content:center;gap:6px;min-width:88px;min-height:44px;padding:0 14px;background:{{ p.btnBg }};border:1px solid {{ p.btnBd }};border-radius:22px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;color:{{ p.btnFg }};cursor:pointer">{{ p.btn }}</button>
+<button onClick="{{ p.go }}" style-hover="filter:brightness(.97)" style="flex:none;display:flex;align-items:center;justify-content:center;gap:6px;min-width:88px;min-height:44px;padding:0 14px;background:{{ p.btnBg }};border:1px solid {{ p.btnBd }};border-radius:22px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:.02em;color:{{ p.btnFg }};cursor:pointer">{{ p.btn }}</button>
 </span>
 </sc-for>
-<span sc-camel-on-click="{{ goInvite }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:66px;padding:11px 20px;cursor:pointer">
-<span style="flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;border:1.5px dashed #C3C9D0"><svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="#7B838B" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.8v10.4M4.8 10h10.4"></path></svg></span>
+<span onClick="{{ goInvite }}" style-hover="background:#FAFBFC" style="display:flex;align-items:center;gap:12px;min-height:66px;padding:11px 20px;cursor:pointer">
+<span style="flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;border:1.5px dashed #C3C9D0"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#7B838B" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.8v10.4M4.8 10h10.4"></path></svg></span>
 <span style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:15.5px;font-weight:600">Someone not on Crewline</span><span style="font-size:13.5px;color:#7B838B">Text them an invite — they sign up on their phone</span></span>
-<svg width="11" height="11" sc-camel-view-box="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<svg width="11" height="11" viewBox="0 0 10 10" style="flex:none"><path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 </span>
 </div>
 </sc-if>
 <div style="flex:none;padding:14px 20px 20px;border-top:1px solid #ECEFF2">
-<button sc-camel-on-click="{{ addCta }}" style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;background:{{ addCtaBg }};border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:15.5px;font-weight:700;letter-spacing:.03em;cursor:{{ addCtaCursor }}">{{ addCtaLabel }}</button>
+<button onClick="{{ addCta }}" style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;background:{{ addCtaBg }};border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:15.5px;font-weight:700;letter-spacing:.03em;cursor:{{ addCtaCursor }}">{{ addCtaLabel }}</button>
 </div>
 </div>
 </sc-if>
 
 <sc-if value="{{ signOpen }}">
-<div sc-camel-on-click="{{ closeSign }}" style="position:absolute;inset:0;background:rgba(20,23,26,.52);z-index:40"></div>
+<div onClick="{{ closeSign }}" style="position:absolute;inset:0;background:rgba(20,23,26,.52);z-index:40"></div>
 <div style="position:absolute;left:0;right:0;bottom:0;z-index:41;display:flex;flex-direction:column;background:#fff;border-radius:18px 18px 34px 34px;box-shadow:0 -10px 30px rgba(16,20,24,.28)">
 <div style="flex:none;display:flex;justify-content:center;padding:9px 0 3px"><span style="width:36px;height:5px;border-radius:3px;background:#DCE0E6"></span></div>
 <div style="flex:none;display:flex;flex-direction:column;gap:3px;padding:8px 20px 14px">
@@ -1149,17 +1150,17 @@ input::placeholder{color:#A7ADB4}
 </div>
 <div style="flex:none;display:flex;align-items:center;justify-content:space-between;padding:16px 20px 7px">
 <span style="font-size:12px;font-weight:700;letter-spacing:.11em;color:#7B838B">YOUR SIGNATURE</span>
-<button sc-camel-on-click="{{ clearSign }}" style-hover="color:#14171A" style="display:inline-flex;align-items:center;min-height:32px;padding:0;background:none;border:0;font-family:inherit;font-size:13.5px;font-weight:600;color:{{ accent }};cursor:pointer">Clear</button>
+<button onClick="{{ clearSign }}" style-hover="color:#14171A" style="display:inline-flex;align-items:center;min-height:32px;padding:0;background:none;border:0;font-family:inherit;font-size:13.5px;font-weight:600;color:{{ accent }};cursor:pointer">Clear</button>
 </div>
 <div style="flex:none;position:relative;height:176px;margin:0 20px;border:1.5px dashed #C3C9D0;border-radius:10px;background:#FBFCFD;overflow:hidden">
-<canvas ref="{{ padRef }}" sc-camel-on-pointer-down="{{ padDown }}" sc-camel-on-pointer-move="{{ padMove }}" sc-camel-on-pointer-up="{{ padUp }}" sc-camel-on-pointer-leave="{{ padUp }}" style="position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair"></canvas>
+<canvas ref="{{ padRef }}" onPointerDown="{{ padDown }}" onPointerMove="{{ padMove }}" onPointerUp="{{ padUp }}" onPointerLeave="{{ padUp }}" style="position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair"></canvas>
 <span style="position:absolute;left:22px;right:22px;bottom:44px;height:1px;background:#DCE0E6"></span>
 <span style="position:absolute;left:22px;bottom:48px;font-size:15px;color:#B7BCC2">×</span>
 <span style="display:{{ signHintShow }};position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:13px;color:#A7ADB4">Sign with your finger</span>
 </div>
 <div style="flex:none;display:flex;flex-direction:column;gap:7px;padding:16px 20px 20px">
-<button sc-camel-on-click="{{ submitSign }}" style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;background:{{ submitBg }};border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:15.5px;font-weight:700;letter-spacing:.03em;cursor:{{ submitCursor }}">SUBMIT SIGNATURE</button>
-<button sc-camel-on-click="{{ closeSign }}" style-hover="background:#F5F6F7" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;background:none;border:0;border-radius:8px;font-family:inherit;font-size:15px;font-weight:600;color:#4A5057;cursor:pointer">Not now</button>
+<button onClick="{{ submitSign }}" style-hover="filter:brightness(1.35)" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;background:{{ submitBg }};border:0;border-radius:10px;color:#fff;font-family:inherit;font-size:15.5px;font-weight:700;letter-spacing:.03em;cursor:{{ submitCursor }}">SUBMIT SIGNATURE</button>
+<button onClick="{{ closeSign }}" style-hover="background:#F5F6F7" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;background:none;border:0;border-radius:8px;font-family:inherit;font-size:15px;font-weight:600;color:#4A5057;cursor:pointer">Not now</button>
 </div>
 </div>
 </sc-if>
@@ -1170,7 +1171,7 @@ input::placeholder{color:#A7ADB4}
 </div>
 
 </x-dc>
-<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960},&quot;startTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;photos&quot;,&quot;plans&quot;,&quot;safety&quot;,&quot;chat&quot;,&quot;money&quot;,&quot;crew&quot;],&quot;default&quot;:&quot;photos&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Demo&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#6E56CF&quot;,&quot;#007BFF&quot;,&quot;#1F7A4D&quot;,&quot;#C2410C&quot;],&quot;default&quot;:&quot;#6E56CF&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Look&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960},&quot;startTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;photos&quot;,&quot;plans&quot;,&quot;safety&quot;,&quot;chat&quot;,&quot;money&quot;,&quot;crew&quot;],&quot;default&quot;:&quot;photos&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Demo&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#6E56CF&quot;,&quot;#007BFF&quot;,&quot;#1F7A4D&quot;,&quot;#C2410C&quot;],&quot;default&quot;:&quot;#6E56CF&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Look&quot;}}">
 const RAIL = {
   lot42: '#4C7FB8', hallett: '#5C8A63', northgate: '#A5714A', glenelg: '#8B8375', regency: '#6E7B86'
 };
@@ -2543,14 +2544,5 @@ class Component extends DCLogic {
   }
 }
 </script>
-
-
-<div id="__claude_design_branding"><style>#__claude_design_branding{position:fixed;right:16px;bottom:16px;z-index:2147483646;display:flex;align-items:center;gap:7px;height:30px;padding:0 5px 0 10px;border-radius:999px;font-family:"Anthropic Sans",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-size:12.5px;font-weight:400;line-height:1;letter-spacing:normal;text-transform:none;color:#141413;background:rgba(255,255,255,.86);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);box-shadow:0 0 0 .5px rgba(31,30,29,.14),0 2px 10px rgba(0,0,0,.09)}
-#__claude_design_branding *{box-sizing:border-box;margin:0}
-#__claude_design_branding a{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
-#__claude_design_branding a:hover span{text-decoration:underline}
-#__claude_design_branding svg{flex:none}
-#__claude_design_branding a svg{color:#D97757}
-#__claude_design_branding button{width:20px;height:20px;padding:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:currentColor;opacity:.55;border:0;background:none;cursor:pointer;flex:none;font:inherit;transition:opacity .14s}
-#__claude_design_branding button:hover{opacity:1;background:rgba(127,127,127,.22)}
-@media print{#__claude_design_branding{display:none}}</style><a href="https://claude.com/product/design" target="_blank" rel="noopener noreferrer"><svg width="14" height="14" viewBox="0 0 20 21" fill="none" aria-hidden="true"><path fill="currentColor" d="M9.99902 0C15.5258 0.000170936 19.999 4.50643 19.999 10.0547C19.999 11.7656 19.5863 12.9976 18.7861 13.8203C17.9924 14.6362 16.9465 14.9138 15.9854 15.0078C15.05 15.0993 14.0097 15.0262 13.2549 15.0186C12.8524 15.0145 12.5177 15.0267 12.2441 15.0703C11.9682 15.1144 11.8143 15.1813 11.7305 15.2432C11.4745 15.4322 11.3353 15.7121 11.2656 16.1602C11.2303 16.3875 11.2168 16.6362 11.209 16.9131C11.2017 17.1715 11.1986 17.4893 11.1807 17.7705C11.1469 18.2975 11.0495 19.0865 10.4199 19.5908C9.7846 20.0996 8.88652 20.1057 7.85449 19.877C7.36399 19.7682 6.88652 19.6232 6.42578 19.4453C2.66989 17.9949 0.000187748 14.3414 0 10.0547C0 4.50643 4.47223 0.000171048 9.99902 0ZM9.99902 1.60547C5.36781 1.60564 1.60547 5.38391 1.60547 10.0547C1.60566 13.6582 3.84823 16.7296 7.00391 17.9482C7.39027 18.0974 7.79085 18.2184 8.20215 18.3096C9.1375 18.5169 9.384 18.3633 9.41602 18.3379C9.4524 18.3087 9.54558 18.1915 9.5791 17.668C9.5947 17.4239 9.59473 17.1786 9.60352 16.8672C9.61179 16.5742 9.62831 16.2435 9.67969 15.9131C9.78359 15.2455 10.0474 14.4906 10.7764 13.9521C11.1479 13.6778 11.5842 13.5493 11.9912 13.4844C12.4007 13.4191 12.8434 13.4088 13.2705 13.4131C14.1753 13.4222 15.0071 13.4905 15.8291 13.4102C16.6257 13.3322 17.2249 13.1235 17.6357 12.7012C18.0401 12.2855 18.3935 11.5261 18.3936 10.0547C18.3936 5.38391 14.6302 1.60564 9.99902 1.60547ZM5.11621 9.86719C5.86386 9.91468 6.45486 10.5348 6.45508 11.2939C6.45506 12.0838 5.81519 12.7245 5.02539 12.7246C4.28481 12.7246 3.67573 12.1617 3.60254 11.4404L3.59473 11.2939L3.60156 11.1533C3.66942 10.4596 4.23282 9.91186 4.93359 9.86719H5.11621ZM14.9814 7.19141C15.729 7.23889 16.3199 7.85919 16.3203 8.61816C16.3203 9.40801 15.6804 10.0487 14.8906 10.0488C14.1501 10.0487 13.5409 9.48586 13.4678 8.76465L13.46 8.61816L13.4668 8.47754C13.5348 7.78403 14.0983 7.23618 14.7988 7.19141H14.9814ZM6.4541 4.93457C7.20161 4.9822 7.79275 5.60231 7.79297 6.36133C7.79288 7.151 7.15291 7.7917 6.36328 7.79199C5.62274 7.79199 5.01369 7.22903 4.94043 6.50781L4.93262 6.36133L4.93945 6.2207C5.00731 5.52698 5.5707 4.97922 6.27148 4.93457H6.4541ZM11.3867 3.59668C12.1343 3.64419 12.7253 4.26436 12.7256 5.02344C12.7256 5.81326 12.0857 6.45393 11.2959 6.4541C10.5553 6.4541 9.94622 5.89123 9.87305 5.16992L9.86523 5.02344L9.87207 4.88281C9.93996 4.18912 10.5033 3.64133 11.2041 3.59668H11.3867Z"></path></svg><span>Made with Claude Design</span></a><button type="button" aria-label="Dismiss" onclick="this.parentElement.remove()"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg></button></div></body></html>
+</body>
+</html>

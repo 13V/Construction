@@ -172,6 +172,7 @@ function Tracker({ me }: { me: WorkerRow }) {
   const [tab, setTab] = useState<Tab>('home')
   /** The job open over Home, and whether the full clock surface is up. */
   const [openJobId, setOpenJobId] = useState<string | null>(null)
+  const [openJobTab, setOpenJobTab] = useState<'photos' | 'waterproofing' | 'money' | 'crew'>('photos')
   const [clockOpen, setClockOpen] = useState(() => !me.is_office)
   const [celebration, setCelebration] = useState<Celebration | null>(null)
   const [clockOutConfirm, setClockOutConfirm] = useState(false)
@@ -422,10 +423,22 @@ function Tracker({ me }: { me: WorkerRow }) {
 
       {screen === 'tracker' && tab === 'home' && !clockOpen && openJob && (
         <JobScreen
+          key={openJob.id + openJobTab}
+          initialTab={openJobTab}
           me={me}
           site={openJob}
           progressPct={simpleData.progress.get(openJob.id) ?? null}
           onSiteCount={simpleData.onSiteNow.get(openJob.id) ?? 0}
+          floodHoldCount={simpleData.floodHold.get(openJob.id) ?? 0}
+          tone={
+            (simpleData.openDefects.get(openJob.id) ?? 0) > 0 || (simpleData.floodHold.get(openJob.id) ?? 0) > 0
+              ? 'r'
+              : (simpleData.pendingVariationsBySite.get(openJob.id) ?? 0) > 0 || openJob.status === 'starting_soon'
+                ? 'a'
+                : (simpleData.onSiteNow.get(openJob.id) ?? 0) > 0
+                  ? 'g'
+                  : 'n'
+          }
           chat={(onClose) => (
             <ChatScreen me={me} currentSiteId={openJob.id} sites={sites} onClose={onClose} />
           )}
@@ -439,7 +452,7 @@ function Tracker({ me }: { me: WorkerRow }) {
         <HomeScreen
           me={me}
           data={simpleData}
-          onOpenJob={(x) => setOpenJobId(x.id)}
+          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'photos'); setOpenJobId(x.id) }}
           onOpenSchedule={() => setTab('schedule')}
           onOpenClock={() => setClockOpen(true)}
           onOpenNotifications={() => setTab('projects')}

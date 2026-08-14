@@ -28,12 +28,6 @@ const CameraGlyph = ({ size, opacity = 1, stroke = '#fff' }: { size: number; opa
   </svg>
 )
 
-const Chevron = ({ colour = '#B7BCC2' }: { colour?: string }) => (
-  <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none' }}>
-    <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke={colour} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
-
 // ------------------------------------------------------------------ photos
 
 const dayLabel = (iso: string) => {
@@ -226,20 +220,119 @@ interface ProfitRow {
   margin_pct: number | null
 }
 
-function MoneyTab({ site, onAddInvoice }: { site: JobSiteRow; onAddInvoice: () => void }) {
+/** The drawing's tone colours for money notes and values. */
+const M_FG = { r: '#A3282E', a: '#8A6100', g: '#1F7A4D' } as const
+const M_CHIP = {
+  r: { bg: '#FDECEE', fg: '#A3282E' },
+  a: { bg: '#FFF6E3', fg: '#8A6100' },
+  g: { bg: '#EAF6EF', fg: '#1F7A4D' },
+  n: { bg: '#F1F3F5', fg: '#4A5057' },
+} as const
+
+interface MoneyLine {
+  k: string
+  v: string
+  flag?: string
+}
+
+interface MoneyRowData {
+  key: string
+  k: string
+  v: string
+  note: string
+  tone?: keyof typeof M_FG
+  lines: MoneyLine[]
+  empty: string
+  ban?: { text: string; tone: keyof typeof M_CHIP }
+}
+
+const shortDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+
+const countWord = (n: number) =>
+  ['Zero', 'One', 'Two', 'Three', 'Four', 'Five'][n] ?? String(n)
+
+function MoneyTab({
+  site,
+  floodHoldCount,
+  onAddInvoice,
+}: {
+  site: JobSiteRow
+  floodHoldCount: number
+  onAddInvoice: () => void
+}) {
   const [row, setRow] = useState<ProfitRow | null>(null)
-  const [pendingCount, setPendingCount] = useState(0)
+  const [donePct, setDonePct] = useState<number | null>(null)
+  const [claims, setClaims] = useState<Array<{ label: string; ex: number }>>([])
+  const [pending, setPending] = useState<Array<{ description: string; cost_impact: number }>>([])
+  const [mats, setMats] = useState<Array<{ name: string; supplier: string | null; total_cost: number; cost_code: string | null }>>([])
+  const [exps, setExps] = useState<Array<{ vendor: string; category: string | null; amount: number; tax: number }>>([])
+  const [sublets, setSublets] = useState<Array<{ name: string; cost: number }>>([])
+  const [wageLines, setWageLines] = useState<MoneyLine[]>([])
+  const [open, setOpen] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
+    const client = supabase()
     void Promise.all([
-      supabase().from('job_profit_v').select('*').eq('site_id', site.id).maybeSingle(),
-      supabase().from('change_orders').select('id').eq('site_id', site.id).eq('status', 'pending_client'),
-    ]).then(([p, co]) => {
+      client.from('job_profit_v').select('*').eq('site_id', site.id).maybeSingle(),
+      client.from('site_progress_v').select('pct_complete').eq('site_id', site.id).maybeSingle(),
+      client.from('invoices').select('invoice_no, period, issued_on, ex_tax').eq('site_id', site.id).in('status', ['sent', 'paid']).order('issued_on', { ascending: false }),
+      client.from('change_orders').select('description, cost_impact').eq('site_id', site.id).eq('status', 'pending_client'),
+      client.from('materials').select('name, supplier, total_cost, cost_code').eq('site_id', site.id).neq('status', 'returned'),
+      client.from('expenses').select('vendor, category, amount, tax').eq('site_id', site.id),
+      client.from('subcontract_work').select('cost, subcontractors(name)').eq('site_id', site.id),
+      client.from('shifts').select('worker_id, started_at, ended_at, break_minutes').eq('site_id', site.id).not('ended_at', 'is', null),
+      client.from('crew_v').select('id, name, trade, role'),
+      client.from('worker_pay').select('worker_id, rate'),
+    ]).then(([p, pr, inv, co, mt, ex, sw, sh, cv, pay]) => {
       if (cancelled) return
       setRow((p.data as ProfitRow) ?? null)
-      setPendingCount(co.data?.length ?? 0)
+      setDonePct(pr.data?.pct_complete === undefined || pr.data?.pct_complete === null ? null : Number(pr.data.pct_complete))
+      setClaims(
+        ((inv.data as Array<{ invoice_no: string; period: string | null; issued_on: string; ex_tax: number }>) ?? []).map((i) => ({
+          label: `${i.period || i.invoice_no} · ${shortDate(i.issued_on)}`,
+          ex: Number(i.ex_tax ?? 0),
+        })),
+      )
+      setPending(((co.data as Array<{ description: string; cost_impact: number }>) ?? []))
+      setMats(((mt.data as Array<{ name: string; supplier: string | null; total_cost: number; cost_code: string | null }>) ?? []))
+      setExps(((ex.data as Array<{ vendor: string; category: string | null; amount: number; tax: number }>) ?? []))
+      const bySub = new Map<string, number>()
+      // The embed's type depends on whether the client knows the FK is
+      // many-to-one; accept both shapes rather than fighting the codegen.
+      for (const r of (sw.data ?? []) as Array<{ cost: number; subcontractors: { name: string } | Array<{ name: string }> | null }>) {
+        const rel = r.subcontractors
+        const name = (Array.isArray(rel) ? rel[0]?.name : rel?.name) ?? 'Subcontractor'
+        bySub.set(name, (bySub.get(name) ?? 0) + Number(r.cost ?? 0))
+      }
+      setSublets([...bySub.entries()].map(([name, cost]) => ({ name, cost })))
+
+      // Wages per person: closed shift hours × their rate. worker_pay is
+      // office-only under RLS, which is exactly who can open this tab.
+      const rates = new Map(((pay.data as Array<{ worker_id: string; rate: number }>) ?? []).map((r) => [r.worker_id, Number(r.rate)]))
+      const people = new Map(
+        ((cv.data as Array<{ id: string; name: string; trade: string | null; role: string }>) ?? []).map((w) => [w.id, w]),
+      )
+      const hours = new Map<string, number>()
+      for (const r of (sh.data ?? []) as Array<{ worker_id: string; started_at: string; ended_at: string | null; break_minutes: number | null }>) {
+        if (!r.ended_at) continue
+        const h = Math.max(
+          0,
+          (new Date(r.ended_at).getTime() - new Date(r.started_at).getTime()) / 3_600_000 - (r.break_minutes ?? 0) / 60,
+        )
+        hours.set(r.worker_id, (hours.get(r.worker_id) ?? 0) + h)
+      }
+      const wl: Array<{ k: string; cost: number }> = []
+      for (const [workerId, h] of hours) {
+        const w = people.get(workerId)
+        if (!w || h <= 0) continue
+        const role = w.role === 'captain' ? 'crew captain' : (w.trade || 'crew').toLowerCase()
+        wl.push({ k: `${w.name} · ${role}`, cost: h * (rates.get(workerId) ?? 0) })
+      }
+      wl.sort((a, b) => b.cost - a.cost)
+      setWageLines(wl.map((l) => ({ k: l.k, v: money(Math.round(l.cost)) })))
       setLoading(false)
     })
     return () => {
@@ -257,15 +350,99 @@ function MoneyTab({ site, onAddInvoice }: { site: JobSiteRow; onAddInvoice: () =
     )
   }
 
-  const claimedPct =
-    row.job_value_ex && row.claimed_ex ? Math.round((Number(row.claimed_ex) / Number(row.job_value_ex)) * 100) : null
-  const marginFg = row.margin_pct === null ? '#8A929B' : Number(row.margin_pct) >= 0 ? '#4CC38A' : '#E5484D'
+  const value = Number(row.job_value_ex ?? 0)
+  const claimed = Number(row.claimed_ex ?? 0)
+  const claimedPct = value > 0 && claimed > 0 ? Math.round((claimed / value) * 100) : null
+  // "Margin at today" is margin on work actually done — earned value less
+  // cost to date, over earned value. The view's margin_pct assumes no more
+  // cost ever lands, which flatters every half-done job; with no progress
+  // figure there is nothing earned to measure against, so the card shows a
+  // dash rather than a number that cannot be defended.
+  const totalCost = Number(row.labour_cost ?? 0) + Number(row.material_cost ?? 0) + Number(row.expense_cost ?? 0) + Number(row.sublet_cost ?? 0)
+  const earned = donePct !== null && value > 0 ? (value * donePct) / 100 : null
+  const marginPct = earned !== null && earned > 0 ? ((earned - totalCost) / earned) * 100 : null
+  const marginFg = marginPct === null ? '#8A929B' : marginPct >= 15 ? '#4CC38A' : marginPct >= 8 ? '#E9A23B' : '#F2777C'
 
-  const lines: Array<{ k: string; note: string; v: string; warn?: boolean }> = [
-    { k: 'Claimed', note: claimedPct === null ? 'nothing claimed yet' : `${claimedPct}% of the job`, v: money(row.claimed_ex) },
-    { k: 'Contractors & wages', note: `${Number(row.labour_hours ?? 0).toFixed(0)} hrs on the clock`, v: money(row.labour_cost) },
-    { k: 'Materials & hire', note: 'materials, expenses and sublet', v: money(Number(row.material_cost ?? 0) + Number(row.expense_cost ?? 0) + Number(row.sublet_cost ?? 0)) },
-    { k: 'Variations', note: pendingCount > 0 ? `${pendingCount} with the builder` : 'none awaiting approval', v: money(row.approved_variations), warn: pendingCount > 0 },
+  /**
+   * The claim band, in the order the trade actually worries: a covered
+   * membrane with no water test freezes claiming outright; then it is the
+   * claimed-vs-done conversation, in the drawing's own words.
+   */
+  let ban: MoneyRowData['ban']
+  if (floodHoldCount > 0) {
+    ban = {
+      tone: 'r',
+      text: `HELD UNTIL SIGN-OFF — ${countWord(floodHoldCount)} wet area${floodHoldCount === 1 ? '' : 's'} signed off with no flood test. Nothing on this job can be claimed until ${floodHoldCount === 1 ? 'it is' : 'they are'} done.`,
+    }
+  } else if (claims.length === 0) {
+    const month = new Date().toLocaleDateString('en-AU', { month: 'long' })
+    ban = { tone: 'n', text: `NOTHING CLAIMED YET — First claim goes out at the end of ${month}, on whatever is measured then.` }
+  } else if (claimedPct !== null && donePct !== null) {
+    const d = Math.round(donePct)
+    if (claimedPct > d) {
+      ban = { tone: 'r', text: `CLAIMED AHEAD OF THE WORK — Claimed ${claimedPct}% against ${d}% done. That is the conversation a builder’s QS opens with.` }
+    } else if (d - claimedPct <= 2) {
+      ban = { tone: 'g', text: `CLAIMED IN LINE WITH THE WORK — Claimed ${claimedPct}% against ${d}% done. Nothing to explain at the next claim.` }
+    } else {
+      const gap = Math.round(((d / 100) * value - claimed) / 100) * 100
+      ban = { tone: 'a', text: `BEHIND ON CLAIMING — Claimed ${claimedPct}% against ${d}% done. There is ${money(gap)} of finished work not yet claimed.` }
+    }
+  }
+
+  const tileMats = mats.filter((m) => m.cost_code === 'tiles')
+  const otherMats = mats.filter((m) => m.cost_code !== 'tiles')
+  const tileSum = tileMats.reduce((a, m) => a + Number(m.total_cost ?? 0), 0)
+  const matLines: Array<{ k: string; cost: number }> = [
+    ...otherMats.map((m) => ({ k: [m.supplier, m.name].filter(Boolean).join(' · '), cost: Number(m.total_cost ?? 0) })),
+    ...exps.map((e) => ({ k: [e.vendor, e.category].filter(Boolean).join(' · '), cost: Number(e.amount ?? 0) - Number(e.tax ?? 0) })),
+  ].sort((a, b) => b.cost - a.cost)
+  const matSum = matLines.reduce((a, l) => a + l.cost, 0)
+  const pendingSum = pending.reduce((a, v) => a + Number(v.cost_impact ?? 0), 0)
+  const wageSum = Number(row.labour_cost ?? 0) + Number(row.sublet_cost ?? 0)
+
+  const rows: MoneyRowData[] = [
+    {
+      key: 'claimed',
+      k: 'Claimed',
+      v: claims.length ? money(claimed) : '—',
+      note: claimedPct !== null ? `${claimedPct}% of the job` : claims.length ? 'claimed to date' : 'nothing claimed yet',
+      lines: claims.map((c) => ({ k: c.label, v: money(c.ex) })),
+      empty: 'No claim has gone out yet.',
+      ban,
+    },
+    {
+      key: 'wages',
+      k: 'Contractors & wages',
+      v: wageSum > 0 ? money(wageSum) : '—',
+      note: wageLines.length + sublets.length > 0 ? `${wageLines.length + sublets.length} people on the job` : 'nothing yet',
+      lines: [...wageLines, ...sublets.map((x) => ({ k: x.name, v: money(Math.round(x.cost)) }))],
+      empty: 'Nobody has booked time to this job.',
+    },
+    {
+      key: 'tiles',
+      k: 'Tile supply',
+      v: tileSum > 0 ? money(tileSum) : '—',
+      note: tileMats.length > 0 ? `${tileMats.length} order${tileMats.length === 1 ? '' : 's'}` : 'nothing ordered',
+      lines: tileMats.map((m) => ({ k: [m.supplier, m.name].filter(Boolean).join(' · '), v: money(Number(m.total_cost ?? 0)) })),
+      empty: 'No tile ordered against this job.',
+    },
+    {
+      key: 'mats',
+      k: 'Materials & hire',
+      v: matSum > 0 ? money(matSum) : '—',
+      note: matLines.length > 0 ? `${matLines.length} line${matLines.length === 1 ? '' : 's'}` : 'nothing yet',
+      lines: matLines.map((l) => ({ k: l.k, v: money(Math.round(l.cost)) })),
+      empty: 'No materials or hire booked.',
+    },
+    {
+      key: 'vars',
+      k: 'Variations',
+      v: pendingSum > 0 ? money(pendingSum) : '—',
+      note: pending.length > 0 ? `${pending.length} with the builder` : 'none raised',
+      tone: pending.length > 0 ? 'a' : undefined,
+      lines: pending.map((v) => ({ k: v.description, v: money(Number(v.cost_impact ?? 0)) })),
+      empty: 'No variations raised on this job.',
+    },
   ]
 
   return (
@@ -280,42 +457,81 @@ function MoneyTab({ site, onAddInvoice }: { site: JobSiteRow; onAddInvoice: () =
         <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 7, padding: '15px 15px 16px' }}>
           <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.13em', color: '#8A929B' }}>MARGIN AT TODAY</span>
           <span style={{ fontSize: 25, fontWeight: 600, letterSpacing: '-.03em', lineHeight: 1, color: marginFg }}>
-            {row.margin_pct === null ? '—' : `${Number(row.margin_pct).toFixed(1)}%`}
+            {marginPct === null ? '—' : `${marginPct.toFixed(1)}%`}
           </span>
         </span>
       </div>
 
-      {lines.map((l) => (
-        <div key={l.k} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 11, minHeight: 58, padding: '11px 13px 11px 15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, boxShadow: '0 1px 2px rgba(16,20,24,.04)' }}>
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.005em', color: s.ink }}>{l.k}</span>
-            <span style={{ fontSize: 12.5, color: l.warn ? '#8A6100' : '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.note}</span>
-          </span>
-          <span style={{ flex: 'none', fontSize: 16, fontWeight: 600, color: s.ink, fontVariantNumeric: 'tabular-nums' }}>{l.v}</span>
-          <Chevron />
-        </div>
-      ))}
+      {rows.map((r) => {
+        const isOpen = open === r.key
+        const noteFg = r.tone ? M_FG[r.tone] : '#8B9096'
+        const vFg = r.tone ? M_FG[r.tone] : '#1A1D21'
+        const chip = r.ban ? M_CHIP[r.ban.tone] : null
+        return (
+          <div key={r.key} style={{ flex: 'none', display: 'flex', flexDirection: 'column', background: '#fff', border: `1px solid ${isOpen ? '#C3C9D0' : '#E1E5E9'}`, borderRadius: 10, boxShadow: '0 1px 2px rgba(16,20,24,.04)', overflow: 'hidden' }}>
+            <span
+              onClick={() => setOpen(isOpen ? '' : r.key)}
+              style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 58, padding: '11px 13px 11px 15px', cursor: 'pointer' }}
+            >
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.005em', color: s.ink }}>{r.k}</span>
+                <span style={{ fontSize: 12.5, color: noteFg, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.note}</span>
+              </span>
+              <span style={{ flex: 'none', fontSize: 16, fontWeight: 600, color: vFg, fontVariantNumeric: 'tabular-nums' }}>{r.v}</span>
+              <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none', transform: isOpen ? 'rotate(90deg)' : 'none' }}>
+                <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            {isOpen && (
+              <span style={{ display: 'flex', flexDirection: 'column', background: '#FAFBFC', borderTop: '1px solid #EDEFF1' }}>
+                {r.ban && chip && (
+                  <span style={{ padding: '11px 15px', fontSize: 13, lineHeight: 1.45, background: chip.bg, color: chip.fg, borderBottom: '1px solid #EDEFF1' }}>
+                    {r.ban.text}
+                  </span>
+                )}
+                {r.lines.map((l, i) => (
+                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, minHeight: 46, padding: '9px 15px', borderBottom: '1px solid #EDEFF1' }}>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: '#4A5057', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.k}</span>
+                    {l.flag && (
+                      <span style={{ display: 'inline-flex', flex: 'none', alignItems: 'center', height: 20, padding: '0 8px', borderRadius: 10, background: '#FFF6E3', fontSize: 11, fontWeight: 700, color: '#8A6100' }}>
+                        {l.flag}
+                      </span>
+                    )}
+                    <span style={{ flex: 'none', fontSize: 13.5, fontWeight: 600, color: s.ink, fontVariantNumeric: 'tabular-nums' }}>{l.v}</span>
+                  </span>
+                ))}
+                {r.lines.length === 0 && (
+                  <span style={{ padding: '13px 15px', fontSize: 13, color: '#8B9096' }}>{r.empty}</span>
+                )}
+              </span>
+            )}
+          </div>
+        )
+      })}
 
       <div style={{ flex: 'none', display: 'flex', gap: 9, paddingTop: 3 }}>
         <button
           onClick={onAddInvoice}
-          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, background: '#1A1D21', border: 0, borderRadius: 10, color: '#fff', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, letterSpacing: '.04em', cursor: 'pointer' }}
+          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, padding: '0 12px', background: '#1A1D21', border: 0, borderRadius: 10, color: '#fff', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap', cursor: 'pointer' }}
         >
           <CameraGlyph size={17} />
           ADD INVOICE
         </button>
         <button
           onClick={onAddInvoice}
-          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 50, background: '#fff', border: '1px solid #DCE0E6', borderRadius: 10, color: s.ink, fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, letterSpacing: '.04em', cursor: 'pointer' }}
+          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, padding: '0 12px', background: '#fff', border: '1px solid #DCE0E6', borderRadius: 10, color: '#1A1D21', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap', cursor: 'pointer' }}
         >
-          + ADD A COST
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#1A1D21" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M10 4.6v10.8M4.6 10h10.8" />
+          </svg>
+          ADD A COST
         </button>
       </div>
 
-      <p style={{ margin: '4px 4px 0', fontSize: 13, lineHeight: 1.5, color: '#7B838B' }}>
+      <span style={{ flex: 'none', fontSize: 13, lineHeight: 1.5, color: '#696D74' }}>
         Tap any line for the full rundown. Photograph a supplier invoice and Crewline reads
         the total, then files it against this job. Only owners and the office see this tab.
-      </p>
+      </span>
     </div>
   )
 }
@@ -338,12 +554,14 @@ function CrewTab({ site }: { site: JobSiteRow }) {
       const people = new Map(
         (cv.data ?? []).map((w: { id: string; name: string; initials: string; trade: string }) => [w.id, w]),
       )
-      const out: Array<{ name: string; initials: string; trade: string; since: string }> = []
+      const out: Array<{ name: string; initials: string; trade: string; since: string; startedAt: string }> = []
       for (const r of (sh.data ?? []) as Array<{ worker_id: string; started_at: string; ended_at: string | null }>) {
         if (r.ended_at !== null) continue
         const w = people.get(r.worker_id)
-        out.push({ name: w?.name ?? 'Crew member', initials: w?.initials ?? '??', trade: w?.trade ?? '', since: timeOf(r.started_at) })
+        out.push({ name: w?.name ?? 'Crew member', initials: w?.initials ?? '??', trade: w?.trade ?? '', since: timeOf(r.started_at), startedAt: r.started_at })
       }
+      // Earliest on first — the drawing reads a crew list as the day arrived.
+      out.sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1))
       setRows(out)
       setLoading(false)
     })
@@ -378,28 +596,57 @@ function CrewTab({ site }: { site: JobSiteRow }) {
 
 // --------------------------------------------------------------- the shell
 
+/**
+ * Same rule as Home: the suburb carries the line, unless the job is named
+ * after its suburb — then the street does.
+ */
+const localeOf = (site: { name: string; address: string }) => {
+  const m = site.address.match(/,\s*([^,\d]+?)\s+SA\b/)
+  const suburb = m?.[1]?.trim()
+  if (suburb && suburb !== site.name) return suburb
+  const street = (site.address.split(',')[0] ?? '').trim()
+  // An address that is just the job's own name carries no locale at all.
+  return street.startsWith(site.name) ? '' : street
+}
+
+/** The drawing's status-dot palette. */
+const DOT_TONE = {
+  g: { dot: '#4CC38A', halo: 'rgba(76,195,138,.16)' },
+  a: { dot: '#E9A23B', halo: 'rgba(233,162,59,.16)' },
+  r: { dot: '#E5484D', halo: 'rgba(229,72,77,.16)' },
+  n: { dot: '#8A929B', halo: 'rgba(138,146,155,.16)' },
+} as const
+
 export function JobScreen({
   me,
   site,
   progressPct,
   onSiteCount,
+  floodHoldCount = 0,
+  tone = 'n',
   chat,
   onBack,
   onTakePhoto,
   onAddInvoice,
+  initialTab,
 }: {
   me: WorkerRow
   site: JobSiteRow
   progressPct: number | null
   onSiteCount: number
+  /** Covered wet areas with no flood test — turns the state line red. */
+  floodHoldCount?: number
+  /** The attention tone the shell computed for this job: drives the dot. */
+  tone?: keyof typeof DOT_TONE
   /** The existing ChatScreen, rendered by the shell so its props stay there. */
   chat: (onClose: () => void) => React.ReactNode
   onBack: () => void
   onTakePhoto: () => void
   onAddInvoice: () => void
+  initialTab?: JobTab
 }) {
   const office = me.is_office
-  const [tab, setTab] = useState<JobTab>('photos')
+  const [tab, setTab] = useState<JobTab>(initialTab ?? 'photos')
 
   const tabs = useMemo(() => {
     const all: Array<{ key: JobTab; label: string }> = [
@@ -413,12 +660,16 @@ export function JobScreen({
     return office ? all : all.filter((t) => t.key !== 'money')
   }, [office])
 
-  const sub = [site.address, site.job_type, site.client_name].filter(Boolean).join(' · ')
-  // The drawing's dot: green running to plan, red when something needs you —
-  // driven here by whether anyone is on the clock.
-  const dot = onSiteCount > 0 ? '#4CC38A' : '#8A929B'
-  const halo = onSiteCount > 0 ? 'rgba(76,195,138,.16)' : 'rgba(138,146,155,.16)'
-  const state = `${onSiteCount} on site${progressPct !== null ? ` · ${Math.round(progressPct)}% done` : ''}`
+  const sub = [localeOf(site), site.job_type, site.client_name].filter(Boolean).join(' · ')
+  const { dot, halo } = DOT_TONE[tone]
+  // The drawing's state line: the thing that needs you beats the tally, and a
+  // job that has not started says when it will.
+  const state =
+    site.status === 'starting_soon'
+      ? `${site.schedule_note || 'Starting soon'} · nobody on site`
+      : floodHoldCount > 0
+        ? `${onSiteCount} on site · flood test overdue`
+        : `${onSiteCount} on site${progressPct !== null ? ` · ${Math.round(progressPct)}% done` : ''}`
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -487,7 +738,7 @@ export function JobScreen({
         {tab === 'plans' && <PlansScreen me={me} siteId={site.id} siteName={site.name} onClose={() => setTab('photos')} />}
         {tab === 'waterproofing' && <WaterproofingTab site={site} />}
         {tab === 'chat' && chat(() => setTab('photos'))}
-        {tab === 'money' && office && <MoneyTab site={site} onAddInvoice={onAddInvoice} />}
+        {tab === 'money' && office && <MoneyTab site={site} floodHoldCount={floodHoldCount} onAddInvoice={onAddInvoice} />}
         {tab === 'crew' && <CrewTab site={site} />}
       </div>
     </div>

@@ -28,6 +28,16 @@ export interface SimpleData {
   tomorrow: AssignmentRow[]
   /** Variations sitting with the builder. Zero for non-office by RLS. */
   pendingVariations: number
+  pendingVariationsBySite: Map<string, number>
+  /** site_id → who is on the clock there, for the Who-is-where sheet. */
+  crewOnSite: Map<string, Array<{ name: string; initials: string; since: string }>>
+  /**
+   * site_id → wet areas covered (complete or signed off) with no flood test.
+   * The drawing's "Needs you" chip and the Money tab's HELD UNTIL SIGN-OFF
+   * band both hang off this: a membrane that gets tiled over before its water
+   * test is the one mistake this trade cannot photograph its way out of.
+   */
+  floodHold: Map<string, number>
   refresh: () => void
 }
 
@@ -45,9 +55,12 @@ export function useSimpleData(me: WorkerRow): SimpleData {
   const [sites, setSites] = useState<JobSiteRow[]>([])
   const [progressRows, setProgressRows] = useState<Array<{ site_id: string; pct_complete: number | null }>>([])
   const [defectRows, setDefectRows] = useState<Array<{ site_id: string; status: string }>>([])
-  const [shiftRows, setShiftRows] = useState<Array<{ site_id: string | null; ended_at: string | null }>>([])
+  const [shiftRows, setShiftRows] = useState<Array<{ site_id: string | null; worker_id: string; started_at: string; ended_at: string | null }>>([])
+  const [roster, setRoster] = useState<Array<{ id: string; name: string; initials: string }>>([])
   const [bookings, setBookings] = useState<AssignmentRow[]>([])
   const [pendingVariations, setPendingVariations] = useState(0)
+  const [variationRows, setVariationRows] = useState<Array<{ id: string; site_id: string | null }>>([])
+  const [wpRows, setWpRows] = useState<Array<{ site_id: string; status: string; flood_tested: boolean }>>([])
 
   useEffect(() => {
     let cancelled = false
@@ -61,7 +74,7 @@ export function useSimpleData(me: WorkerRow): SimpleData {
       client.from('job_sites').select('*').neq('status', 'archived').order('name'),
       client.from('site_progress_v').select('site_id, pct_complete'),
       client.from('defects').select('site_id, status').in('status', ['open', 'in_progress']),
-      client.from('shifts').select('site_id, ended_at').gte('started_at', t0),
+      client.from('shifts').select('site_id, worker_id, started_at, ended_at').gte('started_at', t0),
       client
         .from('assignments')
         .select('*')
@@ -69,8 +82,10 @@ export function useSimpleData(me: WorkerRow): SimpleData {
         .lt('starts_at', t2)
         .gte('ends_at', t0)
         .order('starts_at'),
-      client.from('change_orders').select('id').eq('status', 'pending_client'),
-    ]).then(([st, pr, df, sh, asg, co]) => {
+      client.from('change_orders').select('id, site_id').eq('status', 'pending_client'),
+      client.from('crew_v').select('id, name, initials'),
+      client.from('waterproofing').select('site_id, status, flood_tested').in('status', ['complete', 'signed_off']).eq('flood_tested', false),
+    ]).then(([st, pr, df, sh, asg, co, cv, wp]) => {
       if (cancelled) return
       const firstError = st.error || pr.error || df.error || sh.error || asg.error
       if (firstError) setError(firstError.message)
@@ -82,6 +97,9 @@ export function useSimpleData(me: WorkerRow): SimpleData {
       // change_orders errors for nobody — RLS just empties it — but keep the
       // guard so a future policy change cannot take the whole screen down.
       setPendingVariations(co.error ? 0 : (co.data?.length ?? 0))
+      setVariationRows(co.error ? [] : ((co.data as Array<{ id: string; site_id: string | null }>) ?? []))
+      setRoster((cv.data as Array<{ id: string; name: string; initials: string }>) ?? [])
+      setWpRows(wp.error ? [] : ((wp.data as Array<{ site_id: string; status: string; flood_tested: boolean }>) ?? []))
       setLoading(false)
     })
     return () => {
@@ -110,6 +128,33 @@ export function useSimpleData(me: WorkerRow): SimpleData {
     return m
   }, [shiftRows])
 
+  /** site_id → who is on the clock there right now, earliest first. */
+  const crewOnSite = useMemo(() => {
+    const people = new Map(roster.map((w) => [w.id, w]))
+    const m = new Map<string, Array<{ name: string; initials: string; since: string }>>()
+    for (const r of shiftRows) {
+      if (r.ended_at !== null || !r.site_id) continue
+      const w = people.get(r.worker_id)
+      const list = m.get(r.site_id) ?? []
+      list.push({ name: w?.name ?? 'Crew', initials: w?.initials ?? '??', since: r.started_at })
+      m.set(r.site_id, list)
+    }
+    for (const list of m.values()) list.sort((a, b) => (a.since < b.since ? -1 : 1))
+    return m
+  }, [shiftRows, roster])
+
+  const pendingVariationsBySite = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const v of variationRows) if (v.site_id) m.set(v.site_id, (m.get(v.site_id) ?? 0) + 1)
+    return m
+  }, [variationRows])
+
+  const floodHold = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of wpRows) m.set(r.site_id, (m.get(r.site_id) ?? 0) + 1)
+    return m
+  }, [wpRows])
+
   const { today, tomorrow } = useMemo(() => {
     const t1 = dayStart(1).getTime()
     const today: AssignmentRow[] = []
@@ -134,6 +179,9 @@ export function useSimpleData(me: WorkerRow): SimpleData {
     today,
     tomorrow,
     pendingVariations,
+    pendingVariationsBySite,
+    crewOnSite,
+    floodHold,
     refresh: useCallback(() => setNonce((n) => n + 1), []),
   }
 }

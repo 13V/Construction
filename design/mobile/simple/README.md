@@ -6,14 +6,12 @@ build, implemented exactly as drawn.**
 
 ## Where this file came from
 
-It was never pushed to this repo by the design session that made it. It lives
-in the claude.ai artifact "Waiting for handoff files", which was republished on
-14 Aug with this document in place of the old file listing. The artifact is a
-self-bundling page: the design is stored as a bundler *template* island with
-its runtime and React packed as base64-gzip assets. `Crewline-Simple.dc.html`
-here is that template extracted, with the bundler's asset UUIDs resolved to
-plain `./support.js` (checked in beside it) and the two React UMD script URLs
-left pointing at unpkg.
+The checked-in copy is the one from the design project's own zip export
+(uploaded 14 Aug), byte-identical in content to the claude.ai artifact
+"Waiting for handoff files" — the two differ only in attribute serialization
+(`viewBox` vs `sc-camel-view-box`, etc.) and the artifact's injected badge.
+The design references `./support.js` (checked in beside it) and two React 18
+UMD script URLs on unpkg.
 
 So: **opening this file needs network access** for React 18.3.1, or serve
 `react.production.min.js` / `react-dom.production.min.js` locally and rewrite
