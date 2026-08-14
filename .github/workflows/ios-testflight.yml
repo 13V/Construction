@@ -53,8 +53,12 @@ jobs:
       # build-time constant rather than a runtime check.
       VITE_SURFACE: worker
       VITE_API_BASE: ${{ inputs.api_base || 'https://construction-opal-three.vercel.app' }}
-      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # RAW_, not VITE_: a hand-pasted secret can carry an invisible trailing
+      # newline, and one baked into the bundle breaks every request the phone
+      # makes. The build step strips whitespace before the values are used —
+      # run #2 failed on exactly this, so it is not hypothetical.
+      RAW_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      RAW_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -99,7 +103,11 @@ jobs:
           npm ci --prefix apps/mobile
 
       - name: Build the worker web bundle
-        run: npm run build --prefix apps/dashboard
+        run: |
+          set -euo pipefail
+          export VITE_SUPABASE_URL="$(printf '%s' "$RAW_SUPABASE_URL" | tr -d '[:space:]')"
+          export VITE_SUPABASE_ANON_KEY="$(printf '%s' "$RAW_SUPABASE_ANON_KEY" | tr -d '[:space:]')"
+          npm run build --prefix apps/dashboard
 
       # Fail here rather than in review. A bundle built without VITE_API_BASE
       # calls /api/... relative to capacitor://localhost, which Capacitor's own
@@ -145,6 +153,10 @@ jobs:
           CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
         run: |
           set -euo pipefail          # not set -x: that would echo the secrets
+
+          # A pasted password can pick up a stray CR/LF; the p12 password is
+          # opaque bytes to us, so strip only line endings, never spaces.
+          CERT_PASSWORD="$(printf '%s' "$CERT_PASSWORD" | tr -d '\r\n')"
 
           # The keychain lives for one job, so its password is generated here
           # rather than being one more secret for a human to invent and store.
@@ -227,8 +239,10 @@ jobs:
           PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
           set -euo pipefail
+          KEY_ID="$(printf '%s' "$KEY_ID" | tr -d '[:space:]')"
           mkdir -p "$RUNNER_TEMP/private_keys"
-          printf '%s\n' "$PRIVATE_KEY" > "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8"
+          # tr strips CRs a Windows paste sneaks into the PEM; the newlines stay.
+          printf '%s\n' "$PRIVATE_KEY" | tr -d '\r' > "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8"
           chmod 600 "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8"
 
       # No agvtool. agvtool only drives projects whose VERSIONING_SYSTEM is
@@ -243,6 +257,7 @@ jobs:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
+          TEAM_ID="$(printf '%s' "$TEAM_ID" | tr -d '[:space:]')"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           xcodebuild archive \
             -project App.xcodeproj \
@@ -264,6 +279,7 @@ jobs:
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          TEAM_ID="$(printf '%s' "$TEAM_ID" | tr -d '[:space:]')"
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -297,6 +313,10 @@ jobs:
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           set -euo pipefail
+          # Run #2 died here on a trailing newline inside ISSUER_ID — Apple
+          # answers whitespace with "your password was entered incorrectly".
+          KEY_ID="$(printf '%s' "$KEY_ID" | tr -d '[:space:]')"
+          ISSUER_ID="$(printf '%s' "$ISSUER_ID" | tr -d '[:space:]')"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Crewline.xcarchive" \
