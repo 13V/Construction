@@ -20,12 +20,16 @@ import { DWELL_IN_MS, type DwellPhase } from '../geofence/dwell'
 import { distanceM } from '../geofence/geo'
 import { backend, backendNote, startWatching, type LocationWatch } from './location'
 import { clockTime, dayDate, shortDate } from '../format'
-import { HoursTab } from './HoursTab'
 import { DailyLogScreen } from './DailyLogScreen'
 import { useSites } from './useSites'
+import { HomeScreen } from './simple/Home'
+import { JobScreen } from './simple/Job'
+import { MeScreen } from './simple/Me'
+import { ProjectsScreen } from './simple/Projects'
+import { useSimpleData } from './simple/data'
+import { s as simple } from './simple/stheme'
 import { PlansScreen } from './PlansScreen'
 import { SafetyScreen } from './SafetyScreen'
-import { PhotosTab } from './PhotosTab'
 import { theme } from '../theme'
 import type { LatLng } from '../types'
 
@@ -134,14 +138,12 @@ type PanelScreen = 'photo' | 'receipt' | 'chat' | 'schedule' | 'correction' | 't
 type Screen = 'tracker' | PanelScreen
 
 /**
- * Four tabs that persist, per Crewline Mobile screen 3.
- *
- * The six-tile grid this replaces was all one-way trips: you went in, you came
- * back. There was no persistent home for Time or Photos, so a worker checking
- * their hours on payday had to remember which tile it was — and Photos was not
- * reachable at all, because the gallery did not exist.
+ * Five tabs that persist — the Simple design's root: Home · Projects ·
+ * Schedule · Chat · Me. Photos moved inside the job (where the design puts
+ * them) and Time moved under Me (a worker's hours are their own record, which
+ * is what that tab is for).
  */
-type Tab = 'jobs' | 'time' | 'photos' | 'chat'
+type Tab = 'home' | 'projects' | 'schedule' | 'chat' | 'me'
 
 interface Celebration {
   siteId: string
@@ -167,7 +169,10 @@ function Tracker({ me }: { me: WorkerRow }) {
   const [tick, setTick] = useState(Date.now())
   const [tracking, setTracking] = useState(false)
   const [screen, setScreen] = useState<Screen>('tracker')
-  const [tab, setTab] = useState<Tab>('jobs')
+  const [tab, setTab] = useState<Tab>('home')
+  /** The job open over Home, and whether the full clock surface is up. */
+  const [openJobId, setOpenJobId] = useState<string | null>(null)
+  const [clockOpen, setClockOpen] = useState(false)
   const [celebration, setCelebration] = useState<Celebration | null>(null)
   const [clockOutConfirm, setClockOutConfirm] = useState(false)
   const [note, setNote] = useState<string | null>(null)
@@ -333,6 +338,64 @@ function Tracker({ me }: { me: WorkerRow }) {
 
   const celebrationSite = celebration ? sites.find((s) => s.id === celebration.siteId) ?? null : null
 
+  // Everything the Simple screens read — company-wide by design, RLS-narrowed
+  // by role. Lives here so switching tabs never refetches.
+  const simpleData = useSimpleData(me)
+  const openJob = openJobId ? simpleData.sites.find((x) => x.id === openJobId) ?? null : null
+
+  // A clock-in mid-scroll must surface: the celebration is the product's
+  // best moment and nobody taps into a buried screen to find it.
+  useEffect(() => {
+    if (celebration) setClockOpen(true)
+  }, [celebration])
+
+  /** The tracker's live state as Home's strip — colour and copy per phase. */
+  const clockStrip = (() => {
+    const base: CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 9,
+      margin: '2px 20px 0',
+      padding: '11px 14px',
+      borderRadius: 12,
+      border: '1px solid',
+      fontFamily: 'inherit',
+      fontSize: 13,
+      fontWeight: 600,
+      textAlign: 'left' as const,
+      cursor: 'pointer',
+      width: 'calc(100% - 40px)',
+    }
+    const open = () => setClockOpen(true)
+    if (!tracking)
+      return (
+        <button onClick={open} style={{ ...base, background: simple.amberFill, borderColor: '#F0DCA8', color: simple.amber }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: simple.amber }} />
+          Tracking is off — you will not be clocked on
+        </button>
+      )
+    if (onClock && site)
+      return (
+        <button onClick={open} style={{ ...base, background: simple.greenFill, borderColor: '#C6E5CC', color: simple.green }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: simple.green }} />
+          On the clock at {site.name} · {(elapsed / 3_600_000).toFixed(1)} hrs
+        </button>
+      )
+    if (confirming && site)
+      return (
+        <button onClick={open} style={{ ...base, background: '#EEEAFB', borderColor: '#D8CFF4', color: simple.accent }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: simple.accent }} />
+          Confirming you&rsquo;re on site at {site.name}…
+        </button>
+      )
+    return (
+      <button onClick={open} style={{ ...base, background: simple.panel, borderColor: simple.border, color: simple.body }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: simple.green }} />
+        Tracking on{nearest ? ` · headed to ${nearest.s.name}` : ''}
+      </button>
+    )
+  })()
+
   return (
     <div
       style={{
@@ -390,23 +453,57 @@ function Tracker({ me }: { me: WorkerRow }) {
         <ChatScreen me={me} currentSiteId={currentSiteId} sites={sites} onClose={() => setScreen('tracker')} />
       )}
 
-      {screen === 'tracker' && tab === 'photos' && (
-        <PhotosTab
+      {screen === 'tracker' && tab === 'chat' && (
+        <ChatScreen me={me} currentSiteId={currentSiteId} sites={sites} onClose={() => setTab('home')} />
+      )}
+
+      {screen === 'tracker' && tab === 'schedule' && <ScheduleScreen me={me} onClose={() => setTab('home')} />}
+
+      {screen === 'tracker' && tab === 'projects' && (
+        <ProjectsScreen me={me} data={simpleData} onOpenJob={(x) => { setOpenJobId(x.id); setTab('home') }} />
+      )}
+
+      {screen === 'tracker' && tab === 'me' && (
+        <MeScreen me={me} sites={sites} onShowAccount={() => setShowAccount(true)} />
+      )}
+
+      {screen === 'tracker' && tab === 'home' && !clockOpen && openJob && (
+        <JobScreen
           me={me}
-          sites={sites}
-          activeSiteId={currentSiteId}
+          site={openJob}
+          progressPct={simpleData.progress.get(openJob.id) ?? null}
+          onSiteCount={simpleData.onSiteNow.get(openJob.id) ?? 0}
+          chat={(onClose) => (
+            <ChatScreen me={me} currentSiteId={openJob.id} sites={sites} onClose={onClose} />
+          )}
+          onBack={() => setOpenJobId(null)}
           onTakePhoto={() => setScreen('photo')}
         />
       )}
 
-      {screen === 'tracker' && tab === 'chat' && (
-        <ChatScreen me={me} currentSiteId={currentSiteId} sites={sites} onClose={() => setTab('jobs')} />
+      {screen === 'tracker' && tab === 'home' && !clockOpen && !openJob && (
+        <HomeScreen
+          me={me}
+          data={simpleData}
+          clockStrip={clockStrip}
+          onOpenJob={(x) => setOpenJobId(x.id)}
+          onOpenSchedule={() => setTab('schedule')}
+          onOpenClock={() => setClockOpen(true)}
+          onShowAccount={() => setShowAccount(true)}
+        />
       )}
 
-      {screen === 'tracker' && tab === 'time' && <HoursTab me={me} sites={sites} />}
-
-      {screen === 'tracker' && tab === 'jobs' && (
+      {screen === 'tracker' && tab === 'home' && clockOpen && (
         <>
+          <button
+            onClick={() => setClockOpen(false)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: theme.panel, border: 0, borderBottom: `1px solid ${theme.borderSoft}`, fontFamily: 'inherit', fontSize: 14, fontWeight: 600, color: simple.accent, cursor: 'pointer' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 10 10" style={{ transform: 'rotate(90deg)' }}>
+              <path d="M1.5 3.5L5 7l3.5-3.5" fill="none" stroke={simple.accent} strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+            Home
+          </button>
           {!tracking ? (
             <GateScreen
               me={me}
@@ -460,11 +557,12 @@ function Tracker({ me }: { me: WorkerRow }) {
             />
           )}
 
-          {error && <Banner tone="error">{error}</Banner>}
-
-          {showAccount && <AccountSheet me={me} onClose={() => setShowAccount(false)} />}
         </>
       )}
+
+      {/* Errors and the account sheet belong to the shell, not to one tab. */}
+      {screen === 'tracker' && error && <Banner tone="error">{error}</Banner>}
+      {screen === 'tracker' && showAccount && <AccountSheet me={me} onClose={() => setShowAccount(false)} />}
 
       {/* The bar is the app. It shows on every tab and never on a panel that
           was opened from one — a panel is a trip you come back from. */}
@@ -483,17 +581,18 @@ function TabBar({
   onPick: (t: Tab) => void
 }) {
   const items: Array<{ key: Tab; label: string; icon: (c: string) => ReactNode }> = [
-    { key: 'jobs', label: 'Jobs', icon: (c) => <FolderIcon color={c} /> },
-    { key: 'time', label: 'Time', icon: (c) => <ClockTabIcon color={c} /> },
-    { key: 'photos', label: 'Photos', icon: (c) => <CameraIcon color={c} size={22} /> },
+    { key: 'home', label: 'Home', icon: (c) => <HouseIcon color={c} /> },
+    { key: 'projects', label: 'Projects', icon: (c) => <FolderIcon color={c} /> },
+    { key: 'schedule', label: 'Schedule', icon: (c) => <CalendarTabIcon color={c} /> },
     { key: 'chat', label: 'Chat', icon: (c) => <ChatBubbleIcon color={c} size={22} /> },
+    { key: 'me', label: 'Me', icon: (c) => <PersonIcon color={c} /> },
   ]
   return (
     <div
       style={{
         flex: 'none',
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
+        gridTemplateColumns: 'repeat(5, 1fr)',
         borderTop: `1px solid ${theme.border}`,
         background: theme.panel,
         // 56px plus the home-indicator inset, per the design note.
@@ -502,7 +601,8 @@ function TabBar({
     >
       {items.map((it) => {
         const on = active === it.key
-        const colour = on ? theme.accent : theme.inkFaint
+        // The Simple design's accent — purple, exact-as-drawn.
+        const colour = on ? simple.accent : theme.inkFaint
         return (
           <button
             key={it.key}
@@ -552,19 +652,36 @@ function TabBar({
   )
 }
 
-function FolderIcon({ color }: { color: string }) {
+function HouseIcon({ color }: { color: string }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
-      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.8 2.2h9.2A1.5 1.5 0 0 1 21 9.7v7.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
+      <path d="M4 10.5L12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-4V14h-5v6.5h-4A1.5 1.5 0 0 1 4 19z" strokeLinejoin="round" />
     </svg>
   )
 }
 
-function ClockTabIcon({ color }: { color: string }) {
+function CalendarTabIcon({ color }: { color: string }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
-      <circle cx="12" cy="12" r="8.4" />
-      <path d="M12 7.4V12l3.1 1.9" strokeLinecap="round" />
+      <rect x="3.5" y="5.5" width="17" height="15" rx="1.8" />
+      <path d="M3.5 10h17M8 3.5v3.6M16 3.5v3.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function PersonIcon({ color }: { color: string }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
+      <circle cx="12" cy="8.4" r="3.6" />
+      <path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function FolderIcon({ color }: { color: string }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}>
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.8 2.2h9.2A1.5 1.5 0 0 1 21 9.7v7.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
     </svg>
   )
 }
