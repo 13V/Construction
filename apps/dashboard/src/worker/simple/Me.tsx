@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, type WorkerRow } from '../../data/supabase'
 import { HoursTab } from '../HoursTab'
-import { s } from './stheme'
+import { s, SAFE_TOP } from './stheme'
 
 interface TrackerSite {
   id: string
@@ -62,7 +62,7 @@ export function MeScreen({
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <button
           onClick={() => setShowHours(false)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: s.panel, border: 0, borderBottom: `1px solid ${s.borderSoft}`, fontFamily: 'inherit', fontSize: 14, fontWeight: 600, color: s.accent, cursor: 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: `calc(10px + ${SAFE_TOP}) 16px 10px`, background: s.panel, border: 0, borderBottom: `1px solid ${s.borderSoft}`, fontFamily: 'inherit', fontSize: 14, fontWeight: 600, color: s.accent, cursor: 'pointer' }}
         >
           <svg width="14" height="14" viewBox="0 0 10 10" style={{ transform: 'rotate(90deg)' }}>
             <path d="M1.5 3.5L5 7l3.5-3.5" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinecap="round" />
@@ -86,7 +86,7 @@ export function MeScreen({
   )
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#F5F6F7' }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#F5F6F7', paddingTop: SAFE_TOP }}>
       {/* Identity — the 76px avatar on the dark gradient card. */}
       <div style={{ padding: '6px 18px 4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: 18, borderRadius: 14, background: 'linear-gradient(#23272C,#15181C)', boxShadow: '0 10px 24px rgba(16,20,24,.20), 0 1px 0 rgba(255,255,255,.06) inset' }}>

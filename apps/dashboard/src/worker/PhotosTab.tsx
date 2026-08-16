@@ -452,7 +452,7 @@ function Viewer({
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: '#0E1012', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: '#0E1012', display: 'flex', flexDirection: 'column', paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px' }}>
         <button onClick={onClose} style={round}>
           ✕

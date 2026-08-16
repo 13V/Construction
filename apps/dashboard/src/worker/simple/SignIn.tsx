@@ -9,7 +9,7 @@
 import { useState } from 'react'
 import { supabase } from '../../data/supabase'
 import { api } from '../../data/api'
-import { s } from './stheme'
+import { s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
 
 const field = {
   width: '100%',
@@ -110,7 +110,7 @@ export function SimpleSignIn() {
   return (
     <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', background: '#F5F6F7', overflow: 'auto' }}>
       {/* The dark identity block — the drawing's gradient, the wordmark. */}
-      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 6, padding: '54px 24px 26px', background: 'linear-gradient(#23272C,#15181C)' }}>
+      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 6, padding: `calc(54px + ${SAFE_TOP}) 24px 26px`, background: 'linear-gradient(#23272C,#15181C)' }}>
         <span style={{ fontSize: 27, fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>Crewline</span>
         <span style={{ fontSize: 14.5, lineHeight: 1.4, color: '#98A0A8' }}>
           {mode === 'signin'
@@ -121,7 +121,7 @@ export function SimpleSignIn() {
         </span>
       </div>
 
-      <form onSubmit={submit} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: '22px 20px 28px' }}>
+      <form onSubmit={submit} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: `22px 20px calc(28px + ${SAFE_BOTTOM})` }}>
         {mode === 'signup' && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', background: '#fff', border: '1px solid #DCE0E6', borderRadius: 10, fontSize: 14.5, color: '#4A5057', cursor: 'pointer' }}>
             <input type="checkbox" checked={joining} onChange={(e) => setJoining(e.target.checked)} style={{ width: 18, height: 18, accentColor: s.accent }} />

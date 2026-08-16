@@ -28,6 +28,8 @@ const CONFIRM_WORD = 'DELETE'
 const backdrop: CSSProperties = {
   position: 'fixed',
   inset: 0,
+  paddingTop: 'env(safe-area-inset-top, 0px)',
+  paddingBottom: 'env(safe-area-inset-bottom, 0px)',
   background: 'rgba(26,29,33,.55)',
   display: 'flex',
   alignItems: 'flex-end',

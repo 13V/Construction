@@ -495,7 +495,7 @@ function Tracker({ me }: { me: WorkerRow }) {
         <>
           <button
             onClick={() => setClockOpen(false)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: theme.panel, border: 0, borderBottom: `1px solid ${theme.borderSoft}`, fontFamily: 'inherit', fontSize: 14, fontWeight: 600, color: simple.accent, cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 'calc(10px + env(safe-area-inset-top, 0px)) 16px 10px', background: theme.panel, border: 0, borderBottom: `1px solid ${theme.borderSoft}`, fontFamily: 'inherit', fontSize: 14, fontWeight: 600, color: simple.accent, cursor: 'pointer' }}
           >
             <svg width="14" height="14" viewBox="0 0 10 10" style={{ transform: 'rotate(90deg)' }}>
               <path d="M1.5 3.5L5 7l3.5-3.5" fill="none" stroke={simple.accent} strokeWidth="1.7" strokeLinecap="round" />
@@ -603,7 +603,7 @@ function TabBar({
         flex: 'none',
         display: 'flex',
         alignItems: 'stretch',
-        height: 58,
+        height: 'calc(58px + env(safe-area-inset-bottom, 0px))',
         background: '#fff',
         borderTop: `1px solid ${theme.border}`,
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
@@ -685,7 +685,7 @@ function AccountSheet({ me, onClose }: { me: WorkerRow; onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        style={{ width: '100%', background: theme.panel, borderRadius: '14px 14px 0 0', padding: '22px 20px 28px' }}
+        style={{ width: '100%', background: theme.panel, borderRadius: '14px 14px 0 0', padding: '22px 20px calc(28px + env(safe-area-inset-bottom, 0px))' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1078,7 +1078,7 @@ function ScreenHeader({ title, onCancel }: { title: string; onCancel: () => void
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '4px 18px 12px',
+        padding: 'calc(4px + env(safe-area-inset-top, 0px)) 18px 12px',
         borderBottom: `1px solid ${theme.border}`,
       }}
     >

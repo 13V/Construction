@@ -68,3 +68,12 @@ export const avatarGrey = (i: number) => AV_GREYS[i % AV_GREYS.length]
 
 export const sFont =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
+
+/**
+ * The phone's own reserved edges — the notch / Dynamic Island above, the
+ * home indicator below. Zero on the web; real on a device once the viewport
+ * is viewport-fit=cover. Every fixed top and bottom surface adds these so
+ * the drawing's 52px header means 52px BELOW the status bar, not under it.
+ */
+export const SAFE_TOP = 'env(safe-area-inset-top, 0px)'
+export const SAFE_BOTTOM = 'env(safe-area-inset-bottom, 0px)'

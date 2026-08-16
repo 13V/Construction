@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, type JobSiteRow, type SiteFileRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
 import { PlansScreen } from '../PlansScreen'
-import { avatarGrey, s } from './stheme'
+import { avatarGrey, s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
 
 type JobTab = 'photos' | 'plans' | 'waterproofing' | 'chat' | 'money' | 'crew'
 
@@ -674,7 +674,7 @@ export function JobScreen({
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {/* Charcoal header — 48px, back 44, camera 44. */}
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 4, height: 48, padding: '0 8px 0 4px', background: '#2B2F33', color: '#fff' }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 4, height: `calc(48px + ${SAFE_TOP})`, padding: `${SAFE_TOP} 8px 0 4px`, background: '#2B2F33', color: '#fff' }}>
         <span onClick={onBack} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, cursor: 'pointer' }}>
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12.2 4.4 6.6 10l5.6 5.6" />
@@ -733,7 +733,7 @@ export function JobScreen({
         })}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, background: '#F5F6F7' }}>
+      <div style={{ flex: 1, minHeight: 0, background: '#F5F6F7', paddingBottom: SAFE_BOTTOM }}>
         {tab === 'photos' && <PhotoGrid me={me} site={site} onTakePhoto={onTakePhoto} />}
         {tab === 'plans' && <PlansScreen me={me} siteId={site.id} siteName={site.name} onClose={() => setTab('photos')} />}
         {tab === 'waterproofing' && <WaterproofingTab site={site} />}

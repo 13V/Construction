@@ -313,7 +313,7 @@ function SheetViewer({
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 58, background: '#14171A', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 58, background: '#14171A', display: 'flex', flexDirection: 'column', paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px' }}>
         <button onClick={dropping ? () => { setDropping(false); setDraft(null) } : onClose} style={{ border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 15, color: '#6BB2FF', cursor: 'pointer' }}>
           {dropping ? 'Cancel' : '‹ Sheets'}

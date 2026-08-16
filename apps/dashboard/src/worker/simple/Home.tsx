@@ -7,7 +7,7 @@
  */
 import { useState } from 'react'
 import type { JobSiteRow, WorkerRow } from '../../data/supabase'
-import { avatarGrey, railOf, s } from './stheme'
+import { avatarGrey, railOf, s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
 import type { SimpleData } from './data'
 
 const DAY = 86_400_000
@@ -146,7 +146,7 @@ export function HomeScreen({
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {/* Header: 52px, white, 21px title, bell with dot, 32px avatar. */}
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 52, padding: '0 20px', background: '#fff' }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: `calc(52px + ${SAFE_TOP})`, padding: `${SAFE_TOP} 20px 0`, background: '#fff' }}>
         <span style={{ fontSize: 21, fontWeight: 600, letterSpacing: '-.015em', color: s.ink }}>Home</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <button
@@ -318,7 +318,7 @@ export function HomeScreen({
               </span>
               <span onClick={() => setWhoOpen(false)} style={{ flex: 'none', fontSize: 13.5, fontWeight: 600, color: '#5B6169', cursor: 'pointer' }}>Close</span>
             </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: '0 0 24px' }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: `0 0 calc(24px + ${SAFE_BOTTOM})` }}>
               {[...data.crewOnSite.entries()]
                 .sort((a, b) => (a[1][0].since < b[1][0].since ? -1 : 1))
                 .map(([siteId, crew]) => {
@@ -381,7 +381,7 @@ export function HomeScreen({
               </span>
               <span onClick={() => setAttnOpen(false)} style={{ flex: 'none', fontSize: 13.5, fontWeight: 600, color: '#5B6169', cursor: 'pointer' }}>Close</span>
             </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: '0 0 24px' }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', padding: `0 0 calc(24px + ${SAFE_BOTTOM})` }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 20px 11px', background: '#14171A' }}>
                 <span style={{ flex: 'none', width: 7, height: 7, borderRadius: '50%', background: '#E5484D' }} />
                 <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.13em', color: '#fff' }}>NEEDS YOU</span>
