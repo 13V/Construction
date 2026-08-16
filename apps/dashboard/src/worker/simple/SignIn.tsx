@@ -39,8 +39,31 @@ export function SimpleSignIn() {
   const [name, setName] = useState('')
   const [joining, setJoining] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [demoBusy, setDemoBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  /**
+   * One tap into the demo company. The server mints a one-time token for the
+   * demo account (api/demo.ts) and it is exchanged for a session here — no
+   * password exists in this bundle to leak.
+   */
+  async function openDemo() {
+    if (demoBusy) return
+    setDemoBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const r = await fetch(api('/api/demo'), { method: 'POST' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.token_hash) throw new Error(d.error ?? 'The demo is unavailable right now.')
+      const { error: err } = await supabase().auth.verifyOtp({ type: 'magiclink', token_hash: d.token_hash })
+      if (err) throw err
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setDemoBusy(false)
+    }
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -154,6 +177,28 @@ export function SimpleSignIn() {
         >
           {mode === 'signin' ? 'Set up a new company' : 'I already have an account'}
         </button>
+
+        {mode === 'signin' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '2px 4px' }}>
+              <span style={{ flex: 1, height: 1, background: '#DCE0E6' }} />
+              <span style={{ flex: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '.11em', color: '#8B9096' }}>OR</span>
+              <span style={{ flex: 1, height: 1, background: '#DCE0E6' }} />
+            </div>
+            <button
+              type="button"
+              onClick={() => void openDemo()}
+              disabled={demoBusy}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 56, background: '#fff', border: '1px solid #DCE0E6', borderRadius: 10, fontFamily: 'inherit', fontSize: 15.5, fontWeight: 700, letterSpacing: '.03em', color: '#1A1D21', cursor: demoBusy ? 'default' : 'pointer' }}
+            >
+              {demoBusy ? 'OPENING THE DEMO…' : 'TRY THE DEMO'}
+            </button>
+            <span style={{ fontSize: 13, lineHeight: 1.5, color: '#696D74', textAlign: 'center', padding: '0 8px' }}>
+              A fictional tiling company — five jobs, ten crew, the money — to poke
+              around in. Nothing here is real.
+            </span>
+          </>
+        )}
       </form>
     </div>
   )
