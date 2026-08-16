@@ -528,10 +528,25 @@ try {
   if (histRows.length) console.log(`seeded ${histRows.length} closed shifts of history`)
 
   // ------------------------------------------------------- today, on site
-  // Close anything left open from earlier days, then clock the drawn crew on
-  // at the drawn times. Northgate's night crew "start" tonight — a future
-  // start renders as booked-tonight, exactly how the drawing tells the day.
-  await boss.patch('shifts', `company_id=eq.${companyId}&ended_at=is.null&started_at=lt.${encodeURIComponent(adAt(0, '00:00'))}`, { ended_at: new Date().toISOString() })
+  // Close anything left open from earlier days at a believable time — its
+  // own start plus eight hours, never "now". A shift closed at re-seed time
+  // spans whole days, and shifts_no_overlap then rejects today's clock-ons.
+  const stale = await boss.get('shifts', `select=id,started_at&company_id=eq.${companyId}&ended_at=is.null&started_at=lt.${encodeURIComponent(adAt(0, '00:00'))}`)
+  for (const sh of Array.isArray(stale) ? stale : []) {
+    await boss.patch('shifts', `id=eq.${sh.id}`, { ended_at: new Date(new Date(sh.started_at).getTime() + 8 * 3_600_000).toISOString() })
+  }
+  // Repair pass for rows an earlier run closed at "now": anything absurdly
+  // long gets re-closed at start plus eight hours.
+  const recent = await boss.get('shifts', `select=id,started_at,ended_at&company_id=eq.${companyId}&ended_at=not.is.null&started_at=gte.${encodeURIComponent(adAt(-8, '00:00'))}`)
+  for (const sh of Array.isArray(recent) ? recent : []) {
+    const span = new Date(sh.ended_at).getTime() - new Date(sh.started_at).getTime()
+    if (span > 16 * 3_600_000) {
+      await boss.patch('shifts', `id=eq.${sh.id}`, { ended_at: new Date(new Date(sh.started_at).getTime() + 8 * 3_600_000).toISOString() })
+    }
+  }
+  // Then clock the drawn crew on at the drawn times. Northgate's night crew
+  // "start" tonight — a future start renders as booked-tonight, exactly how
+  // the drawing tells the day.
   const ON_NOW = [
     ['sam', 'lot42', '06:52'], ['kyle', 'lot42', '06:58'], ['tania', 'lot42', '07:04'],
     ['nadia', 'hallett', '07:06'], ['joel', 'hallett', '07:09'],
