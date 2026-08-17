@@ -17,7 +17,7 @@
  * their own bookings.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow } from '../../data/supabase'
 import { avatarGrey, railOf, s, SAFE_TOP } from './stheme'
 import type { SimpleData } from './data'
@@ -148,6 +148,14 @@ function useProgrammeRows(progress: Map<string, number>): { rows: ProgRow[]; loa
 
 // ---------------------------------------------------------------- the gantt
 
+/**
+ * The job column's width, and the row height both panes share. They are
+ * constants because the two panes line up by agreeing on them — a tile that
+ * grew taller than its lane would shear the whole chart.
+ */
+const TILE_W = 144
+const ROW_H = 98
+
 const CHIP_TONE: Record<BarStatus, { bg: string; fg: string }> = {
   progress: { bg: '#EAF7EC', fg: '#1F7A4D' },
   upcoming: { bg: '#EAF0FE', fg: '#2F5FD7' },
@@ -194,15 +202,12 @@ function Gantt({
 }) {
   const span = w1 - w0
   const scrollable = laneWidth !== undefined
-  const laneSize: CSSProperties = scrollable ? { flex: 'none', width: laneWidth } : { flex: 1 }
-  const sticky: CSSProperties = scrollable
-    ? { position: 'sticky', left: 0, zIndex: 3, background: '#fff', boxShadow: '6px 0 8px -6px rgba(16,20,24,.12)' }
-    : {}
   const scrollRef = useRef<HTMLDivElement>(null)
   const visible = rows.filter((r) => !r.start || !r.end || (r.end.getTime() >= w0 && r.start.getTime() < w1))
   // The anchor that makes the chart readable at a glance: where "now" falls.
   const t = Date.now()
   const todayPct = t >= w0 && t < w1 ? ((t - w0) / span) * 100 : null
+  const headH = todayPct !== null ? 42 : 32
 
   const counts: Record<BarStatus, number> = { progress: 0, upcoming: 0, done: 0 }
   for (const r of visible) counts[r.status] += 1
@@ -211,9 +216,39 @@ function Gantt({
   useEffect(() => {
     const el = scrollRef.current
     if (!el || !scrollable || todayPct === null || laneWidth === undefined) return
-    el.scrollLeft = Math.max(0, 124 + (laneWidth * todayPct) / 100 - el.clientWidth / 2)
+    el.scrollLeft = Math.max(0, (laneWidth * todayPct) / 100 - el.clientWidth / 2)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollable, laneWidth, w0])
+
+  /** Everything the lane needs to draw one job, worked out once per row. */
+  const geometry = visible.map((r) => {
+    let bar: { left: number; width: number; clipL: boolean; clipR: boolean } | null = null
+    if (r.start && r.end) {
+      const from = Math.max(r.start.getTime(), w0)
+      const to = Math.min(r.end.getTime() + DAY, w1)
+      if (to > from) {
+        bar = {
+          left: ((from - w0) / span) * 100,
+          width: ((to - from) / span) * 100,
+          // A bar that runs past the window gets a squared edge — the
+          // standard "continues beyond here" mark.
+          clipL: r.start.getTime() < w0,
+          clipR: r.end.getTime() + DAY > w1,
+        }
+      }
+    }
+    return {
+      r,
+      bar,
+      // The green is the job's percentage, plainly — the same number the
+      // chip shows, filling the bar you can see. (It used to be pegged to
+      // the date that percentage fell on, which made the green disappear
+      // whenever that date sat outside the window.)
+      fill: r.status === 'progress' ? Math.min(Math.max(r.pct, 0), 100) : 0,
+      // A one-day job is a milestone, and a milestone is a diamond.
+      milestone: r.start !== null && r.end !== null && r.start.toDateString() === r.end.toDateString(),
+    }
+  })
 
   return (
     <div style={{ background: '#fff' }}>
@@ -232,138 +267,126 @@ function Gantt({
           ))}
       </div>
 
-      <div ref={scrollRef} style={scrollable ? { overflowX: 'auto' } : undefined}>
-      <div style={scrollable ? { minWidth: 'max-content' } : undefined}>
-      {/* Column header — PROJECT, the window's marks, the TODAY tag. It
-          stays pinned while the rows scroll underneath. */}
-      <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 5, background: '#FAFBFC', borderTop: '1px solid #E9EDF0', borderBottom: '1px solid #E1E5E9' }}>
-        <span style={{ flex: 'none', width: 124, display: 'flex', alignItems: 'center', padding: '0 8px 0 16px', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096', ...sticky, background: scrollable ? '#FAFBFC' : undefined }}>
-          PROJECT
-        </span>
-        <div style={{ ...laneSize, position: 'relative', height: todayPct !== null ? 42 : 32, marginRight: 10 }}>
-          {labels.map(([at, text, dim]) => (
-            <span
-              key={`${at}-${text}`}
-              style={{ position: 'absolute', top: 7, left: `${at}%`, transform: 'translateX(-50%)', fontSize: labelSize, fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap', color: dim ? '#BCC3C9' : '#8B9096' }}
-            >
-              {text}
-            </span>
-          ))}
-          {todayPct !== null && (
-            <span
-              style={{ position: 'absolute', bottom: 3, left: `min(max(${todayPct}%, 20px), calc(100% - 20px))`, transform: 'translateX(-50%)', padding: '2px 5px', borderRadius: 4, background: '#C7423A', fontSize: 7.5, fontWeight: 800, letterSpacing: '.06em', color: '#fff', zIndex: 1 }}
-            >
-              TODAY
-            </span>
-          )}
-        </div>
-      </div>
-
-      {visible.map((r) => {
-        let bar: { left: number; width: number; clipL: boolean; clipR: boolean } | null = null
-        let fill = 0
-        if (r.start && r.end) {
-          const from = Math.max(r.start.getTime(), w0)
-          const to = Math.min(r.end.getTime() + DAY, w1)
-          if (to > from) {
-            bar = {
-              left: ((from - w0) / span) * 100,
-              width: ((to - from) / span) * 100,
-              // A bar that runs past the window gets a squared edge — the
-              // standard "continues beyond here" mark.
-              clipL: r.start.getTime() < w0,
-              clipR: r.end.getTime() + DAY > w1,
-            }
-            if (r.status === 'progress' && r.pct > 0) {
-              // The green edge sits at the same DATE whatever the window —
-              // pct of the whole job, clamped to the visible slice.
-              const fillDate = r.start.getTime() + (r.pct / 100) * (r.end.getTime() + DAY - r.start.getTime())
-              fill = Math.min(Math.max(((fillDate - from) / (to - from)) * 100, 0), 100)
-              if (fill < 3) fill = 0
-            }
-          }
-        }
-        const radii = bar ? `${bar.clipL ? 2 : 7}px ${bar.clipR ? 2 : 7}px ${bar.clipR ? 2 : 7}px ${bar.clipL ? 2 : 7}px` : ''
-        // The white end cap only where the bar is long enough to carry it —
-        // on a short pill it reads as a toggle switch, not a milestone.
-        const capOk = bar !== null && !bar.clipR && bar.width >= 18
-        // A one-day job is a milestone, and a milestone is a diamond.
-        const milestone = r.start !== null && r.end !== null && r.start.toDateString() === r.end.toDateString()
-        const chipLabel =
-          r.status === 'progress' ? (r.pct > 0 ? `${Math.round(r.pct)}%` : 'Live') : r.status === 'upcoming' ? 'Upcoming' : 'Done'
-        return (
-          <div
-            key={r.site.id}
-            onClick={() => onOpenJob(r.site)}
-            style={{ display: 'flex', alignItems: 'stretch', minHeight: 64, borderBottom: '1px solid #EFF1F4', cursor: 'pointer' }}
-          >
-            <span style={{ flex: 'none', width: 124, display: 'flex', alignItems: 'stretch', padding: '7px 6px 7px 10px', ...sticky }}>
-              {/* The job as a charcoal tile — the app's dark card: white name,
-                  trade line, status chip, and the job's own rail colour on
-                  the edge, same as its cards everywhere else in the app. */}
-              <span style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 3, justifyContent: 'center', padding: '9px 10px 9px 13px', borderRadius: 10, background: 'linear-gradient(#23272C,#15181C)' }}>
-                <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: railOf(r.site) }} />
-                <span style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.01em', lineHeight: 1.25, color: '#fff', textTransform: 'uppercase', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-                  {r.site.name}
-                </span>
-                {r.site.job_type && (
-                  <span style={{ fontSize: 9.5, lineHeight: 1.3, color: '#98A0A8', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>
-                    {r.site.job_type}
+      {/*
+       * Two panes, not one scrolling table. The job column is a sibling of
+       * the chart rather than a sticky cell inside it — sticky positioning
+       * inside a horizontally scrolling flex row is exactly the thing iOS
+       * drops, and the tiles slid away with the bars on the phone. Panes
+       * cannot slide: the left one simply is not in the scroller. They line
+       * up because every row is the same fixed height in both.
+       */}
+      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+        <div style={{ flex: 'none', width: TILE_W, borderRight: '1px solid #EAEDF0' }}>
+          <span style={{ display: 'flex', alignItems: 'center', height: headH, padding: '0 8px 0 16px', background: '#FAFBFC', borderTop: '1px solid #E9EDF0', borderBottom: '1px solid #E1E5E9', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>
+            PROJECT
+          </span>
+          {geometry.map(({ r }) => {
+            const chipLabel =
+              r.status === 'progress' ? (r.pct > 0 ? `${Math.round(r.pct)}%` : 'Live') : r.status === 'upcoming' ? 'Upcoming' : 'Done'
+            return (
+              <div
+                key={r.site.id}
+                onClick={() => onOpenJob(r.site)}
+                style={{ display: 'flex', alignItems: 'stretch', height: ROW_H, boxSizing: 'border-box', padding: '7px 7px 7px 10px', borderBottom: '1px solid #EFF1F4', cursor: 'pointer' }}
+              >
+                {/* The job as a charcoal tile — the app's dark card: white
+                    name, trade line, status chip, and the job's own rail
+                    colour on the edge, as its cards carry everywhere else. */}
+                <span style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center', padding: '9px 10px 9px 13px', borderRadius: 10, background: 'linear-gradient(#23272C,#15181C)' }}>
+                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: railOf(r.site) }} />
+                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.01em', lineHeight: 1.25, color: '#fff', textTransform: 'uppercase', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                    {r.site.name}
                   </span>
-                )}
-                <span style={{ alignSelf: 'flex-start', marginTop: 3, padding: '2px 7px', borderRadius: 999, background: CHIP_TONE[r.status].bg, fontSize: 9.5, fontWeight: 800, whiteSpace: 'nowrap', color: CHIP_TONE[r.status].fg }}>
-                  {chipLabel}
+                  {r.site.job_type && (
+                    <span style={{ fontSize: 9.5, lineHeight: 1.3, color: '#98A0A8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.site.job_type}
+                    </span>
+                  )}
+                  <span style={{ alignSelf: 'flex-start', padding: '2px 7px', borderRadius: 999, background: CHIP_TONE[r.status].bg, fontSize: 9.5, fontWeight: 800, whiteSpace: 'nowrap', color: CHIP_TONE[r.status].fg }}>
+                    {chipLabel}
+                  </span>
                 </span>
-              </span>
-            </span>
+              </div>
+            )
+          })}
+        </div>
 
-            <div style={{ ...laneSize, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '10px 0', marginRight: 10 }}>
-              {/* Shaded bands and gridlines, behind everything. */}
-              {bands.map(([b0, b1]) => (
-                <span key={`b${b0}`} style={{ position: 'absolute', top: 0, bottom: 0, left: `${b0}%`, width: `${b1 - b0}%`, background: '#F7F8FA' }} />
-              ))}
-              {gridAt.map((g) => (
-                <span key={g} style={{ position: 'absolute', top: 0, bottom: 0, left: `${g}%`, width: 1, background: '#ECEFF2' }} />
+        <div ref={scrollRef} style={{ flex: 1, minWidth: 0, overflowX: 'auto' }}>
+          <div style={{ width: scrollable ? laneWidth : '100%' }}>
+            {/* The window's marks and the TODAY tag, over the same lane. */}
+            <div style={{ position: 'relative', height: headH, background: '#FAFBFC', borderTop: '1px solid #E9EDF0', borderBottom: '1px solid #E1E5E9' }}>
+              {labels.map(([at, text, dim]) => (
+                <span
+                  key={`${at}-${text}`}
+                  style={{ position: 'absolute', top: 7, left: `${at}%`, transform: 'translateX(-50%)', fontSize: labelSize, fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap', color: dim ? '#BCC3C9' : '#8B9096' }}
+                >
+                  {text}
+                </span>
               ))}
               {todayPct !== null && (
-                <span style={{ position: 'absolute', top: 0, bottom: 0, left: `${todayPct}%`, width: 1.5, background: 'rgba(214,69,65,.5)', zIndex: 1 }} />
-              )}
-
-              <div style={{ position: 'relative', height: 14 }}>
-                {bar && milestone ? (
-                  <span
-                    style={{ position: 'absolute', top: '50%', left: `min(max(${bar.left + bar.width / 2}%, 8px), calc(100% - 8px))`, width: 11, height: 11, transform: 'translate(-50%, -50%) rotate(45deg)', borderRadius: 2.5, background: 'linear-gradient(135deg, #23272C, #15181C)', boxShadow: '0 1px 2px rgba(16,20,24,.3)' }}
-                  />
-                ) : bar ? (
-                  <span
-                    style={{ position: 'absolute', top: 0, bottom: 0, left: `min(${bar.left}%, calc(100% - 26px))`, width: `${bar.width}%`, minWidth: 26, borderRadius: radii, background: 'linear-gradient(#23272C, #15181C)', boxShadow: '0 1px 2px rgba(16,20,24,.28)', overflow: 'hidden' }}
-                  >
-                    {fill > 0 && <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${fill}%`, background: 'linear-gradient(#33A75F, #2B9552)' }} />}
-                    {capOk && (
-                      <span style={{ position: 'absolute', right: 3, top: '50%', transform: 'translateY(-50%)', width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />
-                    )}
-                  </span>
-                ) : (
-                  <span style={{ position: 'absolute', top: 1, left: 4, fontSize: 10.5, color: '#9AA1A9' }}>
-                    {r.start && r.end ? rangeLabel(r.start, r.end, true) : 'No dates yet'}
-                  </span>
-                )}
-              </div>
-
-              {bar && r.start && r.end && (
-                <div style={{ position: 'relative', marginTop: 5 }}>
-                  {/* Pannable lanes have room — the label sits under its own
-                      bar. Fixed lanes clamp it left so it never collides. */}
-                  <span style={{ marginLeft: scrollable ? `min(${bar.left}%, calc(100% - 96px))` : `min(${bar.left}%, 34%)`, fontSize: 10.5, whiteSpace: 'nowrap', color: '#5F666E' }}>
-                    {rangeLabel(r.start, r.end)}
-                  </span>
-                </div>
+                <span
+                  style={{ position: 'absolute', bottom: 3, left: `min(max(${todayPct}%, 20px), calc(100% - 20px))`, transform: 'translateX(-50%)', padding: '2px 5px', borderRadius: 4, background: '#C7423A', fontSize: 7.5, fontWeight: 800, letterSpacing: '.06em', color: '#fff' }}
+                >
+                  TODAY
+                </span>
               )}
             </div>
+
+            {geometry.map(({ r, bar, fill, milestone }) => {
+              const radii = bar ? `${bar.clipL ? 2 : 7}px ${bar.clipR ? 2 : 7}px ${bar.clipR ? 2 : 7}px ${bar.clipL ? 2 : 7}px` : ''
+              // The white end cap only where the bar is long enough to carry
+              // it — on a short pill it reads as a toggle switch.
+              const capOk = bar !== null && !bar.clipR && bar.width >= 18
+              return (
+                <div
+                  key={r.site.id}
+                  onClick={() => onOpenJob(r.site)}
+                  style={{ position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: ROW_H, boxSizing: 'border-box', padding: '10px 0', borderBottom: '1px solid #EFF1F4', cursor: 'pointer' }}
+                >
+                  {/* Shaded bands and gridlines, behind everything. */}
+                  {bands.map(([b0, b1]) => (
+                    <span key={`b${b0}`} style={{ position: 'absolute', top: 0, bottom: 0, left: `${b0}%`, width: `${b1 - b0}%`, background: '#F7F8FA' }} />
+                  ))}
+                  {gridAt.map((g) => (
+                    <span key={g} style={{ position: 'absolute', top: 0, bottom: 0, left: `${g}%`, width: 1, background: '#ECEFF2' }} />
+                  ))}
+                  {todayPct !== null && (
+                    <span style={{ position: 'absolute', top: 0, bottom: 0, left: `${todayPct}%`, width: 1.5, background: 'rgba(214,69,65,.5)', zIndex: 1 }} />
+                  )}
+
+                  <div style={{ position: 'relative', height: 14, margin: '0 8px' }}>
+                    {bar && milestone ? (
+                      <span
+                        style={{ position: 'absolute', top: '50%', left: `min(max(${bar.left + bar.width / 2}%, 8px), calc(100% - 8px))`, width: 11, height: 11, transform: 'translate(-50%, -50%) rotate(45deg)', borderRadius: 2.5, background: 'linear-gradient(135deg, #23272C, #15181C)', boxShadow: '0 1px 2px rgba(16,20,24,.3)' }}
+                      />
+                    ) : bar ? (
+                      <span
+                        style={{ position: 'absolute', top: 0, bottom: 0, left: `min(${bar.left}%, calc(100% - 26px))`, width: `${bar.width}%`, minWidth: 26, borderRadius: radii, background: 'linear-gradient(#23272C, #15181C)', boxShadow: '0 1px 2px rgba(16,20,24,.28)', overflow: 'hidden' }}
+                      >
+                        {fill > 0 && <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${fill}%`, background: 'linear-gradient(#33A75F, #2B9552)' }} />}
+                        {capOk && (
+                          <span style={{ position: 'absolute', right: 3, top: '50%', transform: 'translateY(-50%)', width: 8, height: 8, borderRadius: '50%', background: '#fff' }} />
+                        )}
+                      </span>
+                    ) : (
+                      <span style={{ position: 'absolute', top: 1, left: 0, fontSize: 10.5, color: '#9AA1A9' }}>
+                        {r.start && r.end ? rangeLabel(r.start, r.end, true) : 'No dates yet'}
+                      </span>
+                    )}
+                  </div>
+
+                  {bar && r.start && r.end && (
+                    <div style={{ position: 'relative', marginTop: 5, padding: '0 8px' }}>
+                      <span style={{ marginLeft: `min(${bar.left}%, calc(100% - 92px))`, fontSize: 10.5, whiteSpace: 'nowrap', color: '#5F666E' }}>
+                        {rangeLabel(r.start, r.end)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
-        )
-      })}
-      </div>
+        </div>
       </div>
 
       {visible.length === 0 && !loading && (
