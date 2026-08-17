@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, type JobSiteRow, type SiteFileRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
 import { PlansScreen } from '../PlansScreen'
-import { avatarGrey, s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
+import { avatarGrey, s, SAFE_BOTTOM, SAFE_TOP, ticketTone, TICKET_MISSING } from './stheme'
 
 type JobTab = 'photos' | 'plans' | 'waterproofing' | 'chat' | 'money' | 'crew'
 
@@ -556,25 +556,6 @@ interface Ticket {
   expiresOn: string | null
 }
 
-/** Same window the office's certifications tab warns inside. */
-const CERT_WARN_DAYS = 30
-
-const TICKET_HELD = { bg: '#EAF7EC', fg: '#1B7A2C' }
-const TICKET_MISSING = { bg: '#FDECEE', fg: '#A3282E' }
-
-/**
- * Green means they hold it, red means they do not. A ticket that lapsed is
- * red for the same reason a missing one is: on the day it matters, they
- * cannot do the work. The countdown on one about to lapse stays in the
- * label, so it still reads as a warning while it is still theirs.
- */
-function ticketTone(expiresOn: string | null): { bg: string; fg: string; suffix: string } {
-  if (!expiresOn) return { ...TICKET_HELD, suffix: '' }
-  const days = Math.round((new Date(`${expiresOn}T00:00:00`).getTime() - Date.now()) / 86_400_000)
-  if (days < 0) return { ...TICKET_MISSING, suffix: ' · lapsed' }
-  if (days <= CERT_WARN_DAYS) return { ...TICKET_HELD, suffix: ` · ${days}d left` }
-  return { ...TICKET_HELD, suffix: '' }
-}
 
 /**
  * Who is on this job, and what each of them is ticketed to do.

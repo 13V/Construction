@@ -70,6 +70,25 @@ export const sFont =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
 
 /**
+ * Tickets — one rule, read the same on the Crew tab and on Me. Green means
+ * they hold it, red that they do not: a lapsed ticket is red for the same
+ * reason a missing one is, because on the day it matters they cannot do the
+ * work. Anything inside its last thirty days stays green and says how long
+ * is left, which is a warning while it is still theirs.
+ */
+export const TICKET_HELD = { bg: '#EAF7EC', fg: '#1B7A2C' }
+export const TICKET_MISSING = { bg: '#FDECEE', fg: '#A3282E' }
+export const CERT_WARN_DAYS = 30
+
+export function ticketTone(expiresOn: string | null): { bg: string; fg: string; suffix: string } {
+  if (!expiresOn) return { ...TICKET_HELD, suffix: '' }
+  const days = Math.round((new Date(`${expiresOn}T00:00:00`).getTime() - Date.now()) / 86_400_000)
+  if (days < 0) return { ...TICKET_MISSING, suffix: ' · lapsed' }
+  if (days <= CERT_WARN_DAYS) return { ...TICKET_HELD, suffix: ` · ${days}d left` }
+  return { ...TICKET_HELD, suffix: '' }
+}
+
+/**
  * The phone's own reserved edges — the notch / Dynamic Island above, the
  * home indicator below. Zero on the web; real on a device once the viewport
  * is viewport-fit=cover. Every fixed top and bottom surface adds these so
