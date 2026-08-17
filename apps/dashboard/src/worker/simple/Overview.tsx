@@ -1,5 +1,5 @@
 /**
- * Scope — what this job is actually agreed to be, in the order it gets asked.
+ * Overview — what this job is, in the order it gets asked about.
  *
  * A tiling job is lost on the things nobody wrote down: which grout, which
  * silicone, what the mitres do at the return, which grate goes in the floor
@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
+import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
 import { PlansScreen } from '../PlansScreen'
 import { s } from './stheme'
 
@@ -167,6 +168,14 @@ interface SelectionRow {
   chosen: string | null
 }
 
+interface AttachmentRow {
+  id: string
+  selection_id: string | null
+  name: string
+  mime: string | null
+  storage_path: string
+}
+
 interface NoteRow {
   id: string
   body: string
@@ -190,7 +199,7 @@ const sectionLabel = {
   color: '#7B838B',
 } as const
 
-export function ScopeTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
+export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
   const office = me.is_office
   const [rows, setRows] = useState<SelectionRow[]>([])
   const [notes, setNotes] = useState<NoteRow[]>([])
@@ -198,18 +207,32 @@ export function ScopeTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
   const [open, setOpen] = useState<{ line: ScopeLine; row: SelectionRow | null } | null>(null)
   const [noting, setNoting] = useState(false)
   const [noteDraft, setNoteDraft] = useState('')
+  const [files, setFiles] = useState<Map<string, AttachmentRow[]>>(new Map())
+  const [uploading, setUploading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const client = supabase()
-    const [sel, note, crew] = await Promise.all([
+    const [sel, note, crew, att] = await Promise.all([
       client.from('selections').select('id, scope_key, name, detail, status, chosen').eq('site_id', site.id),
       client.from('site_notes').select('id, body, author_id, created_at').eq('site_id', site.id).order('created_at', { ascending: false }),
       client.from('crew_v').select('id, name'),
+      client
+        .from('site_files')
+        .select('id, selection_id, name, mime, storage_path')
+        .eq('site_id', site.id)
+        .not('selection_id', 'is', null)
+        .order('created_at'),
     ])
     setRows((sel.data ?? []) as SelectionRow[])
     setNotes((note.data ?? []) as NoteRow[])
     setPeople(new Map(((crew.data ?? []) as Array<{ id: string; name: string }>).map((w) => [w.id, w.name])))
+    const byLine = new Map<string, AttachmentRow[]>()
+    for (const f of (att.data ?? []) as AttachmentRow[]) {
+      if (!f.selection_id) continue
+      byLine.set(f.selection_id, [...(byLine.get(f.selection_id) ?? []), f])
+    }
+    setFiles(byLine)
   }, [site.id])
 
   useEffect(() => {
@@ -252,6 +275,68 @@ export function ScopeTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
       return
     }
     setOpen(null)
+    await load()
+  }
+
+  /**
+   * A scope line's evidence: the data sheet, the sample photo, the builder's
+   * marked-up schedule. Filed as documents so they stay out of the day's
+   * photos, and against the line so they travel with the decision. An
+   * untouched line has no row yet, so the first upload creates one.
+   */
+  async function attach(line: ScopeLine, row: SelectionRow | null, list: FileList) {
+    setUploading(line.key)
+    setError(null)
+    try {
+      const client = supabase()
+      let selectionId = row?.id ?? null
+      if (!selectionId) {
+        const { data, error: err } = await client
+          .from('selections')
+          .insert({
+            company_id: me.company_id,
+            site_id: site.id,
+            scope_key: SCOPE_TEMPLATE.some((t) => t.key === line.key) ? line.key : null,
+            name: line.name,
+            detail: line.detail,
+            sort: SCOPE_TEMPLATE.findIndex((t) => t.key === line.key),
+            status: 'pending',
+          })
+          .select('id')
+          .single()
+        if (err) throw new Error(err.message)
+        selectionId = (data as { id: string }).id
+      }
+      for (const file of Array.from(list)) {
+        const path = objectPath(me.company_id, site.id, file.name)
+        await uploadFile(BUCKET_FILES, path, file)
+        const { error: err } = await client.from('site_files').insert({
+          company_id: me.company_id,
+          site_id: site.id,
+          selection_id: selectionId,
+          uploaded_by: me.id,
+          kind: 'document',
+          storage_path: path,
+          name: file.name,
+          mime: file.type || null,
+          size_bytes: file.size,
+        })
+        if (err) throw new Error(err.message)
+      }
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not attach that file.')
+    } finally {
+      setUploading(null)
+    }
+  }
+
+  async function removeAttachment(id: string) {
+    const { error: err } = await supabase().from('site_files').delete().eq('id', id)
+    if (err) {
+      setError(err.message)
+      return
+    }
     await load()
   }
 
@@ -312,6 +397,19 @@ export function ScopeTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
                 {row?.chosen && (
                   <span style={{ marginTop: 2, fontSize: 12.5, fontWeight: 600, color: '#1B7A2C' }}>{row.chosen}</span>
                 )}
+                {(() => {
+                  const n = (row && files.get(row.id)?.length) || 0
+                  if (n === 0) return null
+                  return (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 3, fontSize: 12, color: '#7B838B' }}>
+                      <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#8B9096" strokeWidth="1.7" strokeLinejoin="round">
+                        <path d="M4.6 2.8h7l4 4v10.4H4.6z" />
+                        <path d="M11.4 2.8v4.2h4.2" />
+                      </svg>
+                      {n} {n === 1 ? 'attachment' : 'attachments'}
+                    </span>
+                  )
+                })()}
               </span>
               <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7, paddingTop: 2 }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 22, padding: '0 8px', borderRadius: 11, background: meta.bg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', color: meta.fg }}>
@@ -425,6 +523,10 @@ export function ScopeTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
         <ScopeSheet
           line={open.line}
           row={open.row}
+          attachments={open.row ? files.get(open.row.id) ?? [] : []}
+          uploading={uploading === open.line.key}
+          onAttach={(list) => void attach(open.line, open.row, list)}
+          onRemoveAttachment={(id) => void removeAttachment(id)}
           onCancel={() => setOpen(null)}
           onSave={(status, chosen) => void setStatus(open.line, open.row, status, chosen)}
         />
@@ -439,11 +541,19 @@ export function ScopeTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
 function ScopeSheet({
   line,
   row,
+  attachments,
+  uploading,
+  onAttach,
+  onRemoveAttachment,
   onCancel,
   onSave,
 }: {
   line: ScopeLine
   row: SelectionRow | null
+  attachments: AttachmentRow[]
+  uploading: boolean
+  onAttach: (list: FileList) => void
+  onRemoveAttachment: (id: string) => void
   onCancel: () => void
   onSave: (status: ScopeStatus, chosen: string) => void
 }) {
@@ -494,6 +604,56 @@ function ScopeSheet({
           </span>
         </span>
 
+        {/* The paperwork: as many photos and PDFs as the line needs. */}
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>
+            ATTACHMENTS {attachments.length > 0 && `· ${attachments.length}`}
+          </span>
+          {attachments.map((f) => (
+            <AttachmentTile key={f.id} file={f} onRemove={() => onRemoveAttachment(f.id)} />
+          ))}
+          <span style={{ display: 'flex', gap: 8 }}>
+            <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 46, borderRadius: 10, background: '#F1F3F5', border: '1px solid #DCE0E6', fontSize: 14, fontWeight: 600, color: '#1A1D21', cursor: uploading ? 'default' : 'pointer' }}>
+              <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="1.6" strokeLinejoin="round">
+                <path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z" />
+                <circle cx="10" cy="10.8" r="3" />
+              </svg>
+              {uploading ? 'Uploading…' : 'Photos'}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={uploading}
+                onChange={(e) => {
+                  const l = e.target.files
+                  if (l && l.length) onAttach(l)
+                  e.target.value = ''
+                }}
+                style={{ display: 'none' }}
+              />
+            </label>
+            <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 46, borderRadius: 10, background: '#F1F3F5', border: '1px solid #DCE0E6', fontSize: 14, fontWeight: 600, color: '#1A1D21', cursor: uploading ? 'default' : 'pointer' }}>
+              <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="1.6" strokeLinejoin="round">
+                <path d="M4.6 2.8h7l4 4v10.4H4.6z" />
+                <path d="M11.4 2.8v4.2h4.2" />
+              </svg>
+              PDF or file
+              <input
+                type="file"
+                accept="application/pdf,.pdf,.doc,.docx,.xls,.xlsx,image/*"
+                multiple
+                disabled={uploading}
+                onChange={(e) => {
+                  const l = e.target.files
+                  if (l && l.length) onAttach(l)
+                  e.target.value = ''
+                }}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </span>
+        </span>
+
         <button
           onClick={() => onSave(status, chosen)}
           style={{ width: '100%', minHeight: 52, marginTop: 2, border: 0, borderRadius: 10, background: '#1A1D21', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, letterSpacing: '.03em', color: '#fff', cursor: 'pointer' }}
@@ -508,6 +668,54 @@ function ScopeSheet({
         </button>
       </div>
     </div>
+  )
+}
+
+/** One attached file: a thumbnail if it is an image, its name either way. */
+function AttachmentTile({ file, onRemove }: { file: AttachmentRow; onRemove: () => void }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const isImage = /^image\//.test(file.mime ?? '') || /\.(png|jpe?g|gif|webp|heic|heif|avif)$/i.test(file.name)
+
+  useEffect(() => {
+    let cancelled = false
+    void signedUrl(BUCKET_FILES, file.storage_path).then((u) => {
+      if (!cancelled) setUrl(u)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [file.storage_path])
+
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: '#F8F9FA', border: '1px solid #E7EAEE' }}>
+      <a
+        href={url ?? undefined}
+        target="_blank"
+        rel="noreferrer"
+        style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 7, overflow: 'hidden', background: isImage ? 'repeating-linear-gradient(135deg,#E4E7EA 0 6px,#DADEE2 6px 12px)' : '#EEF1F4', textDecoration: 'none' }}
+      >
+        {isImage && url ? (
+          <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.03em', color: '#5F666E' }}>
+            {(file.name.split('.').pop() ?? 'FILE').slice(0, 4).toUpperCase()}
+          </span>
+        )}
+      </a>
+      <a
+        href={url ?? undefined}
+        target="_blank"
+        rel="noreferrer"
+        style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: s.ink, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      >
+        {file.name}
+      </a>
+      <span onClick={onRemove} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, cursor: 'pointer' }}>
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#9AA1A9" strokeWidth="2" strokeLinecap="round">
+          <path d="M5 5l10 10M15 5L5 15" />
+        </svg>
+      </span>
+    </span>
   )
 }
 

@@ -52,12 +52,15 @@ export function SafetyScreen({
   me,
   siteId: standingIn,
   siteName: standingName,
+  embedded = false,
   onClose,
 }: {
   me: WorkerRow
   /** The fence the worker is inside right now, if any. */
   siteId: string | null
   siteName: string
+  /** As a job tab the screen has a header above it already, so it drops its own. */
+  embedded?: boolean
   onClose: () => void
 }) {
   /**
@@ -108,18 +111,20 @@ export function SafetyScreen({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: theme.appBg }}>
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: theme.panel, borderBottom: `1px solid ${theme.border}` }}>
-        <button onClick={onClose} style={{ border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 15, color: theme.accent, cursor: 'pointer' }}>
-          ‹ Back
-        </button>
-        <span style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <span style={{ fontSize: 15.5, fontWeight: 600 }}>Safety</span>
-          <span style={{ fontSize: 11.5, color: theme.inkFaint }}>
-            {me.name} · {me.trade.toLowerCase()}
+      {!embedded && (
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: theme.panel, borderBottom: `1px solid ${theme.border}` }}>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 15, color: theme.accent, cursor: 'pointer' }}>
+            ‹ Back
+          </button>
+          <span style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span style={{ fontSize: 15.5, fontWeight: 600 }}>Safety</span>
+            <span style={{ fontSize: 11.5, color: theme.inkFaint }}>
+              {me.name} · {me.trade.toLowerCase()}
+            </span>
           </span>
-        </span>
-        <span style={{ width: 48 }} />
-      </div>
+          <span style={{ width: 48 }} />
+        </div>
+      )}
 
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingBottom: 24 }}>
         {error && <Band tone="alert">{error}</Band>}
@@ -213,7 +218,7 @@ export function SafetyScreen({
         <div style={{ margin: '0 14px', borderRadius: 10, overflow: 'hidden', border: `1px solid ${theme.border}`, background: theme.panel }}>
           {certs.length === 0 && (
             <div style={{ padding: '18px 15px', fontSize: 13, color: theme.inkSoft }}>
-              No tickets on file. The office adds these.
+              No tickets on file. Add yours under Me → My licenses.
             </div>
           )}
           {certs.map((c, i) => {
@@ -248,7 +253,7 @@ export function SafetyScreen({
           })}
         </div>
         <span style={{ display: 'block', padding: '10px 18px 0', fontSize: 12, lineHeight: 1.5, color: theme.inkFaint }}>
-          The office holds the certificates. A new one is not live until they have filed it.
+          Add a licence and photograph the card under Me → My licenses. The office can correct anything on file.
         </span>
       </div>
 

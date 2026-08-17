@@ -1,17 +1,19 @@
 /**
  * One job — a transcription of the design's isJob block. Charcoal header at
  * 48px with the job’s alert beside its name, the 58px charcoal tab row with 3px
- * underline bars, then the six tabs: Photos · Scope · Waterproofing · Chat ·
- * Money · Crew. Money renders only for the office — absent, not disabled,
- * which is the drawing's own caption and what RLS answers anyway.
+ * underline bars, then the tabs in the order the job gets asked about:
+ * Overview · Waterproofing · Safety · Money · Crew · Photos · Chat. Money
+ * renders only for the office — absent, not disabled, which is the drawing's
+ * own caption and what RLS answers anyway.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, type JobSiteRow, type SiteFileRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
-import { ScopeTab } from './Scope'
+import { SafetyScreen } from '../SafetyScreen'
+import { OverviewTab } from './Overview'
 import { avatarGrey, s, SAFE_BOTTOM, SAFE_TOP, ticketTone, TICKET_MISSING } from './stheme'
 
-type JobTab = 'photos' | 'scope' | 'waterproofing' | 'chat' | 'money' | 'crew'
+type JobTab = 'overview' | 'waterproofing' | 'safety' | 'money' | 'crew' | 'photos' | 'chat'
 
 const money = (v: number | null | undefined) =>
   v === null || v === undefined
@@ -740,16 +742,19 @@ export function JobScreen({
   initialTab?: JobTab
 }) {
   const office = me.is_office
-  const [tab, setTab] = useState<JobTab>(initialTab ?? 'photos')
+  const [tab, setTab] = useState<JobTab>(initialTab ?? 'overview')
 
+  // The client's order: what the job is, then the two things that stop it
+  // being signed off, then the money, then the people, then the record.
   const tabs = useMemo(() => {
     const all: Array<{ key: JobTab; label: string }> = [
-      { key: 'photos', label: 'Photos' },
-      { key: 'scope', label: 'Scope' },
+      { key: 'overview', label: 'Overview' },
       { key: 'waterproofing', label: 'Waterproofing' },
-      { key: 'chat', label: 'Chat' },
+      { key: 'safety', label: 'Safety' },
       { key: 'money', label: 'Money' },
       { key: 'crew', label: 'Crew' },
+      { key: 'photos', label: 'Photos' },
+      { key: 'chat', label: 'Chat' },
     ]
     return office ? all : all.filter((t) => t.key !== 'money')
   }, [office])
@@ -839,9 +844,10 @@ export function JobScreen({
 
       <div style={{ flex: 1, minHeight: 0, background: '#F5F6F7', paddingBottom: SAFE_BOTTOM }}>
         {tab === 'photos' && <PhotoGrid me={me} site={site} onTakePhoto={onTakePhoto} />}
-        {tab === 'scope' && <ScopeTab me={me} site={site} />}
+        {tab === 'overview' && <OverviewTab me={me} site={site} />}
         {tab === 'waterproofing' && <WaterproofingTab site={site} />}
-        {tab === 'chat' && chat(() => setTab('photos'))}
+        {tab === 'safety' && <SafetyScreen me={me} siteId={site.id} siteName={site.name} embedded onClose={() => setTab('overview')} />}
+        {tab === 'chat' && chat(() => setTab('overview'))}
         {tab === 'money' && office && <MoneyTab site={site} floodHoldCount={floodHoldCount} onAddInvoice={onAddInvoice} />}
         {tab === 'crew' && <CrewTab site={site} />}
       </div>

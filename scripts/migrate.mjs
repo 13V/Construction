@@ -50,6 +50,7 @@ const MIGRATIONS = [
   { file: 'schema_v26.sql', proves: ['worker_profiles'] },
   { file: 'schema_v27.sql', proves: ['worker_profiles.phone', 'certifications.document_path'] },
   { file: 'schema_v28.sql', proves: ['selections.scope_key', 'site_notes'] },
+  { file: 'schema_v29.sql', proves: ['site_files.selection_id'] },
 ]
 
 // ------------------------------------------------------------- credentials

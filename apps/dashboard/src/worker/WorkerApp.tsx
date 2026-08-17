@@ -183,7 +183,7 @@ function Tracker({ me }: { me: WorkerRow }) {
   const [tab, setTab] = useState<Tab>('home')
   /** The job open over Home, and whether the full clock surface is up. */
   const [openJobId, setOpenJobId] = useState<string | null>(null)
-  const [openJobTab, setOpenJobTab] = useState<'photos' | 'scope' | 'waterproofing' | 'chat' | 'money' | 'crew'>('photos')
+  const [openJobTab, setOpenJobTab] = useState<'overview' | 'waterproofing' | 'safety' | 'money' | 'crew' | 'photos' | 'chat'>('overview')
   const [clockOpen, setClockOpen] = useState(() => !me.is_office)
   const [celebration, setCelebration] = useState<Celebration | null>(null)
   const [clockOutConfirm, setClockOutConfirm] = useState(false)
@@ -430,7 +430,7 @@ function Tracker({ me }: { me: WorkerRow }) {
       {screen === 'tracker' && tab === 'schedule' && (
         <SimpleSchedule
           data={simpleData}
-          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'photos'); setOpenJobId(x.id); setTab('home') }}
+          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'overview'); setOpenJobId(x.id); setTab('home') }}
         />
       )}
 
@@ -438,7 +438,7 @@ function Tracker({ me }: { me: WorkerRow }) {
         <ProjectsScreen
           me={me}
           data={simpleData}
-          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'photos'); setOpenJobId(x.id); setTab('home') }}
+          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'overview'); setOpenJobId(x.id); setTab('home') }}
         />
       )}
 
@@ -481,7 +481,7 @@ function Tracker({ me }: { me: WorkerRow }) {
         <HomeScreen
           me={me}
           data={simpleData}
-          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'photos'); setOpenJobId(x.id) }}
+          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'overview'); setOpenJobId(x.id) }}
           onOpenSchedule={() => setTab('schedule')}
           onOpenClock={() => setClockOpen(true)}
           onOpenNotifications={() => setTab('projects')}
