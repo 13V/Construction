@@ -1,17 +1,17 @@
 /**
  * One job — a transcription of the design's isJob block. Charcoal header at
- * 48px, the state row with its halo dot, the 58px charcoal tab row with 3px
- * underline bars, then the six tabs: Photos · Plans · Waterproofing · Chat ·
+ * 48px with the job’s alert beside its name, the 58px charcoal tab row with 3px
+ * underline bars, then the six tabs: Photos · Scope · Waterproofing · Chat ·
  * Money · Crew. Money renders only for the office — absent, not disabled,
  * which is the drawing's own caption and what RLS answers anyway.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, type JobSiteRow, type SiteFileRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
-import { PlansScreen } from '../PlansScreen'
+import { ScopeTab } from './Scope'
 import { avatarGrey, s, SAFE_BOTTOM, SAFE_TOP, ticketTone, TICKET_MISSING } from './stheme'
 
-type JobTab = 'photos' | 'plans' | 'waterproofing' | 'chat' | 'money' | 'crew'
+type JobTab = 'photos' | 'scope' | 'waterproofing' | 'chat' | 'money' | 'crew'
 
 const money = (v: number | null | undefined) =>
   v === null || v === undefined
@@ -709,19 +709,16 @@ const localeOf = (site: { name: string; address: string }) => {
   return street.startsWith(site.name) ? '' : street
 }
 
-/** The drawing's status-dot palette. */
-const DOT_TONE = {
-  g: { dot: '#4CC38A', halo: 'rgba(76,195,138,.16)' },
-  a: { dot: '#E9A23B', halo: 'rgba(233,162,59,.16)' },
-  r: { dot: '#E5484D', halo: 'rgba(229,72,77,.16)' },
-  n: { dot: '#8A929B', halo: 'rgba(138,146,155,.16)' },
-} as const
+/**
+ * The shell's attention tone for a job: red needs you, amber is waiting on
+ * somebody, green is running, none is quiet. Only red reaches the header now
+ * — the rest is read on Home and the Schedule before anyone opens the job.
+ */
+type JobTone = 'g' | 'a' | 'r' | 'n'
 
 export function JobScreen({
   me,
   site,
-  progressPct,
-  onSiteCount,
   floodHoldCount = 0,
   tone = 'n',
   chat,
@@ -732,12 +729,9 @@ export function JobScreen({
 }: {
   me: WorkerRow
   site: JobSiteRow
-  progressPct: number | null
-  onSiteCount: number
-  /** Covered wet areas with no flood test — turns the state line red. */
+  /** Covered wet areas with no flood test — the loudest thing a job can say. */
   floodHoldCount?: number
-  /** The attention tone the shell computed for this job: drives the dot. */
-  tone?: keyof typeof DOT_TONE
+  tone?: JobTone
   /** The existing ChatScreen, rendered by the shell so its props stay there. */
   chat: (onClose: () => void) => React.ReactNode
   onBack: () => void
@@ -751,7 +745,7 @@ export function JobScreen({
   const tabs = useMemo(() => {
     const all: Array<{ key: JobTab; label: string }> = [
       { key: 'photos', label: 'Photos' },
-      { key: 'plans', label: 'Plans' },
+      { key: 'scope', label: 'Scope' },
       { key: 'waterproofing', label: 'Waterproofing' },
       { key: 'chat', label: 'Chat' },
       { key: 'money', label: 'Money' },
@@ -761,15 +755,21 @@ export function JobScreen({
   }, [office])
 
   const sub = [localeOf(site), site.job_type, site.client_name].filter(Boolean).join(' · ')
-  const { dot, halo } = DOT_TONE[tone]
-  // The drawing's state line: the thing that needs you beats the tally, and a
-  // job that has not started says when it will.
-  const state =
-    site.status === 'starting_soon'
-      ? `${site.schedule_note || 'Starting soon'} · nobody on site`
-      : floodHoldCount > 0
-        ? `${onSiteCount} on site · flood test overdue`
-        : `${onSiteCount} on site${progressPct !== null ? ` · ${Math.round(progressPct)}% done` : ''}`
+  /**
+   * The state line that used to sit under the header is gone: every one of
+   * its facts — who is on site, how far through, what is overdue — is already
+   * read on Home and on the Schedule before anyone opens the job. What a job
+   * needs to say once you are inside it is whether something is wrong, so
+   * that becomes one mark beside the title.
+   */
+  const alert =
+    floodHoldCount > 0
+      ? floodHoldCount === 1
+        ? 'Flood test overdue'
+        : `${floodHoldCount} flood tests overdue`
+      : tone === 'r'
+        ? 'Needs you'
+        : null
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -781,7 +781,18 @@ export function JobScreen({
           </svg>
         </span>
         <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+            <span style={{ minWidth: 0, fontSize: 16, fontWeight: 600, letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
+            {alert && (
+              <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, height: 19, padding: '0 7px', borderRadius: 10, background: '#E5484D', fontSize: 10.5, fontWeight: 800, letterSpacing: '.01em', whiteSpace: 'nowrap', color: '#fff' }}>
+                <svg width="9" height="9" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round">
+                  <path d="M10 5.4v5.4" />
+                  <path d="M10 14v.3" />
+                </svg>
+                {alert}
+              </span>
+            )}
+          </span>
           {sub && (
             <span style={{ fontSize: 12.5, color: '#A7AEB6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>
           )}
@@ -789,13 +800,6 @@ export function JobScreen({
         <span onClick={onTakePhoto} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, cursor: 'pointer' }}>
           <CameraGlyph size={21} />
         </span>
-      </div>
-
-      {/* State row. */}
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 9, padding: '4px 20px 13px', background: '#2B2F33' }}>
-        <span style={{ flex: 'none', width: 8, height: 8, borderRadius: '50%', background: dot, boxShadow: `0 0 0 4px ${halo}` }} />
-        <span style={{ flex: 1, fontSize: 14, color: '#B4BBC2', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{state}</span>
-        {progressPct !== null && <span style={{ flex: 'none', fontSize: 14, fontWeight: 600, color: '#fff' }}>{Math.round(progressPct)}%</span>}
       </div>
 
       {/* Tab row — 58px charcoal, 3px underline bars. */}
@@ -835,7 +839,7 @@ export function JobScreen({
 
       <div style={{ flex: 1, minHeight: 0, background: '#F5F6F7', paddingBottom: SAFE_BOTTOM }}>
         {tab === 'photos' && <PhotoGrid me={me} site={site} onTakePhoto={onTakePhoto} />}
-        {tab === 'plans' && <PlansScreen me={me} siteId={site.id} siteName={site.name} onClose={() => setTab('photos')} />}
+        {tab === 'scope' && <ScopeTab me={me} site={site} />}
         {tab === 'waterproofing' && <WaterproofingTab site={site} />}
         {tab === 'chat' && chat(() => setTab('photos'))}
         {tab === 'money' && office && <MoneyTab site={site} floodHoldCount={floodHoldCount} onAddInvoice={onAddInvoice} />}

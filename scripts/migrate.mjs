@@ -49,6 +49,7 @@ const MIGRATIONS = [
   // proof of v26 having run is the table under its later name.
   { file: 'schema_v26.sql', proves: ['worker_profiles'] },
   { file: 'schema_v27.sql', proves: ['worker_profiles.phone', 'certifications.document_path'] },
+  { file: 'schema_v28.sql', proves: ['selections.scope_key', 'site_notes'] },
 ]
 
 // ------------------------------------------------------------- credentials

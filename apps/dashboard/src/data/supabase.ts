@@ -67,6 +67,8 @@ export interface JobSiteRow {
   contract_value: number | null
   /** The crew captain running this job. What captains_site() reads. */
   captain_id: string | null
+  /** The builder's person on this job, in builder_contacts. */
+  supervisor_contact_id: string | null
   /** The job's chosen rail colour (schema_v25). Null → hash-derived. */
   colour: string | null
 }

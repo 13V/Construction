@@ -260,6 +260,15 @@ try {
   }
   console.log(`tickets: ${TICKETS.length} across the crew`)
 
+  // The captains carry a mobile, because a job's details are only useful if
+  // the number is there. worker_profiles is self-write, plus office — which
+  // this seed is, signed in as the owner.
+  for (const [key, phone] of [['sam', '0421 776 305'], ['rob', '0438 902 114']]) {
+    await ensureRow(boss, 'worker_profiles', `select=worker_id&worker_id=eq.${crew[key].id}`, {
+      worker_id: crew[key].id, company_id: companyId, phone,
+    }, `captain phone (${key})`)
+  }
+
   // ------------------------------------------------------------ job sites
   // Addresses are written so the app's locale rule reproduces the drawing's
   // sub-lines verbatim: a suburb when it says something ("Prospect"), the
@@ -335,6 +344,41 @@ try {
     phone: '08 8344 9010', address: '96 Churchill Rd, Prospect SA 5082',
     payment_terms_days: 30, default_retention_pct: 5,
   }, 'builder (Kesselman Homes)')
+
+  // The builder's own person on the ground — the Scope tab's project details
+  // read this, and it is who a tiler rings when the screed is not down.
+  const marco = await ensureRow(boss, 'builder_contacts',
+    `select=id&builder_id=eq.${kesselman.id}&name=eq.${encodeURIComponent('Marco Ferraro')}`,
+    {
+      company_id: companyId, builder_id: kesselman.id, name: 'Marco Ferraro',
+      role: 'supervisor', mobile: '0412 345 678', email: 'marco@kesselmanhomes.example',
+    }, 'builder contact (Marco)')
+  await boss.patch('job_sites', `id=eq.${site.lot42.id}`, { supervisor_contact_id: marco.id })
+
+  // ------------------------------------------------------------- the scope
+  // The tiling scope, as the client wants it read: tile selections settled,
+  // everything downstream of them still waiting on a decision. Only the
+  // settled line is written — an untouched line has no row and the app draws
+  // it Required from its own template.
+  await ensureRow(boss, 'selections',
+    `select=id&site_id=eq.${site.lot42.id}&scope_key=eq.tiles`,
+    {
+      company_id: companyId, site_id: site.lot42.id, scope_key: 'tiles', sort: 0,
+      name: 'Tile selections + Data', detail: 'Confirm tile selections and provide all relevant product data.',
+      status: 'chosen', chosen: 'Sicily Grey 600×600 matt · Ensuites & Bath 2', chosen_at: adAt(-6, '09:20'),
+    }, 'scope line (lot42 tiles)')
+
+  // A note the next person on the job actually needs. Authored by the office,
+  // because that is who this seed is signed in as — site_notes only lets you
+  // write your own, which is the point of the policy.
+  const ownerRow = await boss.get('workers', `select=id&company_id=eq.${companyId}&name=eq.${encodeURIComponent(OWNER_NAME)}`)
+  const ownerId = Array.isArray(ownerRow) ? ownerRow[0]?.id : null
+  await ensureRow(boss, 'site_notes',
+    `select=id&site_id=eq.${site.lot42.id}&body=ilike.*strip drain*`,
+    {
+      company_id: companyId, site_id: site.lot42.id, author_id: ownerId,
+      body: 'Marco says the strip drain in Ensuite 2 sits 8mm low against the screed. Check the fall before setting out the next row.',
+    }, 'site note (lot42)')
 
   const CONTRACTS = [
     ['lot42',     176_400, kesselman.id, 'Lot 42 Kentish Ave — tiling & waterproofing'],

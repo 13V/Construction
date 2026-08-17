@@ -183,7 +183,7 @@ function Tracker({ me }: { me: WorkerRow }) {
   const [tab, setTab] = useState<Tab>('home')
   /** The job open over Home, and whether the full clock surface is up. */
   const [openJobId, setOpenJobId] = useState<string | null>(null)
-  const [openJobTab, setOpenJobTab] = useState<'photos' | 'plans' | 'waterproofing' | 'chat' | 'money' | 'crew'>('photos')
+  const [openJobTab, setOpenJobTab] = useState<'photos' | 'scope' | 'waterproofing' | 'chat' | 'money' | 'crew'>('photos')
   const [clockOpen, setClockOpen] = useState(() => !me.is_office)
   const [celebration, setCelebration] = useState<Celebration | null>(null)
   const [clockOutConfirm, setClockOutConfirm] = useState(false)
@@ -458,8 +458,6 @@ function Tracker({ me }: { me: WorkerRow }) {
           initialTab={openJobTab}
           me={me}
           site={openJob}
-          progressPct={simpleData.progress.get(openJob.id) ?? null}
-          onSiteCount={simpleData.onSiteNow.get(openJob.id) ?? 0}
           floodHoldCount={simpleData.floodHold.get(openJob.id) ?? 0}
           tone={
             (simpleData.openDefects.get(openJob.id) ?? 0) > 0 || (simpleData.floodHold.get(openJob.id) ?? 0) > 0

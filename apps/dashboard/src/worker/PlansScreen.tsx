@@ -46,12 +46,19 @@ export function PlansScreen({
   me,
   siteId: standingIn,
   siteName: standingName,
+  embedded = false,
   onClose,
 }: {
   me: WorkerRow
   /** The fence the worker is inside right now, if any. */
   siteId: string | null
   siteName: string
+  /**
+   * Inside the Scope tab the drawings are the first block of a longer page,
+   * so the screen drops its own header and its own scroller and renders as
+   * plain content in whatever is scrolling above it.
+   */
+  embedded?: boolean
   onClose: () => void
 }) {
   // Reading the drawing is something you do before you get there, not only
@@ -97,27 +104,35 @@ export function PlansScreen({
   const pinsFor = (id: string) => pins.filter((p) => p.file_id === id && !p.resolved_at)
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: theme.appBg }}>
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: theme.panel, borderBottom: `1px solid ${theme.border}` }}>
-        <button onClick={onClose} style={{ border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 15, color: theme.accent, cursor: 'pointer' }}>
-          ‹ Back
-        </button>
-        <span style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <span style={{ fontSize: 15.5, fontWeight: 600 }}>Plans</span>
-          <span style={{ fontSize: 11.5, color: theme.inkFaint }}>
-            {siteName} · {sheets.length} {sheets.length === 1 ? 'sheet' : 'sheets'}
+    <div
+      style={
+        embedded
+          ? { display: 'block' }
+          : { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: theme.appBg }
+      }
+    >
+      {!embedded && (
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: theme.panel, borderBottom: `1px solid ${theme.border}` }}>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 15, color: theme.accent, cursor: 'pointer' }}>
+            ‹ Back
+          </button>
+          <span style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span style={{ fontSize: 15.5, fontWeight: 600 }}>Plans</span>
+            <span style={{ fontSize: 11.5, color: theme.inkFaint }}>
+              {siteName} · {sheets.length} {sheets.length === 1 ? 'sheet' : 'sheets'}
+            </span>
           </span>
-        </span>
-        <span style={{ width: 48 }} />
-      </div>
+          <span style={{ width: 48 }} />
+        </div>
+      )}
 
-      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingBottom: 24 }}>
+      <div style={embedded ? { display: 'block' } : { flex: 1, overflowY: 'auto', minHeight: 0, paddingBottom: 24 }}>
         {error && (
           <div style={{ padding: '11px 18px', background: theme.alertFill, color: theme.alertInk, fontSize: 13 }}>{error}</div>
         )}
 
         {!loading && sheets.length === 0 && (
-          <div style={{ padding: '48px 32px', textAlign: 'center' }}>
+          <div style={{ padding: embedded ? '16px 18px 4px' : '48px 32px', textAlign: embedded ? 'left' : 'center' }}>
             <span style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 6 }}>No drawings yet</span>
             <span style={{ fontSize: 13, lineHeight: 1.5, color: theme.inkSoft }}>
               The office uploads sheets to the job. They appear here as soon as they do.
