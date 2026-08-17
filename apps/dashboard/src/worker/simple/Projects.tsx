@@ -47,7 +47,7 @@ interface Notif {
   tone: 'r' | 'a'
   at: string
   site: JobSiteRow
-  tab: 'photos' | 'waterproofing' | 'money'
+  tab: JobTab
 }
 
 interface Person {
@@ -145,7 +145,7 @@ export function ProjectsScreen({
         tone: 'r',
         at,
         site,
-        tab: 'waterproofing',
+        tab: 'overview',
       })
     }
     for (const v of varRows) {
@@ -218,7 +218,7 @@ export function ProjectsScreen({
         chip: f === 1 ? 'Flood test overdue' : `${f} flood tests overdue`,
         bg: '#FDECEE',
         fg: '#A3282E',
-        tab: 'waterproofing',
+        tab: 'overview',
       }
     }
     if (d > 0) return { chip: `${d} defect${d === 1 ? '' : 's'}`, bg: '#FDECEE', fg: '#A3282E', tab: 'overview' }

@@ -14,7 +14,7 @@ import { SafetyScreen } from '../SafetyScreen'
 import { OverviewTab } from './Overview'
 import { addressLine, avatarGrey, builderOf, s, SAFE_BOTTOM, SAFE_TOP, ticketTone, TICKET_MISSING } from './stheme'
 
-export type JobTab = 'overview' | 'waterproofing' | 'safety' | 'money' | 'crew' | 'photos' | 'chat'
+export type JobTab = 'overview' | 'safety' | 'crew' | 'photos' | 'chat' | 'money'
 
 const money = (v: number | null | undefined) =>
   v === null || v === undefined
@@ -136,74 +136,6 @@ function PhotoGrid({ me, site, onTakePhoto }: { me: WorkerRow; site: JobSiteRow;
         </div>
       )}
       <div style={{ height: 14 }} />
-    </div>
-  )
-}
-
-// ----------------------------------------------------------- waterproofing
-
-interface WetRow {
-  id: string
-  area: string
-  status: string
-  flood_test_on: string | null
-  signed_off_on: string | null
-}
-
-function WaterproofingTab({ site }: { site: JobSiteRow }) {
-  const [rows, setRows] = useState<WetRow[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    void supabase()
-      .from('waterproofing')
-      .select('id, area, status, flood_test_on, signed_off_on')
-      .eq('site_id', site.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (cancelled) return
-        setRows((data as WetRow[]) ?? [])
-        setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [site.id])
-
-  const chip = (r: WetRow) =>
-    r.status === 'signed_off'
-      ? { label: 'Signed off', bg: '#EAF6EF', fg: '#1F7A4D' }
-      : r.status === 'failed'
-        ? { label: 'Failed', bg: '#FDECEE', fg: '#A3282E' }
-        : { label: 'In progress', bg: '#FFF6E3', fg: '#8A6100' }
-
-  return (
-    <div style={{ height: '100%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 16px 20px' }}>
-      {rows.map((r) => {
-        const c = chip(r)
-        return (
-          <div key={r.id} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 11, minHeight: 58, padding: '11px 13px 11px 15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, boxShadow: '0 1px 2px rgba(16,20,24,.04)' }}>
-            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.005em', color: s.ink }}>{r.area}</span>
-              <span style={{ fontSize: 12.5, color: '#7B838B' }}>
-                {r.flood_test_on
-                  ? `Flood test ${new Date(r.flood_test_on).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`
-                  : 'No flood test recorded'}
-              </span>
-            </span>
-            <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', height: 23, padding: '0 9px', borderRadius: 12, background: c.bg, color: c.fg, fontSize: 11, fontWeight: 700 }}>
-              {c.label}
-            </span>
-          </div>
-        )
-      })}
-      {!loading && rows.length === 0 && (
-        <div style={{ padding: '36px 24px', textAlign: 'center', fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
-          No wet areas recorded on this job yet. A waterproofing record is what the
-          certificate gets issued from — the office or your captain starts one.
-        </div>
-      )}
     </div>
   )
 }
@@ -715,13 +647,9 @@ type JobTone = 'g' | 'a' | 'r' | 'n'
 const TAB_ICON: Record<JobTab, (c: string) => ReactNode> = {
   overview: (c) => (
     <>
-      <path d="M7 3.4h6v2.3H7z" stroke={c} />
-      <path d="M4.8 5.7h10.4v10.9H4.8z" stroke={c} />
-      <path d="M7.4 9.4h5.2M7.4 12.4h3.2" stroke={c} />
+      <path d="M3.2 9.4 10 3.7l6.8 5.7v7.2H3.2z" stroke={c} />
+      <path d="M8 16.6v-4.4h4v4.4" stroke={c} />
     </>
-  ),
-  waterproofing: (c) => (
-    <path d="M10 3.2c2.7 3.1 4.5 5.2 4.5 7.5a4.5 4.5 0 0 1-9 0c0-2.3 1.8-4.4 4.5-7.5z" stroke={c} />
   ),
   safety: (c) => (
     <>
@@ -731,9 +659,9 @@ const TAB_ICON: Record<JobTab, (c: string) => ReactNode> = {
   ),
   money: (c) => (
     <>
-      <path d="M2.8 6.4h14.4v7.2H2.8z" stroke={c} />
-      <circle cx="10" cy="10" r="2.1" stroke={c} />
-      <path d="M5.4 10h.01M14.6 10h.01" stroke={c} />
+      <circle cx="10" cy="10" r="7.2" stroke={c} />
+      <path d="M10 5.6v8.8" stroke={c} />
+      <path d="M12.3 7.9c0-1-1-1.7-2.3-1.7s-2.3.7-2.3 1.7.9 1.5 2.3 1.8 2.3.8 2.3 1.8-1 1.7-2.3 1.7-2.3-.7-2.3-1.7" stroke={c} />
     </>
   ),
   crew: (c) => (
@@ -745,11 +673,17 @@ const TAB_ICON: Record<JobTab, (c: string) => ReactNode> = {
   ),
   photos: (c) => (
     <>
-      <path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z" stroke={c} />
-      <circle cx="10" cy="10.8" r="2.9" stroke={c} />
+      <path d="M3.2 4.4h13.6v11.2H3.2z" stroke={c} />
+      <path d="M3.2 13 7.4 9.2l3.3 3 2.5-2.2 3.6 3.2" stroke={c} />
+      <circle cx="7.2" cy="7.6" r="1.2" stroke={c} />
     </>
   ),
-  chat: (c) => <path d="M3 4.5h14v9h-8l-4 3.5v-3.5h-2z" stroke={c} />,
+  chat: (c) => (
+    <>
+      <path d="M3.2 4.6h13.6v9H8.9l-4 3.4v-3.4H3.2z" stroke={c} />
+      <path d="M7 9.1h.01M10 9.1h.01M13 9.1h.01" stroke={c} />
+    </>
+  ),
 }
 
 export function JobScreen({
@@ -778,17 +712,17 @@ export function JobScreen({
   const office = me.is_office
   const [tab, setTab] = useState<JobTab>(initialTab ?? 'overview')
 
-  // The client's order: what the job is, then the two things that stop it
-  // being signed off, then the money, then the people, then the record.
+  // The client's order. Waterproofing is not here because it moved inside
+  // Overview, under the drawings — a job's wet areas are part of what the job
+  // is rather than a place to navigate to.
   const tabs = useMemo(() => {
     const all: Array<{ key: JobTab; label: string }> = [
       { key: 'overview', label: 'Overview' },
-      { key: 'waterproofing', label: 'Waterproofing' },
       { key: 'safety', label: 'Safety' },
-      { key: 'money', label: 'Money' },
       { key: 'crew', label: 'Crew' },
       { key: 'photos', label: 'Photos' },
       { key: 'chat', label: 'Chat' },
+      { key: 'money', label: 'Money' },
     ]
     return office ? all : all.filter((t) => t.key !== 'money')
   }, [office])
@@ -889,7 +823,6 @@ export function JobScreen({
       <div style={{ flex: 1, minHeight: 0, background: '#F5F6F7', paddingBottom: SAFE_BOTTOM }}>
         {tab === 'photos' && <PhotoGrid me={me} site={site} onTakePhoto={onTakePhoto} />}
         {tab === 'overview' && <OverviewTab me={me} site={site} />}
-        {tab === 'waterproofing' && <WaterproofingTab site={site} />}
         {tab === 'safety' && <SafetyScreen me={me} siteId={site.id} siteName={site.name} embedded onClose={() => setTab('overview')} />}
         {tab === 'chat' && chat(() => setTab('overview'))}
         {tab === 'money' && office && <MoneyTab site={site} floodHoldCount={floodHoldCount} onAddInvoice={onAddInvoice} />}

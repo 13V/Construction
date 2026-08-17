@@ -183,7 +183,7 @@ function Tracker({ me }: { me: WorkerRow }) {
   const [tab, setTab] = useState<Tab>('home')
   /** The job open over Home, and whether the full clock surface is up. */
   const [openJobId, setOpenJobId] = useState<string | null>(null)
-  const [openJobTab, setOpenJobTab] = useState<'overview' | 'waterproofing' | 'safety' | 'money' | 'crew' | 'photos' | 'chat'>('overview')
+  const [openJobTab, setOpenJobTab] = useState<'overview' | 'safety' | 'crew' | 'photos' | 'chat' | 'money'>('overview')
   const [clockOpen, setClockOpen] = useState(() => !me.is_office)
   const [celebration, setCelebration] = useState<Celebration | null>(null)
   const [clockOutConfirm, setClockOutConfirm] = useState(false)

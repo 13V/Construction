@@ -104,7 +104,7 @@ export function HomeScreen({
   // red for defects, red for a covered membrane with no flood test ("Needs
   // you"), amber for variations sitting with the builder. The sheet spans
   // every non-archived job — a job that starts Monday still belongs on it.
-  const needs: Array<{ site: JobSiteRow; tone: 'r' | 'a'; chip: string; tab: 'photos' | 'waterproofing' | 'money' }> = []
+  const needs: Array<{ site: JobSiteRow; tone: 'r' | 'a'; chip: string; tab: JobTab }> = []
   // Booked jobs first, in the day's order, then the rest — the drawing reads
   // the sheet as "today's problems, then everything else".
   const sheetOrder = [...todaySites, ...data.sites.filter((x) => !todaySites.some((t) => t.id === x.id))]
@@ -113,7 +113,7 @@ export function HomeScreen({
     const f = data.floodHold.get(site.id) ?? 0
     const v = data.pendingVariationsBySite.get(site.id) ?? 0
     if (d > 0) needs.push({ site, tone: 'r', chip: `${d} defect${d === 1 ? '' : 's'}`, tab: 'photos' })
-    else if (f > 0) needs.push({ site, tone: 'r', chip: 'Needs you', tab: 'waterproofing' })
+    else if (f > 0) needs.push({ site, tone: 'r', chip: f === 1 ? 'Flood test overdue' : `${f} flood tests overdue`, tab: 'overview' })
     else if (v > 0) needs.push({ site, tone: 'a', chip: `${v} variation${v === 1 ? '' : 's'}`, tab: 'money' })
   }
   const needIds = new Set(needs.map((n) => n.site.id))

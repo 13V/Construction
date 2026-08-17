@@ -373,6 +373,13 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
         <PlansScreen me={me} siteId={site.id} siteName={site.name} embedded onClose={() => {}} />
       </div>
 
+      {/* Waterproofing sits under the drawings: it is what the job is, not
+          somewhere separate to go. */}
+      <span style={sectionLabel}>WATERPROOFING</span>
+      <div style={{ margin: '0 18px' }}>
+        <Waterproofing site={site} />
+      </div>
+
       {/* The scope lines. */}
       <span style={sectionLabel}>SCOPE OF WORKS</span>
       <div style={{ margin: '0 18px', ...card }}>
@@ -667,6 +674,102 @@ function ScopeSheet({
           Cancel
         </button>
       </div>
+    </div>
+  )
+}
+
+// ----------------------------------------------------------- waterproofing
+
+interface WetRow {
+  id: string
+  area: string
+  status: string
+  flood_tested: boolean
+  completed_on: string | null
+  flood_test_on: string | null
+  signed_off_at: string | null
+}
+
+const shortDate = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+
+/**
+ * What has actually happened to this area. A flood-test date on an untested
+ * area is the date it was DUE, so saying "flood test 13 Aug" there would
+ * report the opposite of the truth.
+ */
+const wetLine = (r: WetRow) => {
+  if (r.flood_tested) return r.flood_test_on ? `Flood tested ${shortDate(r.flood_test_on)}` : 'Flood tested'
+  if (r.completed_on) {
+    const due = r.flood_test_on ? `, due ${shortDate(r.flood_test_on)}` : ''
+    return `Covered ${shortDate(r.completed_on)} · no flood test${due}`
+  }
+  return 'Membrane not finished'
+}
+
+/**
+ * The wet areas, in Overview under the drawings — where the client wanted
+ * them. It is the same list the tab held; a job's waterproofing is part of
+ * what the job IS, not a place you navigate to.
+ */
+function Waterproofing({ site }: { site: JobSiteRow }) {
+  const [rows, setRows] = useState<WetRow[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    void supabase()
+      .from('waterproofing')
+      // signed_off_at, not signed_off_on — the wrong name made this select
+      // fail outright, which is why every job read "no wet areas".
+      .select('id, area, status, flood_tested, completed_on, flood_test_on, signed_off_at')
+      .eq('site_id', site.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return
+        setRows((data as WetRow[]) ?? [])
+        setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [site.id])
+
+  /**
+   * A covered wet area with no flood test is the thing that holds up every
+   * claim on the job, so it says so rather than reading "complete".
+   */
+  const chip = (r: WetRow) => {
+    const covered = r.status === 'complete' || r.status === 'signed_off'
+    if (covered && !r.flood_tested) return { label: 'Flood test overdue', bg: '#FDECEE', fg: '#A3282E' }
+    if (r.status === 'signed_off') return { label: 'Signed off', bg: '#EAF6EF', fg: '#1F7A4D' }
+    if (r.status === 'failed') return { label: 'Failed', bg: '#FDECEE', fg: '#A3282E' }
+    if (r.status === 'complete') return { label: 'Flood tested', bg: '#EAF6EF', fg: '#1F7A4D' }
+    return { label: 'In progress', bg: '#FFF6E3', fg: '#8A6100' }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+      {rows.map((r) => {
+        const c = chip(r)
+        return (
+          <div key={r.id} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 11, minHeight: 58, padding: '11px 13px 11px 15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, boxShadow: '0 1px 2px rgba(16,20,24,.04)' }}>
+            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.005em', color: s.ink }}>{r.area}</span>
+              <span style={{ fontSize: 12.5, color: '#7B838B' }}>{wetLine(r)}</span>
+            </span>
+            <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', height: 23, padding: '0 9px', borderRadius: 12, background: c.bg, color: c.fg, fontSize: 11, fontWeight: 700 }}>
+              {c.label}
+            </span>
+          </div>
+        )
+      })}
+      {!loading && rows.length === 0 && (
+        <div style={{ padding: '15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
+          No wet areas on this job yet. A waterproofing record is what the certificate
+          gets issued from — the office or your captain starts one.
+        </div>
+      )}
     </div>
   )
 }
