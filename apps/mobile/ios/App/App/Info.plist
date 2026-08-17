@@ -111,6 +111,17 @@
 	<string>Save site photos you take in Crewline.</string>
 
 	<!--
+	  Read access, which is a different permission from the add-only one above.
+	  Every photo picker in the app offers "Photo Library" beside "Take Photo"
+	  — a site photo, a receipt, a photo into a job's chat, a profile picture —
+	  and choosing an existing photo needs this string. Modern iOS serves that
+	  sheet out of process and often does not ask, but the legacy picker does,
+	  and an app that reaches it without a description is terminated.
+	-->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Attach photos you already have — site progress, a receipt, or your profile picture.</string>
+
+	<!--
 	  Every network call the app makes is HTTPS to Vercel and Supabase, and the
 	  only cryptography beyond TLS is Supabase's own auth (JWT session tokens
 	  over that same TLS connection) — both are the standard, OS-provided

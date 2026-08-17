@@ -664,7 +664,7 @@ function CrewTab({ site }: { site: JobSiteRow }) {
             <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {held.length === 0 ? (
                 <span style={{ display: 'inline-flex', alignItems: 'center', height: 22, padding: '0 9px', borderRadius: 11, background: TICKET_MISSING.bg, fontSize: 11.5, fontWeight: 700, color: TICKET_MISSING.fg }}>
-                  No tickets on file
+                  No licenses on file
                 </span>
               ) : (
                 held.map((c) => {

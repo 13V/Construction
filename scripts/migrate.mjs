@@ -45,7 +45,10 @@ const MIGRATIONS = [
   { file: 'schema_v24.sql', proves: ['crew_v', 'site_variations_v'] },
   // Column-only migration: proven by table.column, which the probe also lists.
   { file: 'schema_v25.sql', proves: ['job_sites.colour'] },
-  { file: 'schema_v26.sql', proves: ['worker_avatars'] },
+  // v26 created worker_avatars; v27 renamed it to worker_profiles, so the
+  // proof of v26 having run is the table under its later name.
+  { file: 'schema_v26.sql', proves: ['worker_profiles'] },
+  { file: 'schema_v27.sql', proves: ['worker_profiles.phone', 'certifications.document_path'] },
 ]
 
 // ------------------------------------------------------------- credentials

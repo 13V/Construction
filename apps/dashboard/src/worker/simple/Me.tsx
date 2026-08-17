@@ -29,10 +29,45 @@ interface MyTicket {
   id: string
   name: string
   expires_on: string | null
+  document_path: string | null
 }
 
 const fullDate = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+
+/**
+ * The papers a site actually asks for. Offered as one-tap names because
+ * these four are what gets asked for at nearly every induction — the field
+ * stays free text for everything else a tiler might hold.
+ */
+const COMMON_TICKETS = ['Drivers Licence', 'White Card', 'First Aid', 'Police Clearance']
+
+/** The card itself. Private bucket, so the thumbnail waits on a signed URL. */
+function TicketThumb({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void signedUrl(BUCKET_FILES, path).then((u) => {
+      if (!cancelled) setUrl(u)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [path])
+
+  return (
+    <a
+      href={url ?? undefined}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      style={{ display: 'block', flex: 'none', width: 44, height: 34, borderRadius: 6, overflow: 'hidden', border: '1px solid #DCE0E6', background: 'repeating-linear-gradient(135deg,#E4E7EA 0 6px,#DADEE2 6px 12px)' }}
+    >
+      {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+    </a>
+  )
+}
 
 export function MeScreen({
   me,
@@ -59,28 +94,68 @@ export function MeScreen({
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [avatarBusy, setAvatarBusy] = useState(false)
-
-  // Certifications are office-write by policy, so the form is the office's.
-  // Crew still see their own tickets — they just cannot grant themselves one.
-  const canEdit = me.is_office
+  const [phone, setPhone] = useState('')
+  const [phoneDraft, setPhoneDraft] = useState<string | null>(null)
+  const [docBusy, setDocBusy] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     void supabase()
-      .from('worker_avatars')
-      .select('storage_path')
+      .from('worker_profiles')
+      .select('avatar_path, phone')
       .eq('worker_id', me.id)
       .maybeSingle()
       .then(async ({ data }) => {
-        const path = (data as { storage_path: string } | null)?.storage_path
-        if (!path) return
-        const url = await signedUrl(BUCKET_FILES, path)
+        const row = data as { avatar_path: string | null; phone: string | null } | null
+        if (!row) return
+        if (!cancelled) setPhone(row.phone ?? '')
+        if (!row.avatar_path) return
+        const url = await signedUrl(BUCKET_FILES, row.avatar_path)
         if (!cancelled) setAvatarUrl(url)
       })
     return () => {
       cancelled = true
     }
   }, [me.id])
+
+  /** One row per person, so every profile write is the same upsert. */
+  async function saveProfile(patch: { avatar_path?: string; phone?: string | null }) {
+    const { error } = await supabase()
+      .from('worker_profiles')
+      .upsert({ worker_id: me.id, company_id: me.company_id, ...patch, updated_at: new Date().toISOString() })
+    if (error) throw new Error(error.message)
+  }
+
+  async function savePhone() {
+    if (phoneDraft === null) return
+    const next = phoneDraft.trim()
+    setTicketError(null)
+    try {
+      await saveProfile({ phone: next || null })
+      setPhone(next)
+      setPhoneDraft(null)
+    } catch (e) {
+      setTicketError(e instanceof Error ? e.message : 'Could not save that number.')
+    }
+  }
+
+  /** A photo of the card, filed against the ticket it proves. */
+  async function attachDocument(ticketId: string, file: File) {
+    if (docBusy) return
+    setDocBusy(ticketId)
+    setTicketError(null)
+    try {
+      const path = objectPath(me.company_id, 'tickets', file.name)
+      await uploadFile(BUCKET_FILES, path, file)
+      const { error } = await supabase().from('certifications').update({ document_path: path }).eq('id', ticketId)
+      if (error) throw new Error(error.message)
+      setTickets((prev) => prev.map((t) => (t.id === ticketId ? { ...t, document_path: path } : t)))
+    } catch (e) {
+      setTicketError(e instanceof Error ? e.message : 'Could not save that photo.')
+    } finally {
+      setDocBusy(null)
+    }
+  }
 
   /** The camera badge, wired: your own face, stored against your own row. */
   async function setAvatar(file: File) {
@@ -90,10 +165,7 @@ export function MeScreen({
     try {
       const path = objectPath(me.company_id, 'avatars', file.name)
       await uploadFile(BUCKET_FILES, path, file)
-      const { error } = await supabase()
-        .from('worker_avatars')
-        .upsert({ worker_id: me.id, company_id: me.company_id, storage_path: path, updated_at: new Date().toISOString() })
-      if (error) throw new Error(error.message)
+      await saveProfile({ avatar_path: path })
       setAvatarUrl(await signedUrl(BUCKET_FILES, path))
     } catch (e) {
       setTicketError(e instanceof Error ? e.message : 'Could not save that photo.')
@@ -106,7 +178,7 @@ export function MeScreen({
     let cancelled = false
     void supabase()
       .from('certifications')
-      .select('id, name, expires_on')
+      .select('id, name, expires_on, document_path')
       .eq('worker_id', me.id)
       .order('expires_on', { nullsFirst: false })
       .then(({ data }) => {
@@ -130,7 +202,7 @@ export function MeScreen({
         name,
         expires_on: newExpiry || null,
       })
-      .select('id, name, expires_on')
+      .select('id, name, expires_on, document_path')
       .single()
     setSaving(false)
     if (error) {
@@ -243,19 +315,49 @@ export function MeScreen({
         <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>CONTACT</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', margin: '0 18px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, overflow: 'hidden' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 60, padding: '11px 15px' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 60, padding: '11px 15px', borderBottom: '1px solid #EDEFF1' }}>
           <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '.05em', color: '#7B838B' }}>EMAIL</span>
             <span style={{ fontSize: 15.5, color: s.ink }}>{email || '—'}</span>
           </span>
+        </span>
+        {/* Phone is the crew's own to set — it is how a site foreman reaches
+            them, and it is nobody else's business to type it for them. */}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 60, padding: '11px 15px' }}>
+          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '.05em', color: '#7B838B' }}>PHONE</span>
+            {phoneDraft === null ? (
+              <span style={{ fontSize: 15.5, color: phone ? s.ink : '#9AA1A9' }}>{phone || 'Not set'}</span>
+            ) : (
+              <input
+                value={phoneDraft}
+                onChange={(e) => setPhoneDraft(e.target.value)}
+                type="tel"
+                inputMode="tel"
+                autoFocus
+                placeholder="0412 345 678"
+                style={{ width: '100%', height: 40, padding: '0 10px', marginTop: 2, boxSizing: 'border-box', background: '#F5F6F7', border: '1px solid #DCE0E6', borderRadius: 8, font: 'inherit', fontSize: 16, color: s.ink, outline: 'none' }}
+              />
+            )}
+          </span>
+          {phoneDraft === null ? (
+            <span onClick={() => setPhoneDraft(phone)} style={{ flex: 'none', fontSize: 13.5, fontWeight: 600, color: s.accent, cursor: 'pointer' }}>
+              {phone ? 'Change' : 'Add'}
+            </span>
+          ) : (
+            <span style={{ flex: 'none', display: 'flex', gap: 12 }}>
+              <span onClick={() => setPhoneDraft(null)} style={{ fontSize: 13.5, color: '#8B9096', cursor: 'pointer' }}>Cancel</span>
+              <span onClick={() => void savePhone()} style={{ fontSize: 13.5, fontWeight: 700, color: s.accent, cursor: 'pointer' }}>Save</span>
+            </span>
+          )}
         </span>
       </div>
 
       {/* MY TICKETS — what this person is licensed to do, and (for the
           office, which is who policy lets write them) a way to add one. */}
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '18px 18px 9px' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>MY TICKETS</span>
-        {canEdit && !adding && (
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>MY LICENSES</span>
+        {!adding && (
           <span onClick={() => setAdding(true)} style={{ fontSize: 13.5, fontWeight: 600, color: s.accent, cursor: 'pointer' }}>
             Add
           </span>
@@ -265,7 +367,9 @@ export function MeScreen({
         {tickets.map((t, i) => {
           const tone = ticketTone(t.expires_on)
           return (
-            <span key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56, padding: '11px 15px', borderBottom: i === tickets.length - 1 && !adding && tickets.length > 0 ? 'none' : '1px solid #EDEFF1' }}>
+            <span key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 62, padding: '11px 15px', borderBottom: i === tickets.length - 1 && !adding && tickets.length > 0 ? 'none' : '1px solid #EDEFF1' }}>
+              {/* The card itself, if they have photographed it. */}
+              {t.document_path && <TicketThumb path={t.document_path} />}
               <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <span style={{ fontSize: 15.5, color: s.ink }}>{t.name}</span>
                 <span style={{ fontSize: 12.5, color: '#8B9096' }}>
@@ -275,24 +379,58 @@ export function MeScreen({
               <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', height: 22, padding: '0 9px', borderRadius: 11, background: tone.bg, fontSize: 11.5, fontWeight: 700, color: tone.fg }}>
                 {tone.suffix ? tone.suffix.replace(' · ', '') : 'Current'}
               </span>
-              {canEdit && (
-                <span onClick={() => void removeTicket(t.id)} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, cursor: 'pointer' }}>
-                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#9AA1A9" strokeWidth="2" strokeLinecap="round">
-                    <path d="M5 5l10 10M15 5L5 15" />
+              {/* Photograph the card, or replace the photo that is there. */}
+              <label style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 8, background: '#F1F3F5', cursor: docBusy === t.id ? 'default' : 'pointer' }}>
+                {docBusy === t.id ? (
+                  <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid #C3C9D0', borderTopColor: '#4A5057', animation: 'cl-spin .8s linear infinite' }} />
+                ) : (
+                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="1.6" strokeLinejoin="round">
+                    <path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z" />
+                    <circle cx="10" cy="10.8" r="3" />
                   </svg>
-                </span>
-              )}
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={docBusy !== null}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    e.target.value = ''
+                    if (f) void attachDocument(t.id, f)
+                  }}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <span onClick={() => void removeTicket(t.id)} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, cursor: 'pointer' }}>
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#9AA1A9" strokeWidth="2" strokeLinecap="round">
+                  <path d="M5 5l10 10M15 5L5 15" />
+                </svg>
+              </span>
             </span>
           )
         })}
 
         {adding && (
           <span style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '13px 15px 15px' }}>
+            {/* The four a site asks for, one tap each. */}
+            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {COMMON_TICKETS.map((name) => {
+                const on = newName === name
+                return (
+                  <span
+                    key={name}
+                    onClick={() => setNewName(name)}
+                    style={{ display: 'inline-flex', alignItems: 'center', height: 30, padding: '0 11px', borderRadius: 15, background: on ? '#1A1D21' : '#fff', border: `1px solid ${on ? '#1A1D21' : '#DCE0E6'}`, fontSize: 12.5, fontWeight: 600, color: on ? '#fff' : '#4A5057', cursor: 'pointer' }}
+                  >
+                    {name}
+                  </span>
+                )
+              })}
+            </span>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="White Card, EWP, Working at Heights…"
-              autoFocus
+              placeholder="Or type it — EWP, Working at Heights…"
               style={{ width: '100%', height: 48, padding: '0 13px', boxSizing: 'border-box', background: '#F5F6F7', border: '1px solid #DCE0E6', borderRadius: 10, font: 'inherit', fontSize: 16, color: s.ink, outline: 'none' }}
             />
             <span style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -310,7 +448,7 @@ export function MeScreen({
                 disabled={!newName.trim() || saving}
                 style={{ flex: 1, height: 46, border: 0, borderRadius: 10, background: !newName.trim() || saving ? '#C3C9D0' : '#1A1D21', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 700, letterSpacing: '.03em', color: '#fff', cursor: !newName.trim() || saving ? 'default' : 'pointer' }}
               >
-                {saving ? 'SAVING…' : 'SAVE TICKET'}
+                {saving ? 'SAVING…' : 'SAVE LICENSE'}
               </button>
               <button
                 onClick={() => {
@@ -329,19 +467,13 @@ export function MeScreen({
 
         {tickets.length === 0 && !adding && (
           <span style={{ padding: '15px', fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
-            {canEdit
-              ? 'Nothing on file yet. Add your white card and any licence you hold — they show on every job you are on.'
-              : 'Nothing on file yet. Your office adds these, and they show on every job you are on.'}
+            Nothing on file yet. Add your licence, white card or first aid and photograph
+            the card — they show on every job you are on.
           </span>
         )}
       </div>
       {ticketError && (
         <span style={{ display: 'block', padding: '9px 18px 0', fontSize: 13, lineHeight: 1.45, color: '#A3282E' }}>{ticketError}</span>
-      )}
-      {!canEdit && tickets.length > 0 && (
-        <span style={{ display: 'block', padding: '9px 18px 0', fontSize: 12.5, lineHeight: 1.45, color: '#8B9096' }}>
-          Your office keeps these current. Tell them if one is missing or renewed.
-        </span>
       )}
 
       {/* Settings — the drawn rows, plus the personal surfaces they open. */}
