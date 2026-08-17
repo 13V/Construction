@@ -281,8 +281,10 @@ function Gantt({
             PROJECT
           </span>
           {geometry.map(({ r }) => {
-            const chipLabel =
-              r.status === 'progress' ? (r.pct > 0 ? `${Math.round(r.pct)}%` : 'Live') : r.status === 'upcoming' ? 'Upcoming' : 'Done'
+            // When the job runs, not how far through it is — the dates are
+            // what a programme is read for, and the bar already carries the
+            // progress in green. Its colour still says which state this is.
+            const chipLabel = r.start && r.end ? rangeLabel(r.start, r.end) : 'No dates yet'
             return (
               <div
                 key={r.site.id}
@@ -290,8 +292,8 @@ function Gantt({
                 style={{ display: 'flex', alignItems: 'stretch', height: ROW_H, boxSizing: 'border-box', padding: '7px 7px 7px 10px', borderBottom: '1px solid #EFF1F4', cursor: 'pointer' }}
               >
                 {/* The job as a charcoal tile — the app's dark card: white
-                    name, trade line, status chip, and the job's own rail
-                    colour on the edge, as its cards carry everywhere else. */}
+                    name, trade line, the dates it runs, and the job's own
+                    rail colour on the edge, as its cards carry elsewhere. */}
                 <span style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center', padding: '9px 10px 9px 13px', borderRadius: 10, background: 'linear-gradient(#23272C,#15181C)' }}>
                   <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: railOf(r.site) }} />
                   <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.01em', lineHeight: 1.25, color: '#fff', textTransform: 'uppercase', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
@@ -369,19 +371,14 @@ function Gantt({
                         )}
                       </span>
                     ) : (
+                      // Only reachable for a job with no dates at all —
+                      // anything dated outside this window is filtered out
+                      // of `visible` before it gets here.
                       <span style={{ position: 'absolute', top: 1, left: 0, fontSize: 10.5, color: '#9AA1A9' }}>
-                        {r.start && r.end ? rangeLabel(r.start, r.end, true) : 'No dates yet'}
+                        Not scheduled yet
                       </span>
                     )}
                   </div>
-
-                  {bar && r.start && r.end && (
-                    <div style={{ position: 'relative', marginTop: 5, padding: '0 8px' }}>
-                      <span style={{ marginLeft: `min(${bar.left}%, calc(100% - 92px))`, fontSize: 10.5, whiteSpace: 'nowrap', color: '#5F666E' }}>
-                        {rangeLabel(r.start, r.end)}
-                      </span>
-                    </div>
-                  )}
                 </div>
               )
             })}
