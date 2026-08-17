@@ -220,6 +220,46 @@ try {
   }
   console.log(`crew: ${OWNER_NAME} (office) + ${CREW.length} on the tools`)
 
+  // ------------------------------------------------------------- tickets
+  // What each of them is licensed to do, shown on a job's Crew tab. Dates
+  // are anchored to today so the demo always carries the same shape: mostly
+  // current, Ben's EWP lapsed (he is the one on the Glenelg balcony), and
+  // Kyle's white card a fortnight from expiry.
+  const TICKETS = [
+    ['sam',    'White Card',            null],
+    ['sam',    'Working at Heights',    adDay(420)],
+    ['sam',    'Confined Space',        adDay(96)],
+    ['kyle',   'White Card',            adDay(14)],
+    ['kyle',   'Working at Heights',    adDay(300)],
+    ['tania',  'White Card',            null],
+    ['tania',  'Silica Awareness',      adDay(540)],
+    ['dev',    'White Card',            null],
+    ['ben',    'White Card',            null],
+    ['ben',    'Waterproofing Licence', adDay(610)],
+    ['ben',    'EWP — under 11 m',      adDay(-38)],
+    ['nadia',  'White Card',            null],
+    ['nadia',  'First Aid',             adDay(210)],
+    ['joel',   'White Card',            null],
+    ['rob',    'White Card',            null],
+    ['rob',    'Working at Heights',    adDay(180)],
+    ['rob',    'Forklift (LF)',         adDay(880)],
+    ['priya',  'White Card',            null],
+    ['priya',  'Silica Awareness',      adDay(430)],
+    ['callum', 'White Card',            null],
+    ['callum', 'Working at Heights',    adDay(25)],
+  ]
+  for (const [key, name, expires] of TICKETS) {
+    await ensureRow(boss, 'certifications',
+      `select=id&worker_id=eq.${crew[key].id}&name=eq.${encodeURIComponent(name)}`,
+      {
+        company_id: companyId, worker_id: crew[key].id, name, expires_on: expires,
+        restriction: name.startsWith('EWP')
+          ? 'You cannot operate the scissor lift or work off the EWP until this is renewed.'
+          : null,
+      }, `ticket (${key}: ${name})`)
+  }
+  console.log(`tickets: ${TICKETS.length} across the crew`)
+
   // ------------------------------------------------------------ job sites
   // Addresses are written so the app's locale rule reproduces the drawing's
   // sub-lines verbatim: a suburb when it says something ("Prospect"), the

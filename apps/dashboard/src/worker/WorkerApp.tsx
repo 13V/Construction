@@ -14,7 +14,7 @@ import type {
   TimeOffRow,
   WorkerRow,
 } from '../data/supabase'
-import { BUCKET_FILES, BUCKET_RECEIPTS, objectPath, uploadFile } from '../data/storage'
+import { BUCKET_FILES, BUCKET_RECEIPTS, objectPath, signedUrl, uploadFile } from '../data/storage'
 import { DWELL_IN_MS, type DwellPhase } from '../geofence/dwell'
 import { distanceM } from '../geofence/geo'
 import { backend, backendNote, startWatching, type LocationWatch } from './location'
@@ -2336,6 +2336,59 @@ interface MessageWithAuthor extends MessageRow {
   workers: { name: string; initials: string } | null
 }
 
+const CHAT_IMAGE_RE = /\.(png|jpe?g|gif|webp|heic|heif|avif)$/i
+/** Same ceiling the office composer enforces. */
+const CHAT_ATTACHMENT_MAX = 25 * 1024 * 1024
+
+/**
+ * A photo in the thread. The bucket is private, so every render trades the
+ * stored path for a signed URL; until it arrives the tile holds its space
+ * with the same hatch the rest of the app uses for a pending image.
+ */
+function ChatAttachment({ path, mine }: { path: string; mine: boolean }) {
+  const [url, setUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void signedUrl(BUCKET_FILES, path).then((u) => {
+      if (!cancelled) setUrl(u)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [path])
+
+  const name = path.split('/').pop() ?? path
+
+  if (!CHAT_IMAGE_RE.test(path)) {
+    return (
+      <a
+        href={url ?? undefined}
+        target="_blank"
+        rel="noreferrer"
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, background: mine ? 'rgba(255,255,255,.10)' : '#F1F3F5', fontSize: 13.5, fontWeight: 600, color: mine ? '#fff' : '#1A1D21', textDecoration: 'none' }}
+      >
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke={mine ? '#fff' : '#4A5057'} strokeWidth="1.6" strokeLinejoin="round">
+          <path d="M4.5 2.5h7l4 4v11h-11z" />
+          <path d="M11.5 2.5v4h4" />
+        </svg>
+        {name.replace(/^[0-9a-f-]{36}-/i, '')}
+      </a>
+    )
+  }
+
+  return (
+    <a
+      href={url ?? undefined}
+      target="_blank"
+      rel="noreferrer"
+      style={{ display: 'block', width: 200, height: 150, borderRadius: 10, overflow: 'hidden', background: 'repeating-linear-gradient(135deg,#E4E7EA 0 7px,#DADEE2 7px 14px)' }}
+    >
+      {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+    </a>
+  )
+}
+
 function chatDayLabel(d: Date): string {
   const today = new Date()
   const yesterday = new Date(today)
@@ -2376,6 +2429,7 @@ function ChatScreen({
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   const authorsRef = useRef(authors)
   useEffect(() => {
@@ -2500,9 +2554,9 @@ function ChatScreen({
     el.style.height = `${Math.min(120, el.scrollHeight)}px`
   }
 
-  async function send() {
+  async function send(attachmentPath?: string) {
     const body = draft.trim()
-    if (!body || !channel || sending) return
+    if ((!body && !attachmentPath) || !channel || sending) return
     setSending(true)
     setError(null)
     // Append the row we get back instead of waiting for realtime to echo it —
@@ -2516,6 +2570,7 @@ function ChatScreen({
         author_id: me.id,
         kind: 'user',
         body,
+        attachment_path: attachmentPath ?? null,
       })
       .select('*')
       .single()
@@ -2530,6 +2585,30 @@ function ChatScreen({
     }
     setDraft('')
     if (inputRef.current) inputRef.current.style.height = '44px'
+  }
+
+  /**
+   * A photo straight into the thread. Same bucket and helpers the photo
+   * screen uploads through; the channel id stands in for a site id as the
+   * folder key, which the bucket's company-folder rule doesn't mind.
+   */
+  async function attach(file: File) {
+    if (!channel || uploading) return
+    if (file.size > CHAT_ATTACHMENT_MAX) {
+      setError('That photo is too large — 25 MB max.')
+      return
+    }
+    setUploading(true)
+    setError(null)
+    try {
+      const path = objectPath(me.company_id, channel.id, file.name)
+      await uploadFile(BUCKET_FILES, path, file)
+      await send(path)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send that photo.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const site = sites.find((s) => s.id === siteId) ?? null
@@ -2571,18 +2650,22 @@ function ChatScreen({
         )}
         <span
           style={{
-            padding: '11px 13px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            // A photo on its own wears the bubble as a frame, not a padded box.
+            padding: m.attachment_path && !m.body ? 5 : '11px 13px',
             borderRadius: mine ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
             background: mine ? '#2B2F33' : '#FFFFFF',
             border: `1px solid ${mine ? '#2B2F33' : '#DCE0E6'}`,
             color: mine ? '#FFFFFF' : '#1A1D21',
             fontSize: 15,
             lineHeight: 1.45,
-            whiteSpace: 'pre-wrap',
             overflowWrap: 'anywhere',
           }}
         >
-          {m.body}
+          {m.attachment_path && <ChatAttachment path={m.attachment_path} mine={mine} />}
+          {m.body && <span style={{ whiteSpace: 'pre-wrap' }}>{m.body}</span>}
         </span>
         <span style={{ fontSize: 11.5, color: '#9AA1A9', alignSelf: mine ? 'flex-end' : 'flex-start', padding: '0 3px' }}>{time}</span>
       </span>,
@@ -2642,6 +2725,31 @@ function ChatScreen({
               borderTop: '1px solid #DCE0E6',
             }}
           >
+            {/* The drawing's camera key, wired: a photo goes into the thread
+                without leaving the conversation. */}
+            <label
+              style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 10, background: '#F1F3F5', cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.5 : 1 }}
+            >
+              {uploading ? (
+                <span style={{ width: 15, height: 15, borderRadius: '50%', border: '2px solid #C3C9D0', borderTopColor: '#4A5057', animation: 'cl-spin .8s linear infinite' }} />
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="1.6" strokeLinejoin="round">
+                  <path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z" />
+                  <circle cx="10" cy="10.8" r="3" />
+                </svg>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  e.target.value = ''
+                  if (f) void attach(f)
+                }}
+                style={{ display: 'none' }}
+              />
+            </label>
             <textarea
               ref={inputRef}
               value={draft}

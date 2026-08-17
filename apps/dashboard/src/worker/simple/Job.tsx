@@ -538,31 +538,109 @@ function MoneyTab({
 
 // -------------------------------------------------------------------- crew
 
+interface CrewMember {
+  id: string
+  name: string
+  initials: string
+  trade: string
+  /** On the clock right now, versus rostered here today. */
+  onClock: boolean
+  /** The time that fact happened — clocked on at, or booked to start. */
+  at: string
+  sortKey: string
+}
+
+interface Ticket {
+  id: string
+  name: string
+  expiresOn: string | null
+}
+
+/** Same rule the office's certifications tab reads by. */
+const CERT_WARN_DAYS = 30
+
+function ticketTone(expiresOn: string | null): { bg: string; fg: string; suffix: string } {
+  if (!expiresOn) return { bg: '#F1F3F5', fg: '#4A5057', suffix: '' }
+  const days = Math.round((new Date(`${expiresOn}T00:00:00`).getTime() - Date.now()) / 86_400_000)
+  if (days < 0) return { bg: '#FDECEE', fg: '#A3282E', suffix: ' · lapsed' }
+  if (days <= CERT_WARN_DAYS) return { bg: '#FFF6DE', fg: '#8A6100', suffix: ` · ${days}d` }
+  return { bg: '#F1F3F5', fg: '#4A5057', suffix: '' }
+}
+
+/**
+ * Who is on this job, and what each of them is ticketed to do.
+ *
+ * The list is everyone rostered here today, not only whoever the geofence
+ * has clocked on — a supervisor asking "can anyone here run the scissor
+ * lift" needs an answer at 7am and at 7pm alike. Certifications are
+ * company-readable by RLS, so the tickets come back for the whole crew.
+ */
 function CrewTab({ site }: { site: JobSiteRow }) {
-  const [rows, setRows] = useState<Array<{ name: string; initials: string; trade: string; since: string }>>([])
+  const [rows, setRows] = useState<CrewMember[]>([])
+  const [tickets, setTickets] = useState<Map<string, Ticket[]>>(new Map())
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     const t0 = new Date()
     t0.setHours(0, 0, 0, 0)
+    const t1 = new Date(t0.getTime() + 86_400_000)
     void Promise.all([
       supabase().from('shifts').select('worker_id, started_at, ended_at').eq('site_id', site.id).gte('started_at', t0.toISOString()),
+      supabase()
+        .from('assignments')
+        .select('worker_id, starts_at')
+        .eq('site_id', site.id)
+        .eq('published', true)
+        .gte('starts_at', t0.toISOString())
+        .lt('starts_at', t1.toISOString()),
       supabase().from('crew_v').select('id, name, initials, trade'),
-    ]).then(([sh, cv]) => {
+      supabase().from('certifications').select('id, worker_id, name, expires_on'),
+    ]).then(([sh, asg, cv, certs]) => {
       if (cancelled) return
       const people = new Map(
         (cv.data ?? []).map((w: { id: string; name: string; initials: string; trade: string }) => [w.id, w]),
       )
-      const out: Array<{ name: string; initials: string; trade: string; since: string; startedAt: string }> = []
+      const byWorker = new Map<string, CrewMember>()
+      const add = (workerId: string, onClock: boolean, at: string) => {
+        const existing = byWorker.get(workerId)
+        // Clocked on outranks booked — the fact beats the plan.
+        if (existing && (existing.onClock || !onClock)) return
+        const w = people.get(workerId)
+        byWorker.set(workerId, {
+          id: workerId,
+          name: w?.name ?? 'Crew member',
+          initials: w?.initials ?? '??',
+          trade: w?.trade ?? '',
+          onClock,
+          at: timeOf(at),
+          sortKey: `${onClock ? '0' : '1'}${at}`,
+        })
+      }
       for (const r of (sh.data ?? []) as Array<{ worker_id: string; started_at: string; ended_at: string | null }>) {
         if (r.ended_at !== null) continue
-        const w = people.get(r.worker_id)
-        out.push({ name: w?.name ?? 'Crew member', initials: w?.initials ?? '??', trade: w?.trade ?? '', since: timeOf(r.started_at), startedAt: r.started_at })
+        add(r.worker_id, true, r.started_at)
       }
-      // Earliest on first — the drawing reads a crew list as the day arrived.
-      out.sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1))
+      for (const a of (asg.data ?? []) as Array<{ worker_id: string; starts_at: string }>) {
+        add(a.worker_id, false, a.starts_at)
+      }
+      const out = [...byWorker.values()]
+      // On the clock first, then earliest — the drawing reads a crew list as
+      // the day arrived.
+      out.sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1))
+
+      const held = new Map<string, Ticket[]>()
+      for (const c of (certs.data ?? []) as Array<{ id: string; worker_id: string; name: string; expires_on: string | null }>) {
+        if (!byWorker.has(c.worker_id)) continue
+        held.set(c.worker_id, [...(held.get(c.worker_id) ?? []), { id: c.id, name: c.name, expiresOn: c.expires_on }])
+      }
+      // Anything lapsed or expiring rides at the front of its own row.
+      for (const list of held.values()) {
+        list.sort((a, b) => (a.expiresOn ?? '9999') < (b.expiresOn ?? '9999') ? -1 : 1)
+      }
+
       setRows(out)
+      setTickets(held)
       setLoading(false)
     })
     return () => {
@@ -572,22 +650,52 @@ function CrewTab({ site }: { site: JobSiteRow }) {
 
   return (
     <div style={{ height: '100%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 16px 20px' }}>
-      {rows.map((r, i) => (
-        <div key={i} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, minHeight: 58, padding: '11px 13px 11px 15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, boxShadow: '0 1px 2px rgba(16,20,24,.04)' }}>
-          <span style={{ position: 'relative', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: avatarGrey(i), color: '#fff', fontSize: 11.5, fontWeight: 700 }}>
-            {r.initials}
-            <span style={{ position: 'absolute', right: -1, bottom: -1, width: 10, height: 10, borderRadius: '50%', border: '2px solid #fff', background: '#4CC38A' }} />
-          </span>
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.005em', color: s.ink }}>{r.name}</span>
-            <span style={{ fontSize: 12.5, color: '#7B838B' }}>{[r.trade, `on since ${r.since}`].filter(Boolean).join(' · ')}</span>
-          </span>
-        </div>
-      ))}
+      {rows.map((r, i) => {
+        const held = tickets.get(r.id) ?? []
+        return (
+          <div key={r.id} style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 10, padding: '11px 13px 12px 15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, boxShadow: '0 1px 2px rgba(16,20,24,.04)' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ position: 'relative', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: avatarGrey(i), color: '#fff', fontSize: 11.5, fontWeight: 700 }}>
+                {r.initials}
+                {r.onClock && (
+                  <span style={{ position: 'absolute', right: -1, bottom: -1, width: 10, height: 10, borderRadius: '50%', border: '2px solid #fff', background: '#4CC38A' }} />
+                )}
+              </span>
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.005em', color: s.ink }}>{r.name}</span>
+                <span style={{ fontSize: 12.5, color: '#7B838B' }}>
+                  {[r.trade, r.onClock ? `on since ${r.at}` : `booked ${r.at}`].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+            </span>
+
+            {/* What this person is ticketed to do. A lapsed ticket is the
+                whole point of showing them, so it colours itself. */}
+            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {held.length === 0 ? (
+                <span style={{ fontSize: 12, color: '#9AA1A9' }}>No tickets on file</span>
+              ) : (
+                held.map((c) => {
+                  const tone = ticketTone(c.expiresOn)
+                  return (
+                    <span
+                      key={c.id}
+                      style={{ display: 'inline-flex', alignItems: 'center', height: 22, padding: '0 9px', borderRadius: 11, background: tone.bg, fontSize: 11.5, fontWeight: 700, color: tone.fg }}
+                    >
+                      {c.name}
+                      {tone.suffix}
+                    </span>
+                  )
+                })
+              )}
+            </span>
+          </div>
+        )
+      })}
       {!loading && rows.length === 0 && (
         <div style={{ padding: '36px 24px', textAlign: 'center', fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
-          Nobody on the clock here right now. Whoever the geofence clocks on shows up
-          here the moment it happens.
+          Nobody rostered here today. Whoever the office books, or the geofence
+          clocks on, shows up here with the tickets they hold.
         </div>
       )}
     </div>
