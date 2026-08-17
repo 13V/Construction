@@ -386,10 +386,10 @@ function Tracker({ me }: { me: WorkerRow }) {
       {queued > 0 && <OfflineBanner text={`Offline — ${queued} location${queued === 1 ? '' : 's'} waiting to sync`} />}
 
       {screen === 'photo' && (
-        <PhotoScreen me={me} currentSiteId={currentSiteId} sites={sites} fix={fix} onClose={() => setScreen('tracker')} />
+        <PhotoScreen me={me} currentSiteId={currentSiteId} defaultSiteId={openJobId} sites={sites} fix={fix} onClose={() => setScreen('tracker')} />
       )}
       {screen === 'receipt' && (
-        <ReceiptScreen me={me} currentSiteId={currentSiteId} sites={sites} onClose={() => setScreen('tracker')} />
+        <ReceiptScreen me={me} currentSiteId={currentSiteId} defaultSiteId={openJobId} sites={sites} onClose={() => setScreen('tracker')} />
       )}
       {screen === 'schedule' && <ScheduleScreen me={me} onClose={() => setScreen('tracker')} />}
       {screen === 'correction' && (
@@ -1739,17 +1739,22 @@ const PHOTO_CATEGORY_LABEL: Record<PhotoCategory, string> = {
 function PhotoScreen({
   me,
   currentSiteId,
-  sites,
+  defaultSiteId,
+  sites: fromTracker,
   fix,
   onClose,
 }: {
   me: WorkerRow
   currentSiteId: string | null
+  defaultSiteId: string | null
   sites: ServerSite[]
   fix: { pos: LatLng; accuracyM: number } | null
   onClose: () => void
 }) {
-  const [siteId, setSiteId] = useState(currentSiteId ?? sites[0]?.id ?? '')
+  // The tracker's list is empty until tracking starts; the job-site picker
+  // must not be. Same fallback-to-fetch every tab uses (useSites).
+  const sites = useSites(fromTracker as never) as unknown as ServerSite[]
+  const [siteId, setSiteId] = useState(currentSiteId ?? defaultSiteId ?? '')
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [capturedAt, setCapturedAt] = useState<number | null>(null)
@@ -2048,15 +2053,19 @@ function readFileAsBase64(file: File): Promise<string> {
 function ReceiptScreen({
   me,
   currentSiteId,
-  sites,
+  defaultSiteId,
+  sites: fromTracker,
   onClose,
 }: {
   me: WorkerRow
   currentSiteId: string | null
+  defaultSiteId: string | null
   sites: ServerSite[]
   onClose: () => void
 }) {
-  const [form, setForm] = useState<ReceiptForm>(() => blankReceiptForm(currentSiteId ?? sites[0]?.id ?? ''))
+  // Same as PhotoScreen: never depend on the tracker having run for the list.
+  const sites = useSites(fromTracker as never) as unknown as ServerSite[]
+  const [form, setForm] = useState<ReceiptForm>(() => blankReceiptForm(currentSiteId ?? defaultSiteId ?? ''))
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -2192,7 +2201,7 @@ function ReceiptScreen({
       return
     }
     setSaved(true)
-    setForm(blankReceiptForm(currentSiteId ?? sites[0]?.id ?? ''))
+    setForm(blankReceiptForm(currentSiteId ?? defaultSiteId ?? ''))
   }
 
   return (
@@ -2227,7 +2236,7 @@ function ReceiptScreen({
           <span style={sectionLabel}>JOB SITE</span>
           {sites.length === 0 ? (
             <div style={{ fontSize: 12.5, color: design.faint, marginTop: 6 }}>
-              No job sites loaded yet — wait for your first location report.
+              Loading job sites…
             </div>
           ) : (
             <select value={form.siteId} onChange={(e) => editField('siteId', e.target.value)} style={fieldBox}>
