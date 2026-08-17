@@ -18,6 +18,12 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
   },
   plugins: {
+    Keyboard: {
+      // Shrink the webview above the keyboard instead of letting iOS pan the
+      // whole page — panning shoved the header off-screen and did not always
+      // pan back after the keyboard closed.
+      resize: 'native',
+    },
     BackgroundGeolocation: {
       // Android will not grant background location without a visible
       // notification. Showing the crew when they are being tracked is the

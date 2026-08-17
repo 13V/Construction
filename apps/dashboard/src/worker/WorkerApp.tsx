@@ -471,7 +471,7 @@ function Tracker({ me }: { me: WorkerRow }) {
                   : 'n'
           }
           chat={(onClose) => (
-            <ChatScreen me={me} currentSiteId={openJob.id} sites={sites} onClose={onClose} />
+            <ChatScreen me={me} currentSiteId={openJob.id} sites={sites} embedded onClose={onClose} />
           )}
           onBack={() => setOpenJobId(null)}
           onTakePhoto={() => setScreen('photo')}
@@ -1248,7 +1248,9 @@ const fieldBox: CSSProperties = {
   border: `1px solid ${theme.border}`,
   borderRadius: 4,
   font: 'inherit',
-  fontSize: 14.5,
+  // 16px is load-bearing on iOS: a focused input any smaller makes the OS
+  // zoom the whole page in, and the zoom outlives the keyboard.
+  fontSize: 16,
   color: theme.ink,
   background: theme.panel,
   boxSizing: 'border-box',
@@ -2334,15 +2336,28 @@ interface MessageWithAuthor extends MessageRow {
   workers: { name: string; initials: string } | null
 }
 
+function chatDayLabel(d: Date): string {
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  if (d.toDateString() === today.toDateString()) return 'Today'
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
+  return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
 function ChatScreen({
   me,
   currentSiteId,
   sites: fromTracker,
+  embedded = false,
   onClose,
 }: {
   me: WorkerRow
   currentSiteId: string | null
   sites: ServerSite[]
+  /** Inside a job's Chat tab the job header already frames the screen — no
+   *  own header, no site picker, no doubled safe-area inset. */
+  embedded?: boolean
   onClose: () => void
 }) {
   // Chat is a tab. The tracker's site list is empty until someone taps Start
@@ -2468,16 +2483,32 @@ function ChatScreen({
     }
   }, [channel, me.id])
 
+  // Jump on first load, glide on appends — the iMessage feel.
+  const prevCountRef = useRef(0)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end' })
+    const smooth = prevCountRef.current > 0 && messages.length > prevCountRef.current
+    prevCountRef.current = messages.length
+    bottomRef.current?.scrollIntoView({ block: 'end', behavior: smooth ? 'smooth' : 'auto' })
   }, [messages])
+
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  function autogrow() {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(120, el.scrollHeight)}px`
+  }
 
   async function send() {
     const body = draft.trim()
     if (!body || !channel || sending) return
     setSending(true)
     setError(null)
-    const { error: err } = await supabase()
+    // Append the row we get back instead of waiting for realtime to echo it —
+    // the bubble lands the moment SEND is tapped. The realtime handler
+    // already dedupes by id when the echo arrives.
+    const { data, error: err } = await supabase()
       .from('messages')
       .insert({
         company_id: me.company_id,
@@ -2486,21 +2517,83 @@ function ChatScreen({
         kind: 'user',
         body,
       })
+      .select('*')
+      .single()
     setSending(false)
     if (err) {
       setError(err.message)
       return
     }
+    if (data) {
+      const row = data as MessageRow
+      setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]))
+    }
     setDraft('')
+    if (inputRef.current) inputRef.current.style.height = '44px'
   }
 
   const site = sites.find((s) => s.id === siteId) ?? null
 
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <ScreenHeader title="Site chat" onCancel={onClose} />
+  // The transcript in the drawing's own vocabulary: day chips down the
+  // centre, my messages charcoal on the right, everyone else white-bordered
+  // on the left with their name above the run.
+  const rows: ReactNode[] = []
+  let lastDay = ''
+  for (const m of messages) {
+    const d = new Date(m.created_at)
+    if (d.toDateString() !== lastDay) {
+      lastDay = d.toDateString()
+      rows.push(
+        <span
+          key={`day-${lastDay}`}
+          style={{ alignSelf: 'center', display: 'inline-flex', alignItems: 'center', height: 24, padding: '0 11px', borderRadius: 12, background: '#E5E8EB', fontSize: 12, fontWeight: 600, color: '#5B6169' }}
+        >
+          {chatDayLabel(d)}
+        </span>,
+      )
+    }
+    const time = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
+    if (m.kind === 'system') {
+      rows.push(
+        <span key={m.id} style={{ alignSelf: 'center', textAlign: 'center', fontSize: 12, lineHeight: 1.4, color: '#8B9096', padding: '0 14px' }}>
+          {m.body} · {time}
+        </span>,
+      )
+      continue
+    }
+    const mine = m.author_id === me.id
+    rows.push(
+      <span key={m.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '84%' }}>
+        {!mine && (
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#7B838B', paddingLeft: 3 }}>
+            {authors[m.author_id ?? '']?.name ?? 'Crew'}
+          </span>
+        )}
+        <span
+          style={{
+            padding: '11px 13px',
+            borderRadius: mine ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+            background: mine ? '#2B2F33' : '#FFFFFF',
+            border: `1px solid ${mine ? '#2B2F33' : '#DCE0E6'}`,
+            color: mine ? '#FFFFFF' : '#1A1D21',
+            fontSize: 15,
+            lineHeight: 1.45,
+            whiteSpace: 'pre-wrap',
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {m.body}
+        </span>
+        <span style={{ fontSize: 11.5, color: '#9AA1A9', alignSelf: mine ? 'flex-end' : 'flex-start', padding: '0 3px' }}>{time}</span>
+      </span>,
+    )
+  }
 
-      {!currentSiteId && (
+  return (
+    <div style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', background: '#F5F6F7' }}>
+      {!embedded && <ScreenHeader title="Site chat" onCancel={onClose} />}
+
+      {!embedded && !currentSiteId && (
         <div style={{ padding: '10px 18px', borderBottom: `1px solid ${theme.border}` }}>
           <select value={siteId} onChange={(e) => setSiteId(e.target.value)} style={{ ...fieldBox, marginTop: 0 }}>
             <option value="">Choose a site…</option>
@@ -2525,68 +2618,95 @@ function ChatScreen({
         </div>
       ) : (
         <>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px', background: theme.appBg }}>
-            {loading && <div style={{ fontSize: 12.5, color: design.faint }}>Loading…</div>}
+          <div
+            style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column', gap: 12, padding: 16 }}
+          >
+            {loading && <div style={{ fontSize: 12.5, color: design.faint, textAlign: 'center' }}>Loading…</div>}
             {!loading && messages.length === 0 && (
               <div style={{ fontSize: 13, color: design.faint, textAlign: 'center', padding: '30px 0' }}>No messages yet. Say hello.</div>
             )}
-            {messages.map((m) =>
-              m.kind === 'system' ? (
-                <div key={m.id} style={{ textAlign: 'center', margin: '10px 0' }}>
-                  <span style={{ fontSize: 12, color: design.faint }}>
-                    {m.body} · {new Date(m.created_at).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}
-                  </span>
-                </div>
-              ) : (
-                <div key={m.id} style={{ margin: '10px 0' }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{m.author_id === me.id ? 'You' : authors[m.author_id ?? '']?.name ?? 'Crew'}</span>
-                    <span style={{ fontSize: 11.5, color: design.faint }}>
-                      {new Date(m.created_at).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 14.5, lineHeight: 1.45, whiteSpace: 'pre-wrap', marginTop: 2 }}>{m.body}</div>
-                </div>
-              ),
-            )}
-            <div ref={bottomRef} />
+            {rows}
+            <div ref={bottomRef} style={{ flex: 'none' }} />
           </div>
 
           {error && <Banner tone="error">{error}</Banner>}
 
-          <div style={{ flex: 'none', display: 'flex', gap: 8, alignItems: 'flex-end', padding: '10px 12px', borderTop: `1px solid ${theme.border}` }}>
+          <div
+            style={{
+              flex: 'none',
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: 9,
+              padding: embedded ? '10px 14px 14px' : '10px 14px calc(14px + env(safe-area-inset-bottom, 0px))',
+              background: '#fff',
+              borderTop: '1px solid #DCE0E6',
+            }}
+          >
             <textarea
+              ref={inputRef}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                autogrow()
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
                   void send()
                 }
               }}
-              placeholder="Message the crew…"
+              onFocus={() => {
+                // Keep the newest messages in view once the keyboard settles.
+                window.setTimeout(() => bottomRef.current?.scrollIntoView({ block: 'end' }), 300)
+              }}
+              onBlur={() => {
+                // iOS pans the page to reveal a focused input and does not
+                // always pan back — snap the layout viewport home.
+                window.scrollTo(0, 0)
+              }}
+              placeholder={site ? 'Message the crew on this job' : 'Message the crew…'}
               rows={1}
-              style={{ ...fieldBox, marginTop: 0, flex: 1, resize: 'none', fontFamily: 'inherit', minHeight: 44, boxSizing: 'border-box' }}
+              style={{
+                flex: 1,
+                height: 44,
+                maxHeight: 120,
+                padding: '10px 15px',
+                boxSizing: 'border-box',
+                background: '#F5F6F7',
+                border: '1px solid #DCE0E6',
+                borderRadius: 22,
+                fontFamily: 'inherit',
+                // 16px is load-bearing: anything smaller makes iOS zoom the
+                // page on focus, and the zoom outlives the keyboard.
+                fontSize: 16,
+                lineHeight: '22px',
+                color: '#1A1D21',
+                resize: 'none',
+                outline: 'none',
+                overflowY: 'auto',
+              }}
             />
             <button
               onClick={() => void send()}
               disabled={sending || !draft.trim()}
+              aria-label="Send"
               style={{
                 flex: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 44,
                 height: 44,
-                padding: '0 18px',
-                borderRadius: 3,
+                borderRadius: '50%',
                 border: 'none',
-                background: theme.accent,
-                color: '#fff',
-                font: 'inherit',
-                fontSize: 13.5,
-                fontWeight: 700,
-                cursor: 'pointer',
-                opacity: sending || !draft.trim() ? 0.5 : 1,
+                background: '#1A1D21',
+                cursor: sending || !draft.trim() ? 'default' : 'pointer',
+                opacity: sending || !draft.trim() ? 0.35 : 1,
               }}
             >
-              {sending ? '…' : 'SEND'}
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 16V4M4.8 9.2 10 4l5.2 5.2" />
+              </svg>
             </button>
           </div>
         </>
