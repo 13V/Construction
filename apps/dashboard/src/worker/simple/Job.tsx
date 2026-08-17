@@ -7,6 +7,7 @@
  * own caption and what RLS answers anyway.
  */
 import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { supabase, type JobSiteRow, type SiteFileRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
 import { SafetyScreen } from '../SafetyScreen'
@@ -705,6 +706,52 @@ function CrewTab({ site }: { site: JobSiteRow }) {
  */
 type JobTone = 'g' | 'a' | 'r' | 'n'
 
+/**
+ * Tab icons in the bottom bar's own vocabulary — 20-unit viewBox, stroked
+ * rather than filled, coloured by state. A tab row of seven words all the
+ * same length is a wall of text on a phone; the glyph is what the thumb
+ * actually aims at.
+ */
+const TAB_ICON: Record<JobTab, (c: string) => ReactNode> = {
+  overview: (c) => (
+    <>
+      <path d="M7 3.4h6v2.3H7z" stroke={c} />
+      <path d="M4.8 5.7h10.4v10.9H4.8z" stroke={c} />
+      <path d="M7.4 9.4h5.2M7.4 12.4h3.2" stroke={c} />
+    </>
+  ),
+  waterproofing: (c) => (
+    <path d="M10 3.2c2.7 3.1 4.5 5.2 4.5 7.5a4.5 4.5 0 0 1-9 0c0-2.3 1.8-4.4 4.5-7.5z" stroke={c} />
+  ),
+  safety: (c) => (
+    <>
+      <path d="M10 3.1l5.6 2.1v4.6c0 3.4-2.3 5.8-5.6 7.1-3.3-1.3-5.6-3.7-5.6-7.1V5.2z" stroke={c} />
+      <path d="M7.7 9.9l1.9 1.9 3.1-3.3" stroke={c} />
+    </>
+  ),
+  money: (c) => (
+    <>
+      <path d="M2.8 6.4h14.4v7.2H2.8z" stroke={c} />
+      <circle cx="10" cy="10" r="2.1" stroke={c} />
+      <path d="M5.4 10h.01M14.6 10h.01" stroke={c} />
+    </>
+  ),
+  crew: (c) => (
+    <>
+      <circle cx="8" cy="7.4" r="2.7" stroke={c} />
+      <path d="M3 16.4c0-2.6 2.3-4.1 5-4.1s5 1.5 5 4.1" stroke={c} />
+      <path d="M13.6 5.2a2.5 2.5 0 0 1 0 4.9M15.1 12.7c1.4.5 2.3 1.6 2.3 3.3" stroke={c} />
+    </>
+  ),
+  photos: (c) => (
+    <>
+      <path d="M2.6 6.2h3.1l1.3-1.9h6l1.3 1.9h3.1v9.6H2.6z" stroke={c} />
+      <circle cx="10" cy="10.8" r="2.9" stroke={c} />
+    </>
+  ),
+  chat: (c) => <path d="M3 4.5h14v9h-8l-4 3.5v-3.5h-2z" stroke={c} />,
+}
+
 export function JobScreen({
   me,
   site,
@@ -812,15 +859,16 @@ export function JobScreen({
                 position: 'relative',
                 flex: 'none',
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 5,
+                gap: 3,
                 height: 58,
-                padding: '0 3px',
+                padding: '0 9px',
                 background: 'none',
                 border: 0,
                 fontFamily: 'inherit',
-                fontSize: 13,
+                fontSize: 10.5,
                 letterSpacing: '-.02em',
                 whiteSpace: 'nowrap',
                 cursor: 'pointer',
@@ -828,6 +876,9 @@ export function JobScreen({
                 fontWeight: on ? 700 : 500,
               }}
             >
+              <svg width="19" height="19" viewBox="0 0 20 20" fill="none" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                {TAB_ICON[t.key](on ? '#FFFFFF' : '#8A929B')}
+              </svg>
               {t.label}
               <span style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, borderRadius: '2px 2px 0 0', background: on ? s.accent : 'transparent' }} />
             </button>
