@@ -556,15 +556,24 @@ interface Ticket {
   expiresOn: string | null
 }
 
-/** Same rule the office's certifications tab reads by. */
+/** Same window the office's certifications tab warns inside. */
 const CERT_WARN_DAYS = 30
 
+const TICKET_HELD = { bg: '#EAF7EC', fg: '#1B7A2C' }
+const TICKET_MISSING = { bg: '#FDECEE', fg: '#A3282E' }
+
+/**
+ * Green means they hold it, red means they do not. A ticket that lapsed is
+ * red for the same reason a missing one is: on the day it matters, they
+ * cannot do the work. The countdown on one about to lapse stays in the
+ * label, so it still reads as a warning while it is still theirs.
+ */
 function ticketTone(expiresOn: string | null): { bg: string; fg: string; suffix: string } {
-  if (!expiresOn) return { bg: '#F1F3F5', fg: '#4A5057', suffix: '' }
+  if (!expiresOn) return { ...TICKET_HELD, suffix: '' }
   const days = Math.round((new Date(`${expiresOn}T00:00:00`).getTime() - Date.now()) / 86_400_000)
-  if (days < 0) return { bg: '#FDECEE', fg: '#A3282E', suffix: ' · lapsed' }
-  if (days <= CERT_WARN_DAYS) return { bg: '#FFF6DE', fg: '#8A6100', suffix: ` · ${days}d` }
-  return { bg: '#F1F3F5', fg: '#4A5057', suffix: '' }
+  if (days < 0) return { ...TICKET_MISSING, suffix: ' · lapsed' }
+  if (days <= CERT_WARN_DAYS) return { ...TICKET_HELD, suffix: ` · ${days}d left` }
+  return { ...TICKET_HELD, suffix: '' }
 }
 
 /**
@@ -673,7 +682,9 @@ function CrewTab({ site }: { site: JobSiteRow }) {
                 whole point of showing them, so it colours itself. */}
             <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {held.length === 0 ? (
-                <span style={{ fontSize: 12, color: '#9AA1A9' }}>No tickets on file</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', height: 22, padding: '0 9px', borderRadius: 11, background: TICKET_MISSING.bg, fontSize: 11.5, fontWeight: 700, color: TICKET_MISSING.fg }}>
+                  No tickets on file
+                </span>
               ) : (
                 held.map((c) => {
                   const tone = ticketTone(c.expiresOn)
