@@ -1763,7 +1763,6 @@ function PhotoScreen({
   const [caption, setCaption] = useState('')
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
 
   useEffect(() => {
     if (currentSiteId) setSiteId(currentSiteId)
@@ -1781,7 +1780,6 @@ function PhotoScreen({
     setPreviewUrl(URL.createObjectURL(f))
     setCapturedAt(Date.now())
     setCapturedFix(fix)
-    setSuccess(false)
     setError(null)
   }
 
@@ -1815,11 +1813,10 @@ function PhotoScreen({
           taken_at: new Date(capturedAt ?? Date.now()).toISOString(),
         })
       if (err) throw new Error(err.message)
-      setSuccess(true)
-      if (previewUrl) URL.revokeObjectURL(previewUrl)
-      setFile(null)
-      setPreviewUrl(null)
-      setCaption('')
+      // Straight back to the photos the upload just joined — the new tile is
+      // the confirmation. (Resetting to the empty camera screen here read as
+      // "nothing happened".)
+      onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed.')
     } finally {
@@ -1972,7 +1969,6 @@ function PhotoScreen({
             )}
 
             {error && <Banner tone="error">{error}</Banner>}
-            {success && <Banner tone="success">Photo uploaded.</Banner>}
 
             <div style={{ flex: 1 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 18px 22px', borderTop: `1px solid ${theme.border}` }}>
