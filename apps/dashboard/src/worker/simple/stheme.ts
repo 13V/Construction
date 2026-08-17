@@ -66,6 +66,23 @@ export function railOf(site: { id: string; colour?: string | null }): string {
 export const AV_GREYS = ['#2B2F33', '#4A5057', '#696D74', '#7B838B']
 export const avatarGrey = (i: number) => AV_GREYS[i % AV_GREYS.length]
 
+/**
+ * How a job identifies itself everywhere it is listed: where it is, and who
+ * it is for. The client asked for these two facts and no others — a trade
+ * name and a percentage told a foreman nothing he could act on.
+ *
+ * The state and postcode come off because a phone header has no room for
+ * them and nobody reads a job by its postcode.
+ */
+export const addressLine = (site: { name?: string; address: string | null }) => {
+  const line = (site.address ?? '').replace(/,?\s*(SA|NSW|VIC|QLD|WA|NT|TAS|ACT)\s*\d{4}\s*$/i, '').trim()
+  // A job named after its address has nothing to add by repeating it.
+  return site.name && line.toLowerCase() === site.name.trim().toLowerCase() ? '' : line
+}
+
+/** The builder we are under. Blank until somebody sets it on the job. */
+export const builderOf = (site: { client_name: string | null }) => (site.client_name ?? '').trim()
+
 export const sFont =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
 

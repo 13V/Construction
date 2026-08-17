@@ -293,7 +293,7 @@ try {
       lat: -34.8551, lng: 138.6253, radius_m: 200, colour: '#A5714A',
     },
     glenelg: {
-      name: 'Glenelg Marina 3B', address: 'Glenelg Marina 3B SA 5045',
+      name: 'Glenelg Marina 3B', address: '12 Holdfast Promenade, Glenelg SA 5045',
       job_type: 'Balcony waterproofing · Level 3', client_name: '', status: 'active',
       lat: -34.9698, lng: 138.5090, radius_m: 120, colour: '#8B8375',
     },
@@ -315,7 +315,7 @@ try {
   // coordinates are the point, so they are kept, not corrected.
   {
     const regencyDef = {
-      name: 'Regency Park Storage', address: 'Warehouse floor, Regency Park Storage SA 5010',
+      name: 'Regency Park Storage', address: '9 Bellchambers Rd, Regency Park SA 5010',
       job_type: 'Epoxy & sealing', client_name: '', status: 'starting_soon',
       schedule_note: `Starts ${fmtDay(startMon)}`, colour: '#6E7B86',
     }
@@ -335,6 +335,20 @@ try {
         }, 'job site (Regency Park Storage / review fence)')
       }
     }
+  }
+
+  // Every job reads as address + builder in the app, so every job has both.
+  // Addresses are set at creation; these bring the builders up to date on a
+  // world that was seeded before the app asked for them.
+  for (const [key, builder, address] of [
+    ['hallett',   'Ventura Group',              null],
+    ['northgate', 'Northgate Retail Trust',     null],
+    ['glenelg',   'Marina Living Developments', '12 Holdfast Promenade, Glenelg SA 5045'],
+    ['regency',   'SA Storage Co',              '9 Bellchambers Rd, Regency Park SA 5010'],
+  ]) {
+    const patch = address ? { client_name: builder, address } : { client_name: builder }
+    const r = await boss.patch('job_sites', `id=eq.${site[key].id}`, patch)
+    if (!r.ok) throw new Error(`builder (${key}): HTTP ${r.status} ${await r.text()}`)
   }
 
   // -------------------------------------------------- builders + contracts

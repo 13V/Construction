@@ -11,9 +11,9 @@ import { supabase, type JobSiteRow, type SiteFileRow, type WorkerRow } from '../
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
 import { SafetyScreen } from '../SafetyScreen'
 import { OverviewTab } from './Overview'
-import { avatarGrey, s, SAFE_BOTTOM, SAFE_TOP, ticketTone, TICKET_MISSING } from './stheme'
+import { addressLine, avatarGrey, builderOf, s, SAFE_BOTTOM, SAFE_TOP, ticketTone, TICKET_MISSING } from './stheme'
 
-type JobTab = 'overview' | 'waterproofing' | 'safety' | 'money' | 'crew' | 'photos' | 'chat'
+export type JobTab = 'overview' | 'waterproofing' | 'safety' | 'money' | 'crew' | 'photos' | 'chat'
 
 const money = (v: number | null | undefined) =>
   v === null || v === undefined
@@ -699,22 +699,9 @@ function CrewTab({ site }: { site: JobSiteRow }) {
 // --------------------------------------------------------------- the shell
 
 /**
- * Same rule as Home: the suburb carries the line, unless the job is named
- * after its suburb — then the street does.
- */
-const localeOf = (site: { name: string; address: string }) => {
-  const m = site.address.match(/,\s*([^,\d]+?)\s+SA\b/)
-  const suburb = m?.[1]?.trim()
-  if (suburb && suburb !== site.name) return suburb
-  const street = (site.address.split(',')[0] ?? '').trim()
-  // An address that is just the job's own name carries no locale at all.
-  return street.startsWith(site.name) ? '' : street
-}
-
-/**
  * The shell's attention tone for a job: red needs you, amber is waiting on
- * somebody, green is running, none is quiet. Only red reaches the header now
- * — the rest is read on Home and the Schedule before anyone opens the job.
+ * somebody, green is running, none is quiet. Only red reaches the header —
+ * the rest is read on Home and the Schedule before anyone opens the job.
  */
 type JobTone = 'g' | 'a' | 'r' | 'n'
 
@@ -759,7 +746,8 @@ export function JobScreen({
     return office ? all : all.filter((t) => t.key !== 'money')
   }, [office])
 
-  const sub = [localeOf(site), site.job_type, site.client_name].filter(Boolean).join(' · ')
+  const where = addressLine(site)
+  const builder = builderOf(site)
   /**
    * The state line that used to sit under the header is gone: every one of
    * its facts — who is on site, how far through, what is overdue — is already
@@ -779,7 +767,7 @@ export function JobScreen({
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {/* Charcoal header — 48px, back 44, camera 44. */}
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 4, height: `calc(48px + ${SAFE_TOP})`, padding: `${SAFE_TOP} 8px 0 4px`, background: '#2B2F33', color: '#fff' }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 4, minHeight: `calc(62px + ${SAFE_TOP})`, padding: `calc(6px + ${SAFE_TOP}) 8px 8px 4px`, background: '#2B2F33', color: '#fff' }}>
         <span onClick={onBack} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, cursor: 'pointer' }}>
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12.2 4.4 6.6 10l5.6 5.6" />
@@ -798,8 +786,13 @@ export function JobScreen({
               </span>
             )}
           </span>
-          {sub && (
-            <span style={{ fontSize: 12.5, color: '#A7AEB6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>
+          {/* Where it is, and who it is for. Nothing else fits, and nothing
+              else is asked for at a gate. */}
+          {where && (
+            <span style={{ fontSize: 12.5, color: '#A7AEB6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{where}</span>
+          )}
+          {builder && (
+            <span style={{ fontSize: 12.5, color: '#8D949C', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{builder}</span>
           )}
         </span>
         <span onClick={onTakePhoto} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, cursor: 'pointer' }}>

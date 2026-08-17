@@ -21,6 +21,7 @@ import type { ReactNode } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow } from '../../data/supabase'
 import { avatarGrey, railOf, s, SAFE_TOP } from './stheme'
 import type { SimpleData } from './data'
+import type { JobTab } from './Job'
 
 const DAY = 86_400_000
 const MON3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -400,7 +401,7 @@ export function SimpleSchedule({
   onOpenJob,
 }: {
   data: SimpleData
-  onOpenJob: (site: JobSiteRow, tab?: 'photos' | 'waterproofing' | 'money' | 'crew') => void
+  onOpenJob: (site: JobSiteRow, tab?: JobTab) => void
 }) {
   const now = useMemo(() => new Date(), [])
   const [view, setView] = useState<'quarter' | 'month' | 'week' | 'day'>('quarter')

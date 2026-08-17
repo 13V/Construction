@@ -9,6 +9,7 @@ import { useState } from 'react'
 import type { JobSiteRow, WorkerRow } from '../../data/supabase'
 import { avatarGrey, railOf, s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
 import type { SimpleData } from './data'
+import type { JobTab } from './Job'
 
 const DAY = 86_400_000
 
@@ -54,7 +55,7 @@ export function HomeScreen({
 }: {
   me: WorkerRow
   data: SimpleData
-  onOpenJob: (site: JobSiteRow, tab?: 'photos' | 'waterproofing' | 'money' | 'crew') => void
+  onOpenJob: (site: JobSiteRow, tab?: JobTab) => void
   onOpenSchedule: () => void
   onOpenClock: () => void
   onOpenNotifications: () => void

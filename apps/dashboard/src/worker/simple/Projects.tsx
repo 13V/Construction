@@ -9,8 +9,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow, type WorkerRow } from '../../data/supabase'
-import { avatarGrey, railOf, s, SAFE_TOP } from './stheme'
+import { addressLine, avatarGrey, builderOf, railOf, s, SAFE_TOP } from './stheme'
 import type { SimpleData } from './data'
+import type { JobTab } from './Job'
 
 const money0 = (v: number) =>
   new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(v)
@@ -64,7 +65,7 @@ export function ProjectsScreen({
 }: {
   me: WorkerRow
   data: SimpleData
-  onOpenJob: (site: JobSiteRow, tab?: 'photos' | 'waterproofing' | 'money' | 'crew') => void
+  onOpenJob: (site: JobSiteRow, tab?: JobTab) => void
 }) {
   const office = me.is_office
   const [defectRows, setDefectRows] = useState<Array<{ site_id: string; location: string | null; created_at: string }>>([])
@@ -203,13 +204,32 @@ export function ProjectsScreen({
     setNonce((n) => n + 1)
   }
 
-  const chipOf = (site: JobSiteRow) => {
+  /**
+   * What needs attention, named as the thing itself and pointed at the tab
+   * that fixes it. "Needs you" told a foreman to go looking; "2 flood tests
+   * overdue" tells him what to do, and the tap lands him on Waterproofing.
+   */
+  const chipOf = (site: JobSiteRow): { chip: string; bg: string; fg: string; tab: JobTab } | null => {
     const d = data.openDefects.get(site.id) ?? 0
     const f = data.floodHold.get(site.id) ?? 0
     const v = data.pendingVariationsBySite.get(site.id) ?? 0
-    if (d > 0) return { chip: `${d} defect${d === 1 ? '' : 's'}`, bg: '#FDECEE', fg: '#A3282E' }
-    if (f > 0) return { chip: 'Needs you', bg: '#FDECEE', fg: '#A3282E' }
-    if (v > 0) return { chip: `${v} variation${v === 1 ? '' : 's'}`, bg: '#FFF6E3', fg: '#8A6100' }
+    if (f > 0) {
+      return {
+        chip: f === 1 ? 'Flood test overdue' : `${f} flood tests overdue`,
+        bg: '#FDECEE',
+        fg: '#A3282E',
+        tab: 'waterproofing',
+      }
+    }
+    if (d > 0) return { chip: `${d} defect${d === 1 ? '' : 's'}`, bg: '#FDECEE', fg: '#A3282E', tab: 'overview' }
+    if (v > 0) {
+      return {
+        chip: `${v} variation${v === 1 ? '' : 's'} waiting`,
+        bg: '#FFF6E3',
+        fg: '#8A6100',
+        tab: office ? 'money' : 'overview',
+      }
+    }
     return null
   }
 
@@ -279,11 +299,11 @@ export function ProjectsScreen({
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 18px' }}>
           {active.map((site) => {
-            const pct = Math.round(data.progress.get(site.id) ?? 0)
             const chip = chipOf(site)
             const people = peopleOf(site.id)
             const isOpen = open === site.id
-            const sub = [localeOf(site), site.job_type, site.client_name].filter(Boolean).join(' · ')
+            const where = addressLine(site)
+            const builder = builderOf(site)
             return (
               <div key={site.id} style={{ position: 'relative', display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, boxShadow: '0 1px 2px rgba(16,20,24,.05)', overflow: 'hidden' }}>
                 <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site), zIndex: 1 }} />
@@ -291,20 +311,25 @@ export function ProjectsScreen({
                   <span style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                       <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-.015em', color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
-                      <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>
+                      {where && (
+                        <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{where}</span>
+                      )}
+                      {builder && (
+                        <span style={{ fontSize: 12.5, color: '#8B9096', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{builder}</span>
+                      )}
                     </span>
                     {chip && (
-                      <span style={{ display: 'inline-flex', flex: 'none', alignItems: 'center', gap: 5, height: 23, padding: '0 9px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: chip.bg, color: chip.fg }}>
-                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: chip.fg }} />
-                        {chip.chip}
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onOpenJob(site, chip.tab)
+                        }}
+                        style={{ display: 'inline-flex', flex: 'none', alignItems: 'center', gap: 5, maxWidth: 172, height: 23, padding: '0 9px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: chip.bg, color: chip.fg, cursor: 'pointer' }}
+                      >
+                        <span style={{ flex: 'none', width: 5, height: 5, borderRadius: '50%', background: chip.fg }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chip.chip}</span>
                       </span>
                     )}
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                    <span style={{ flex: 1, display: 'block', height: 4, borderRadius: 2, background: '#EDEFF1', overflow: 'hidden' }}>
-                      <span style={{ display: 'block', height: 4, borderRadius: 2, background: railOf(site), width: `${pct}%` }} />
-                    </span>
-                    <span style={{ flex: 'none', fontSize: 13, fontWeight: 600, color: '#5B6169' }}>{pct}%</span>
                   </span>
                 </span>
                 <span
