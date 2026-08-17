@@ -205,6 +205,7 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
   const [notes, setNotes] = useState<NoteRow[]>([])
   const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [open, setOpen] = useState<{ line: ScopeLine; row: SelectionRow | null } | null>(null)
+  const [wetOpen, setWetOpen] = useState(false)
   const [noting, setNoting] = useState(false)
   const [noteDraft, setNoteDraft] = useState('')
   const [files, setFiles] = useState<Map<string, AttachmentRow[]>>(new Map())
@@ -373,12 +374,10 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
         <PlansScreen me={me} siteId={site.id} siteName={site.name} embedded onClose={() => {}} />
       </div>
 
-      {/* Waterproofing sits under the drawings: it is what the job is, not
-          somewhere separate to go. */}
+      {/* Waterproofing under the drawings, as one door rather than a list —
+          it is the thing that holds up every claim, so it gets the weight. */}
       <span style={sectionLabel}>WATERPROOFING</span>
-      <div style={{ margin: '0 18px' }}>
-        <Waterproofing site={site} />
-      </div>
+      <WaterproofingButton site={site} onOpen={() => setWetOpen(true)} />
 
       {/* The scope lines. */}
       <span style={sectionLabel}>SCOPE OF WORKS</span>
@@ -525,6 +524,8 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
       {error && (
         <span style={{ display: 'block', padding: '12px 18px 0', fontSize: 13, lineHeight: 1.45, color: '#A3282E' }}>{error}</span>
       )}
+
+      {wetOpen && <WaterproofingSheet site={site} onClose={() => setWetOpen(false)} />}
 
       {open && (
         <ScopeSheet
@@ -707,12 +708,8 @@ const wetLine = (r: WetRow) => {
   return 'Membrane not finished'
 }
 
-/**
- * The wet areas, in Overview under the drawings — where the client wanted
- * them. It is the same list the tab held; a job's waterproofing is part of
- * what the job IS, not a place you navigate to.
- */
-function Waterproofing({ site }: { site: JobSiteRow }) {
+/** Wet areas for a job, and the two facts a summary needs. */
+function useWetAreas(siteId: string) {
   const [rows, setRows] = useState<WetRow[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -723,7 +720,7 @@ function Waterproofing({ site }: { site: JobSiteRow }) {
       // signed_off_at, not signed_off_on — the wrong name made this select
       // fail outright, which is why every job read "no wet areas".
       .select('id, area, status, flood_tested, completed_on, flood_test_on, signed_off_at')
-      .eq('site_id', site.id)
+      .eq('site_id', siteId)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         if (cancelled) return
@@ -733,43 +730,137 @@ function Waterproofing({ site }: { site: JobSiteRow }) {
     return () => {
       cancelled = true
     }
-  }, [site.id])
+  }, [siteId])
 
-  /**
-   * A covered wet area with no flood test is the thing that holds up every
-   * claim on the job, so it says so rather than reading "complete".
-   */
-  const chip = (r: WetRow) => {
-    const covered = r.status === 'complete' || r.status === 'signed_off'
-    if (covered && !r.flood_tested) return { label: 'Flood test overdue', bg: '#FDECEE', fg: '#A3282E' }
-    if (r.status === 'signed_off') return { label: 'Signed off', bg: '#EAF6EF', fg: '#1F7A4D' }
-    if (r.status === 'failed') return { label: 'Failed', bg: '#FDECEE', fg: '#A3282E' }
-    if (r.status === 'complete') return { label: 'Flood tested', bg: '#EAF6EF', fg: '#1F7A4D' }
-    return { label: 'In progress', bg: '#FFF6E3', fg: '#8A6100' }
-  }
+  const overdue = rows.filter((r) => (r.status === 'complete' || r.status === 'signed_off') && !r.flood_tested).length
+  const signedOff = rows.filter((r) => r.status === 'signed_off' && r.flood_tested).length
+  return { rows, loading, overdue, signedOff }
+}
+
+/**
+ * A covered wet area with no flood test is the thing that holds up every
+ * claim on the job, so it says so rather than reading "complete".
+ */
+const wetChip = (r: WetRow) => {
+  const covered = r.status === 'complete' || r.status === 'signed_off'
+  if (covered && !r.flood_tested) return { label: 'Flood test overdue', bg: '#FDECEE', fg: '#A3282E' }
+  if (r.status === 'signed_off') return { label: 'Signed off', bg: '#EAF6EF', fg: '#1F7A4D' }
+  if (r.status === 'failed') return { label: 'Failed', bg: '#FDECEE', fg: '#A3282E' }
+  if (r.status === 'complete') return { label: 'Flood tested', bg: '#EAF6EF', fg: '#1F7A4D' }
+  return { label: 'In progress', bg: '#FFF6E3', fg: '#8A6100' }
+}
+
+/**
+ * Waterproofing as one button rather than a list in the page. It is the one
+ * thing on a tiling job that holds up every claim, so it gets the weight of
+ * a door you walk through — and the button says whether you need to.
+ */
+function WaterproofingButton({ site, onOpen }: { site: JobSiteRow; onOpen: () => void }) {
+  const { rows, loading, overdue, signedOff } = useWetAreas(site.id)
+  const alarm = overdue > 0
+
+  const line = loading
+    ? ' '
+    : rows.length === 0
+      ? 'Nothing recorded yet'
+      : alarm
+        ? `${overdue} flood test${overdue === 1 ? '' : 's'} overdue · ${rows.length} wet area${rows.length === 1 ? '' : 's'}`
+        : signedOff === rows.length
+          ? `All ${rows.length} wet area${rows.length === 1 ? '' : 's'} signed off`
+          : `${rows.length} wet area${rows.length === 1 ? '' : 's'} · ${signedOff} signed off`
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-      {rows.map((r) => {
-        const c = chip(r)
-        return (
-          <div key={r.id} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 11, minHeight: 58, padding: '11px 13px 11px 15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, boxShadow: '0 1px 2px rgba(16,20,24,.04)' }}>
-            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.005em', color: s.ink }}>{r.area}</span>
-              <span style={{ fontSize: 12.5, color: '#7B838B' }}>{wetLine(r)}</span>
-            </span>
-            <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', height: 23, padding: '0 9px', borderRadius: 12, background: c.bg, color: c.fg, fontSize: 11, fontWeight: 700 }}>
-              {c.label}
-            </span>
-          </div>
-        )
-      })}
-      {!loading && rows.length === 0 && (
-        <div style={{ padding: '15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
-          No wet areas on this job yet. A waterproofing record is what the certificate
-          gets issued from — the office or your captain starts one.
+    <div
+      onClick={onOpen}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 13,
+        margin: '0 18px',
+        padding: '15px 15px 15px 16px',
+        borderRadius: 12,
+        background: alarm ? '#FFF6F6' : '#fff',
+        border: `1px solid ${alarm ? '#F3C9CC' : '#E1E5E9'}`,
+        boxShadow: '0 1px 2px rgba(16,20,24,.05)',
+        cursor: 'pointer',
+      }}
+    >
+      <span
+        style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 46, height: 46, borderRadius: 12, background: alarm ? '#FDE7E8' : '#E7F1FB' }}
+      >
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="none" stroke={alarm ? '#A3282E' : '#2F5FD7'} strokeWidth="1.6" strokeLinejoin="round">
+          <path d="M10 3.2c2.7 3.1 4.5 5.2 4.5 7.5a4.5 4.5 0 0 1-9 0c0-2.3 1.8-4.4 4.5-7.5z" />
+        </svg>
+      </span>
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: 16.5, fontWeight: 700, letterSpacing: '-.01em', color: s.ink }}>Waterproofing</span>
+        <span style={{ fontSize: 13, color: alarm ? '#A3282E' : '#7B838B', fontWeight: alarm ? 600 : 400 }}>{line}</span>
+      </span>
+      <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none' }}>
+        <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  )
+}
+
+/** The wet areas in full, as their own sheet over the job. */
+function WaterproofingSheet({ site, onClose }: { site: JobSiteRow; onClose: () => void }) {
+  const { rows, loading, overdue } = useWetAreas(site.id)
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.45)' }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxHeight: '90%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
+      >
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '16px 16px 13px 18px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
+          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>Waterproofing</span>
+            <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
+          </span>
+          <span
+            onClick={onClose}
+            style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}
+          >
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="2" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </span>
         </div>
-      )}
+
+        {overdue > 0 && (
+          <span style={{ flex: 'none', padding: '11px 18px', background: '#FDECEE', fontSize: 13.5, lineHeight: 1.45, color: '#8E2A31' }}>
+            {overdue === 1 ? 'One area is covered with no flood test.' : `${overdue} areas are covered with no flood test.`}{' '}
+            Nothing on this job can be claimed until {overdue === 1 ? 'it is' : 'they are'} done.
+          </span>
+        )}
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 9, padding: `14px 16px calc(20px + env(safe-area-inset-bottom, 0px))` }}>
+          {rows.map((r) => {
+            const c = wetChip(r)
+            return (
+              <div key={r.id} style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 11, minHeight: 62, padding: '11px 13px 11px 15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, boxShadow: '0 1px 2px rgba(16,20,24,.04)' }}>
+                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.005em', color: s.ink }}>{r.area}</span>
+                  <span style={{ fontSize: 12.5, lineHeight: 1.35, color: '#7B838B' }}>{wetLine(r)}</span>
+                </span>
+                <span style={{ flex: 'none', display: 'inline-flex', alignItems: 'center', height: 23, padding: '0 9px', borderRadius: 12, background: c.bg, color: c.fg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  {c.label}
+                </span>
+              </div>
+            )
+          })}
+          {!loading && rows.length === 0 && (
+            <div style={{ padding: '15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
+              No wet areas on this job yet. A waterproofing record is what the certificate
+              gets issued from — the office or your captain starts one.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
