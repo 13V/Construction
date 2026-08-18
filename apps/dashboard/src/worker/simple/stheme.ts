@@ -8,10 +8,15 @@
  * coincidence to "fix".
  */
 export const s = {
-  /** The accent is a prop in the design, default #6E56CF. Purple, not blue —
-   *  the Crewline blue is present in the design only as a non-chosen option,
-   *  and the client's instruction is exact-as-drawn. */
-  accent: '#6E56CF',
+  /**
+   * Black, on the client's instruction — "make the purple black", the same
+   * call he made on the chat bubbles. The design shipped with #6E56CF and the
+   * app wore it until he saw it on a phone in daylight.
+   *
+   * A shade darker than `ink` so a link still separates from body text: the
+   * weight and the icon do most of that work, and this finishes it.
+   */
+  accent: '#0B0D10',
 
   appBg: '#F5F6F7', // ×23
   panel: '#FFFFFF', // ×34

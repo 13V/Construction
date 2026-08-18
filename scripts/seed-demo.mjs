@@ -390,6 +390,22 @@ try {
   // The other two the client's project details screen names. A tiler rings
   // the supervisor about the slab and the contract administrator about the
   // variation, and they are rarely the same person.
+  // Glenelg's builder, and its one person — the job details screen is where a
+  // tiler finds out who to ring, so a job with a builder and no contact is a
+  // screen with a hole in it.
+  const marina = await ensureRow(boss, 'builders',
+    `select=id&company_id=eq.${companyId}&name=eq.${encodeURIComponent('Marina Living Developments')}`,
+    { company_id: companyId, name: 'Marina Living Developments', payment_terms_days: 30 },
+    'builder (Marina Living Developments)')
+  await boss.patch('job_sites', `id=eq.${site.glenelg.id}`, { builder_id: marina.id })
+  const elena = await ensureRow(boss, 'builder_contacts',
+    `select=id&builder_id=eq.${marina.id}&name=eq.${encodeURIComponent('Elena Marsh')}`,
+    {
+      company_id: companyId, builder_id: marina.id, name: 'Elena Marsh',
+      role: 'supervisor', mobile: '0433 908 771', email: 'elena@marinaliving.example',
+    }, 'builder contact (Elena)')
+  await boss.patch('job_sites', `id=eq.${site.glenelg.id}`, { supervisor_contact_id: elena.id })
+
   const KESSELMAN_PEOPLE = [
     ['Dana Whitlock', 'project_manager', '0407 118 224', 'dana@kesselmanhomes.example'],
     ['Priya Raman', 'contract_admin', '0428 663 190', 'priya@kesselmanhomes.example'],

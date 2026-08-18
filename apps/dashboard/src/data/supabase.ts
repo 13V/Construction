@@ -71,6 +71,9 @@ export interface JobSiteRow {
   supervisor_contact_id: string | null
   /** The builder this job is for (schema_v15). Null until somebody links it. */
   builder_id: string | null
+  /** Dates set by hand on the job (schema_v33). Null means derive them. */
+  starts_on: string | null
+  ends_on: string | null
   /** The job's chosen rail colour (schema_v25). Null → hash-derived. */
   colour: string | null
 }

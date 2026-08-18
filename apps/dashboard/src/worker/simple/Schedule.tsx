@@ -106,8 +106,8 @@ function useProgrammeRows(progress: Map<string, number>): { rows: ProgRow[]; loa
       }
       const merged = new Map<string, { s: number; e: number }>()
       for (const site of (js.data ?? []) as JobSiteRow[]) {
-        const rows = per.get(site.id)
-        const span = rows ? siteSpan(rows) : null
+        const rows = per.get(site.id) ?? { tasks: [], assignments: [], shifts: [] }
+        const span = siteSpan({ ...rows, set: { starts_on: site.starts_on, ends_on: site.ends_on } })
         if (span) merged.set(site.id, span)
       }
       setSites((js.data ?? []) as JobSiteRow[])

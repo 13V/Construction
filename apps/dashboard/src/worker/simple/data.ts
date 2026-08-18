@@ -215,11 +215,19 @@ export interface SpanRows {
   tasks: Array<{ starts_on: string | null; ends_on: string | null }>
   assignments: Array<{ starts_at: string; ends_at: string | null }>
   shifts: Array<{ started_at: string }>
+  /** Set by hand on the job (schema_v33). Beats everything below it. */
+  set?: { starts_on: string | null; ends_on: string | null }
 }
 
 export function siteSpan(rows: SpanRows): { s: number; e: number } | null {
+  const day = (v: string) => new Date(`${v}T00:00:00`).getTime()
   const span = (from: number, to: number, acc: { s: number; e: number } | null) =>
     acc ? { s: Math.min(acc.s, from), e: Math.max(acc.e, to) } : { s: from, e: to }
+
+  // Somebody typed these in. Nothing derived gets to argue with that.
+  if (rows.set?.starts_on) {
+    return { s: day(rows.set.starts_on), e: day(rows.set.ends_on ?? rows.set.starts_on) }
+  }
 
   let planned: { s: number; e: number } | null = null
   for (const t of rows.tasks) {

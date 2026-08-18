@@ -54,6 +54,7 @@ const MIGRATIONS = [
   { file: 'schema_v30.sql', proves: ['waterproofing_packages', 'site_files.wp_step', 'companies.legal_name'] },
   { file: 'schema_v31.sql', proves: ['safety_documents.storage_path', 'safety_documents.expires_on', 'safety_shelf_v'] },
   { file: 'schema_v32.sql', proves: ['builder_contacts_role_check_v32'] },
+  { file: 'schema_v33.sql', proves: ['job_sites.starts_on', 'job_sites.ends_on'] },
 ]
 
 // ------------------------------------------------------------- credentials

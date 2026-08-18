@@ -911,42 +911,38 @@ function ProjectDetails({
 }) {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [dates, setDates] = useState<{ start: string | null; end: string | null }>({ start: null, end: null })
-  const [openContact, setOpenContact] = useState<Contact | null>(null)
-  const [editing, setEditing] = useState(false)
-  const [client, setClient] = useState(site.client_name ?? '')
-  const [address, setAddress] = useState(site.address ?? '')
+  const [editRow, setEditRow] = useState<EditRow | null>(null)
   const [shown, setShown] = useState({ client: site.client_name ?? '', address: site.address ?? '' })
-  const [saveError, setSaveError] = useState<string | null>(null)
 
-  async function saveDetails() {
-    setSaveError(null)
-    const { error } = await supabase()
-      .from('job_sites')
-      .update({ client_name: client.trim() || null, address: address.trim() })
-      .eq('id', site.id)
-    if (error) {
-      setSaveError(error.message)
-      return
-    }
-    setShown({ client: client.trim(), address: address.trim() })
-    setEditing(false)
-  }
-
-  useEffect(() => {
+  const reloadDetails = useCallback(() => {
     let cancelled = false
     const c = supabase()
     void (async () => {
+      /**
+       * The job's own fields are re-read rather than taken from the prop.
+       * Editing a contact can link this job to a builder for the first time,
+       * and editing the dates writes to the row — both of which the copy of
+       * the job held further up the tree knows nothing about, so trusting it
+       * showed "not set" one second after saving a name.
+       */
+      const fresh = await c
+        .from('job_sites')
+        .select('builder_id, supervisor_contact_id, starts_on, ends_on')
+        .eq('id', site.id)
+        .maybeSingle()
+      const job = (fresh.data as Pick<JobSiteRow, 'builder_id' | 'supervisor_contact_id' | 'starts_on' | 'ends_on'> | null) ?? site
+
       /**
        * The builder's people. The job points at one contact directly (its
        * supervisor); the rest belong to the builder, so the supervisor is
        * also how we find out which builder that is when the job has not been
        * linked to one yet.
        */
-      const sup = site.supervisor_contact_id
-        ? await c.from('builder_contacts').select('id, name, role, mobile, email, note, builder_id').eq('id', site.supervisor_contact_id).maybeSingle()
+      const sup = job.supervisor_contact_id
+        ? await c.from('builder_contacts').select('id, name, role, mobile, email, note, builder_id').eq('id', job.supervisor_contact_id).maybeSingle()
         : { data: null }
       const supRow = sup.data as (Contact & { builder_id: string }) | null
-      const builderId = site.builder_id ?? supRow?.builder_id ?? null
+      const builderId = job.builder_id ?? supRow?.builder_id ?? null
       const all = builderId
         ? await c.from('builder_contacts').select('id, name, role, mobile, email, note').eq('builder_id', builderId)
         : { data: [] }
@@ -966,6 +962,7 @@ function ProjectDetails({
         tasks: (pt.data ?? []) as SpanRows['tasks'],
         assignments: (asg.data ?? []) as SpanRows['assignments'],
         shifts: (sh.data ?? []) as SpanRows['shifts'],
+        set: { starts_on: job.starts_on, ends_on: job.ends_on },
       })
       // Local parts, not toISOString(): a programme date is a calendar date in
       // Adelaide, and UTC midnight is the previous afternoon here — which
@@ -979,7 +976,9 @@ function ProjectDetails({
     return () => {
       cancelled = true
     }
-  }, [site.id, site.supervisor_contact_id, site.builder_id])
+  }, [site.id, site.supervisor_contact_id, site.builder_id, site.starts_on, site.ends_on])
+
+  useEffect(() => reloadDetails(), [reloadDetails])
 
   const byRole = (role: Contact['role']) => contacts.find((x) => x.role === role) ?? null
   const longDate = (v: string | null) =>
@@ -1005,7 +1004,7 @@ function ProjectDetails({
         cursor: onTap ? 'pointer' : 'default',
       }}
     >
-      <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 8, background: '#EFEBFB' }}>
+      <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 8, background: '#EDEEF1' }}>
         {glyph}
       </span>
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -1076,64 +1075,11 @@ function ProjectDetails({
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '15px 18px 8px' }}>
+      <div style={{ padding: '15px 18px 8px' }}>
         <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>PROJECT DETAILS</span>
-        {office && !editing && (
-          <span onClick={() => setEditing(true)} style={{ fontSize: 13.5, fontWeight: 600, color: s.accent, cursor: 'pointer' }}>
-            Edit
-          </span>
-        )}
       </div>
 
-      {editing ? (
-        <div style={{ margin: '0 16px', ...card }}>
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px 15px 16px' }}>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>BUILDER</span>
-              <input
-                value={client}
-                onChange={(e) => setClient(e.target.value)}
-                placeholder="Who the job is for"
-                style={{ width: '100%', height: 48, padding: '0 13px', boxSizing: 'border-box', background: '#F5F6F7', border: '1px solid #DCE0E6', borderRadius: 10, font: 'inherit', fontSize: 16, color: s.ink, outline: 'none' }}
-              />
-            </span>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>SITE ADDRESS</span>
-              <textarea
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                rows={2}
-                placeholder="Street, suburb, state, postcode"
-                style={{ width: '100%', padding: '11px 13px', boxSizing: 'border-box', background: '#F5F6F7', border: '1px solid #DCE0E6', borderRadius: 10, fontFamily: 'inherit', fontSize: 16, lineHeight: 1.4, color: s.ink, resize: 'none', outline: 'none' }}
-              />
-            </span>
-            {saveError && <span style={{ fontSize: 13, color: '#A3282E' }}>{saveError}</span>}
-            <span style={{ fontSize: 12.5, lineHeight: 1.45, color: '#8B9096' }}>
-              The builder's people and the programme dates are set where the job is set up, on the
-              office dashboard — this keeps one list of contacts rather than two.
-            </span>
-            <span style={{ display: 'flex', gap: 9 }}>
-              <button
-                onClick={() => void saveDetails()}
-                style={{ flex: 1, height: 46, border: 0, borderRadius: 10, background: '#1A1D21', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 700, letterSpacing: '.03em', color: '#fff', cursor: 'pointer' }}
-              >
-                SAVE
-              </button>
-              <button
-                onClick={() => {
-                  setEditing(false)
-                  setClient(shown.client)
-                  setAddress(shown.address)
-                  setSaveError(null)
-                }}
-                style={{ flex: 'none', height: 46, padding: '0 16px', border: '1px solid #DCE0E6', borderRadius: 10, background: '#fff', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600, color: '#4A5057', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-            </span>
-          </span>
-        </div>
-      ) : (
+      {(
         <>
           {rowCard(
             glyph(
@@ -1144,6 +1090,7 @@ function ProjectDetails({
             ),
             'Builder',
             value(shown.client || '—'),
+            () => setEditRow('builder'),
           )}
 
           {rowCard(
@@ -1155,7 +1102,7 @@ function ProjectDetails({
             ),
             'Site address',
             value(shown.address || '—'),
-            mapsHref ? () => window.open(mapsHref, '_blank') : undefined,
+            () => setEditRow('address'),
           )}
 
           {rowCard(
@@ -1176,6 +1123,7 @@ function ProjectDetails({
                 {value(longDate(dates.end))}
               </span>
             </span>,
+            () => setEditRow('dates'),
           )}
 
           {rowCard(
@@ -1187,7 +1135,7 @@ function ProjectDetails({
             ),
             'Project manager',
             person(byRole('project_manager'), 'Not set for this job'),
-            byRole('project_manager') ? () => setOpenContact(byRole('project_manager')) : undefined,
+            () => setEditRow('project_manager'),
           )}
 
           {rowCard(
@@ -1199,7 +1147,7 @@ function ProjectDetails({
             ),
             'Site supervisor',
             person(byRole('supervisor'), 'Not set for this job'),
-            byRole('supervisor') ? () => setOpenContact(byRole('supervisor')) : undefined,
+            () => setEditRow('supervisor'),
           )}
 
           {rowCard(
@@ -1211,7 +1159,7 @@ function ProjectDetails({
             ),
             'Contract administrator',
             person(byRole('contract_admin'), 'Not set for this job'),
-            byRole('contract_admin') ? () => setOpenContact(byRole('contract_admin')) : undefined,
+            () => setEditRow('contract_admin'),
           )}
 
           {rowCard(
@@ -1244,99 +1192,318 @@ function ProjectDetails({
         </>
       )}
 
-      {openContact && <ContactSheet contact={openContact} onClose={() => setOpenContact(null)} />}
+      {editRow && (
+        <DetailEditor
+          row={editRow}
+          site={site}
+          office={office}
+          contact={editRow === 'builder' || editRow === 'address' || editRow === 'dates' ? null : byRole(editRow)}
+          mapsHref={mapsHref}
+          onClose={() => setEditRow(null)}
+          onSaved={(patch) => {
+            if (patch) setShown((prev) => ({ ...prev, ...patch }))
+            setEditRow(null)
+            void reloadDetails()
+          }}
+        />
+      )}
     </>
   )
 }
 
-const ROLE_LABEL: Record<Contact['role'], string> = {
+// -------------------------------------------------------- editing a detail
+
+/**
+ * Every row on the project details screen opens, on the client's instruction:
+ * "I should be able to edit all of these if I tap on the box."
+ *
+ * One sheet does all seven because they are the same shape — a title, the
+ * thing you would do with this fact on site, and the fields behind it. The
+ * doing comes first: a supervisor's number is more often rung than corrected,
+ * and an address is more often navigated to than retyped.
+ */
+type EditRow = 'builder' | 'address' | 'dates' | 'project_manager' | 'supervisor' | 'contract_admin'
+
+const EDIT_TITLE: Record<EditRow, string> = {
+  builder: 'Builder',
+  address: 'Site address',
+  dates: 'Project dates',
   project_manager: 'Project manager',
   supervisor: 'Site supervisor',
   contract_admin: 'Contract administrator',
-  accounts: 'Accounts',
-  estimator: 'Estimator',
-  other: 'Contact',
 }
 
-/**
- * One of the builder's people, with the two buttons a phone is for. The links
- * on the row itself are small; on a wet slab in a hurry this is the target.
- */
-function ContactSheet({ contact, onClose }: { contact: Contact; onClose: () => void }) {
-  const btn = {
+function DetailEditor({
+  row,
+  site,
+  office,
+  contact,
+  mapsHref,
+  onClose,
+  onSaved,
+}: {
+  row: EditRow
+  site: JobSiteRow
+  office: boolean
+  contact: Contact | null
+  mapsHref: string | null
+  onClose: () => void
+  onSaved: (patch?: { client?: string; address?: string }) => void
+}) {
+  const isContact = row === 'project_manager' || row === 'supervisor' || row === 'contract_admin'
+  const [builder, setBuilder] = useState(site.client_name ?? '')
+  const [address, setAddress] = useState(site.address ?? '')
+  const [startOn, setStartOn] = useState(site.starts_on ?? '')
+  const [endOn, setEndOn] = useState(site.ends_on ?? '')
+  const [name, setName] = useState(contact?.name ?? '')
+  const [mobile, setMobile] = useState(contact?.mobile ?? '')
+  const [email, setEmail] = useState(contact?.email ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  /**
+   * A contact belongs to a builder, and a job that has never been linked to
+   * one has nowhere to put a name. So the first contact saved on such a job
+   * creates the builder from what the job already calls it, and links them —
+   * which is what the office dashboard would have done eventually anyway.
+   */
+  async function builderIdFor(c: ReturnType<typeof supabase>): Promise<string | null> {
+    if (site.builder_id) return site.builder_id
+    const named = (site.client_name ?? '').trim()
+    if (!named) {
+      setError('Set the builder on this job first — a contact has to belong to one.')
+      return null
+    }
+    const found = await c.from('builders').select('id').eq('name', named).maybeSingle()
+    let id = (found.data as { id: string } | null)?.id ?? null
+    if (!id) {
+      const made = await c.from('builders').insert({ company_id: site.company_id, name: named }).select('id').single()
+      if (made.error) {
+        setError(made.error.message)
+        return null
+      }
+      id = (made.data as { id: string }).id
+    }
+    const link = await c.from('job_sites').update({ builder_id: id }).eq('id', site.id)
+    if (link.error) {
+      setError(link.error.message)
+      return null
+    }
+    return id
+  }
+
+  async function save() {
+    setBusy(true)
+    setError(null)
+    try {
+      const c = supabase()
+      if (row === 'builder') {
+        const { error: err } = await c.from('job_sites').update({ client_name: builder.trim() || null }).eq('id', site.id)
+        if (err) throw new Error(err.message)
+        onSaved({ client: builder.trim() })
+        return
+      }
+      if (row === 'address') {
+        const { error: err } = await c.from('job_sites').update({ address: address.trim() }).eq('id', site.id)
+        if (err) throw new Error(err.message)
+        onSaved({ address: address.trim() })
+        return
+      }
+      if (row === 'dates') {
+        const { error: err } = await c
+          .from('job_sites')
+          .update({ starts_on: startOn || null, ends_on: endOn || null })
+          .eq('id', site.id)
+        if (err) throw new Error(err.message)
+        onSaved()
+        return
+      }
+
+      // A contact. Blank name means "there is nobody in this role" — which is
+      // a real answer, and clears the row rather than leaving a ghost.
+      if (!name.trim()) {
+        if (contact) {
+          const { error: err } = await c.from('builder_contacts').delete().eq('id', contact.id)
+          if (err) throw new Error(err.message)
+        }
+        onSaved()
+        return
+      }
+      const builderId = await builderIdFor(c)
+      if (!builderId) return
+      const patch = { name: name.trim(), mobile: mobile.trim() || null, email: email.trim() || null }
+      let contactId = contact?.id ?? null
+      if (contactId) {
+        const { error: err } = await c.from('builder_contacts').update(patch).eq('id', contactId)
+        if (err) throw new Error(err.message)
+      } else {
+        const { data, error: err } = await c
+          .from('builder_contacts')
+          .insert({ company_id: site.company_id, builder_id: builderId, role: row, ...patch })
+          .select('id')
+          .single()
+        if (err) throw new Error(err.message)
+        contactId = (data as { id: string }).id
+      }
+      // The job points at its supervisor directly, so that link has to follow.
+      if (row === 'supervisor' && contactId !== site.supervisor_contact_id) {
+        const { error: err } = await c.from('job_sites').update({ supervisor_contact_id: contactId }).eq('id', site.id)
+        if (err) throw new Error(err.message)
+      }
+      onSaved()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save that.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const label = { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' } as const
+  const input = {
+    width: '100%',
+    height: 48,
+    padding: '0 13px',
+    boxSizing: 'border-box' as const,
+    background: '#F5F6F7',
+    border: '1px solid #DCE0E6',
+    borderRadius: 10,
+    font: 'inherit',
+    fontSize: 16,
+    color: s.ink,
+    outline: 'none',
+  }
+  const action = {
     flex: 1,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 50,
+    height: 48,
     borderRadius: 11,
     fontFamily: 'inherit',
     fontSize: 14.5,
     fontWeight: 700,
-    letterSpacing: '.02em',
     textDecoration: 'none',
   } as const
 
+  const field = (l: string, v: string, set: (x: string) => void, opts: { type?: string; placeholder?: string; area?: boolean } = {}) => (
+    <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={label}>{l}</span>
+      {opts.area ? (
+        <textarea
+          value={v}
+          onChange={(e) => set(e.target.value)}
+          rows={2}
+          placeholder={opts.placeholder}
+          disabled={!office}
+          style={{ ...input, height: 'auto', padding: '11px 13px', fontFamily: 'inherit', lineHeight: 1.4, resize: 'none' }}
+        />
+      ) : (
+        <input
+          type={opts.type ?? 'text'}
+          value={v}
+          onChange={(e) => set(e.target.value)}
+          placeholder={opts.placeholder}
+          disabled={!office}
+          style={input}
+        />
+      )}
+    </span>
+  )
+
   return (
-    <div
-      onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.5)' }}
-    >
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.5)' }}>
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 14, padding: `18px 16px calc(22px + ${SAFE_BOTTOM})`, background: '#F5F6F7', borderRadius: '16px 16px 0 0' }}
+        style={{ width: '100%', maxHeight: '92%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
       >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 46, height: 46, borderRadius: '50%', background: '#EFEBFB', fontSize: 16, fontWeight: 800, color: s.accent }}>
-            {contact.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
-          </span>
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>{contact.name}</span>
-            <span style={{ fontSize: 13, color: '#7B838B' }}>{ROLE_LABEL[contact.role]}</span>
-          </span>
-          <span
-            onClick={onClose}
-            style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#E9ECEF', cursor: 'pointer' }}
-          >
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '15px 15px 12px 18px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>{EDIT_TITLE[row]}</span>
+          <span onClick={onClose} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}>
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="2" strokeLinecap="round">
               <path d="M5 5l10 10M15 5L5 15" />
             </svg>
           </span>
-        </span>
+        </div>
 
-        {contact.note && (
-          <span style={{ padding: '11px 13px', background: '#fff', border: '1px solid #E4E7EB', borderRadius: 10, fontSize: 13, lineHeight: 1.45, color: '#4A5057' }}>
-            {contact.note}
-          </span>
-        )}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `15px 16px calc(20px + ${SAFE_BOTTOM})` }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            {error && <span style={{ padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 13, color: '#8E2A31' }}>{error}</span>}
 
-        <span style={{ display: 'flex', gap: 10 }}>
-          {contact.mobile && (
-            <a href={`tel:${contact.mobile.replace(/\s/g, '')}`} style={{ ...btn, background: '#1A1D21', color: '#fff' }}>
-              <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinejoin="round">
-                <path d="M6.4 3.4l2 3-1.6 1.6a9 9 0 0 0 4.2 4.2L12.6 10.6l3 2-1.2 2.4a1.6 1.6 0 0 1-1.8.8C8.4 14.8 5.2 11.6 4.2 6.4a1.6 1.6 0 0 1 .8-1.8z" />
-              </svg>
-              Call
-            </a>
-          )}
-          {contact.email && (
-            <a href={`mailto:${contact.email}`} style={{ ...btn, background: '#fff', border: '1px solid #DCE0E6', color: s.accent }}>
-              <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinejoin="round">
-                <rect x="2.8" y="5" width="14.4" height="10" rx="2" />
-                <path d="M3.2 6l6.8 5 6.8-5" />
-              </svg>
-              Email
-            </a>
-          )}
-        </span>
+            {/* What you would do with this, before what you would change. */}
+            {isContact && contact && (contact.mobile || contact.email) && (
+              <span style={{ display: 'flex', gap: 10 }}>
+                {contact.mobile && (
+                  <a href={`tel:${contact.mobile.replace(/\s/g, '')}`} style={{ ...action, background: '#1A1D21', color: '#fff' }}>
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinejoin="round">
+                      <path d="M6.4 3.4l2 3-1.6 1.6a9 9 0 0 0 4.2 4.2L12.6 10.6l3 2-1.2 2.4a1.6 1.6 0 0 1-1.8.8C8.4 14.8 5.2 11.6 4.2 6.4a1.6 1.6 0 0 1 .8-1.8z" />
+                    </svg>
+                    Call
+                  </a>
+                )}
+                {contact.email && (
+                  <a href={`mailto:${contact.email}`} style={{ ...action, background: '#fff', border: '1px solid #DCE0E6', color: s.accent }}>
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinejoin="round">
+                      <rect x="2.8" y="5" width="14.4" height="10" rx="2" />
+                      <path d="M3.2 6l6.8 5 6.8-5" />
+                    </svg>
+                    Email
+                  </a>
+                )}
+              </span>
+            )}
+            {row === 'address' && mapsHref && (
+              <a href={mapsHref} target="_blank" rel="noreferrer" style={{ ...action, background: '#1A1D21', color: '#fff' }}>
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinejoin="round">
+                  <path d="M10 17.4S4.6 12.4 4.6 8.6a5.4 5.4 0 0 1 10.8 0c0 3.8-5.4 8.8-5.4 8.8z" />
+                  <circle cx="10" cy="8.5" r="1.9" />
+                </svg>
+                Directions
+              </a>
+            )}
 
-        {(contact.mobile || contact.email) && (
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12.5, color: '#8B9096' }}>
-            {contact.mobile && <span>{contact.mobile}</span>}
-            {contact.email && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{contact.email}</span>}
-          </span>
-        )}
+            {row === 'builder' && field('BUILDER', builder, setBuilder, { placeholder: 'Who the job is for' })}
+            {row === 'address' && field('SITE ADDRESS', address, setAddress, { area: true, placeholder: 'Street, suburb, state, postcode' })}
+            {row === 'dates' && (
+              <>
+                {field('START DATE', startOn, setStartOn, { type: 'date' })}
+                {field('END DATE', endOn, setEndOn, { type: 'date' })}
+                <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+                  Leave both blank and the dates come off the builder's programme, or off when the
+                  crew is booked when there is no programme. Fill them in and they are the job's
+                  dates everywhere — here and on the schedule.
+                </span>
+              </>
+            )}
+            {isContact && (
+              <>
+                {field('NAME', name, setName, { placeholder: 'Their name' })}
+                {field('MOBILE', mobile, setMobile, { type: 'tel', placeholder: '04…' })}
+                {field('EMAIL', email, setEmail, { type: 'email', placeholder: 'name@builder.com.au' })}
+                <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+                  {contact
+                    ? 'Clearing the name removes them from this job.'
+                    : 'Saved against the builder, so the same person shows on every job of theirs.'}
+                </span>
+              </>
+            )}
+
+            {office ? (
+              <button
+                disabled={busy}
+                onClick={() => void save()}
+                style={{ width: '100%', height: 48, border: 0, borderRadius: 10, background: '#1A1D21', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 700, letterSpacing: '.03em', color: '#fff', opacity: busy ? 0.6 : 1, cursor: 'pointer' }}
+              >
+                {busy ? 'SAVING…' : 'SAVE'}
+              </button>
+            ) : (
+              <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+                The office keeps these up to date. If something here is wrong, say so in the job
+                chat — it is quicker than it reaching them any other way.
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
