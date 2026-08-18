@@ -20,7 +20,7 @@ import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/stor
 import { siteSpan, type SpanRows } from './data'
 import { DrawingsPanel } from './Drawings'
 import { WaterproofingPanel } from './Waterproofing'
-import { s } from './stheme'
+import { s, SAFE_BOTTOM } from './stheme'
 
 type ScopeStatus = 'pending' | 'chosen' | 'not_applicable'
 
@@ -342,6 +342,7 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
   const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [open, setOpen] = useState<{ line: ScopeLine; row: SelectionRow | null } | null>(null)
   const [section, setSection] = useState<OverviewSection>('details')
+  const [notesOpen, setNotesOpen] = useState(false)
   const [noting, setNoting] = useState(false)
   const [noteDraft, setNoteDraft] = useState('')
   const [files, setFiles] = useState<Map<string, AttachmentRow[]>>(new Map())
@@ -508,76 +509,7 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 26 }}>
       {section === 'details' && (
-        <>
-          <ProjectDetails site={site} office={office} />
-      {/* Notes for whoever is next on the job. */}
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '18px 18px 9px' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>NOTES</span>
-        {!noting && (
-          <span onClick={() => setNoting(true)} style={{ fontSize: 13.5, fontWeight: 600, color: s.accent, cursor: 'pointer' }}>
-            Add note
-          </span>
-        )}
-      </div>
-      <div style={{ margin: '0 18px', ...card }}>
-        {notes.map((n, i) => (
-          <span key={n.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 13px 12px 15px', borderBottom: i === notes.length - 1 && !noting ? 'none' : '1px solid #EDEFF1' }}>
-            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 14.5, lineHeight: 1.45, color: s.ink, whiteSpace: 'pre-wrap' }}>{n.body}</span>
-              <span style={{ fontSize: 12, color: '#8B9096' }}>
-                {[people.get(n.author_id ?? '') ?? 'Someone', new Date(n.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })].join(' · ')}
-              </span>
-            </span>
-            {(office || n.author_id === me.id) && (
-              <span onClick={() => void removeNote(n.id)} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, cursor: 'pointer' }}>
-                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#9AA1A9" strokeWidth="2" strokeLinecap="round">
-                  <path d="M5 5l10 10M15 5L5 15" />
-                </svg>
-              </span>
-            )}
-          </span>
-        ))}
-
-        {noting ? (
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '13px 15px 15px' }}>
-            <textarea
-              value={noteDraft}
-              onChange={(e) => setNoteDraft(e.target.value)}
-              autoFocus
-              rows={3}
-              placeholder="Anything the next person on this job needs to know…"
-              style={{ width: '100%', padding: '11px 13px', boxSizing: 'border-box', background: '#F5F6F7', border: '1px solid #DCE0E6', borderRadius: 10, fontFamily: 'inherit', fontSize: 16, lineHeight: 1.45, color: s.ink, resize: 'none', outline: 'none' }}
-            />
-            <span style={{ display: 'flex', gap: 9 }}>
-              <button
-                onClick={() => void addNote()}
-                disabled={!noteDraft.trim()}
-                style={{ flex: 1, height: 46, border: 0, borderRadius: 10, background: noteDraft.trim() ? '#1A1D21' : '#C3C9D0', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 700, letterSpacing: '.03em', color: '#fff', cursor: noteDraft.trim() ? 'pointer' : 'default' }}
-              >
-                SAVE NOTE
-              </button>
-              <button
-                onClick={() => {
-                  setNoting(false)
-                  setNoteDraft('')
-                }}
-                style={{ flex: 'none', height: 46, padding: '0 16px', border: '1px solid #DCE0E6', borderRadius: 10, background: '#fff', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600, color: '#4A5057', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-            </span>
-          </span>
-        ) : (
-          notes.length === 0 && (
-            <span style={{ display: 'block', padding: '15px', fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
-              Nothing yet. A note here is read by everyone on the job — the thing you would
-              otherwise have to say twice.
-            </span>
-          )
-        )}
-      </div>
-
-        </>
+        <ProjectDetails site={site} office={office} notes={notes} onOpenNotes={() => setNotesOpen(true)} />
       )}
 
       {section === 'drawings' && <DrawingsPanel me={me} site={site} />}
@@ -655,6 +587,99 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
       </div>
 
       <ReadinessBar counts={counts} />
+
+
+      {notesOpen && (
+        <div
+          onClick={() => setNotesOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.45)' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxHeight: '90%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
+          >
+            <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '15px 15px 12px 18px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>Notes</span>
+              <span
+                onClick={() => setNotesOpen(false)}
+                style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}
+              >
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="2" strokeLinecap="round">
+                  <path d="M5 5l10 10M15 5L5 15" />
+                </svg>
+              </span>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: `calc(20px + ${SAFE_BOTTOM})` }}>
+      {/* Notes for whoever is next on the job. */}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '18px 18px 9px' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>NOTES</span>
+        {!noting && (
+          <span onClick={() => setNoting(true)} style={{ fontSize: 13.5, fontWeight: 600, color: s.accent, cursor: 'pointer' }}>
+            Add note
+          </span>
+        )}
+      </div>
+      <div style={{ margin: '0 18px', ...card }}>
+        {notes.map((n, i) => (
+          <span key={n.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 13px 12px 15px', borderBottom: i === notes.length - 1 && !noting ? 'none' : '1px solid #EDEFF1' }}>
+            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ fontSize: 14.5, lineHeight: 1.45, color: s.ink, whiteSpace: 'pre-wrap' }}>{n.body}</span>
+              <span style={{ fontSize: 12, color: '#8B9096' }}>
+                {[people.get(n.author_id ?? '') ?? 'Someone', new Date(n.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })].join(' · ')}
+              </span>
+            </span>
+            {(office || n.author_id === me.id) && (
+              <span onClick={() => void removeNote(n.id)} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, cursor: 'pointer' }}>
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#9AA1A9" strokeWidth="2" strokeLinecap="round">
+                  <path d="M5 5l10 10M15 5L5 15" />
+                </svg>
+              </span>
+            )}
+          </span>
+        ))}
+
+        {noting ? (
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '13px 15px 15px' }}>
+            <textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              autoFocus
+              rows={3}
+              placeholder="Anything the next person on this job needs to know…"
+              style={{ width: '100%', padding: '11px 13px', boxSizing: 'border-box', background: '#F5F6F7', border: '1px solid #DCE0E6', borderRadius: 10, fontFamily: 'inherit', fontSize: 16, lineHeight: 1.45, color: s.ink, resize: 'none', outline: 'none' }}
+            />
+            <span style={{ display: 'flex', gap: 9 }}>
+              <button
+                onClick={() => void addNote()}
+                disabled={!noteDraft.trim()}
+                style={{ flex: 1, height: 46, border: 0, borderRadius: 10, background: noteDraft.trim() ? '#1A1D21' : '#C3C9D0', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 700, letterSpacing: '.03em', color: '#fff', cursor: noteDraft.trim() ? 'pointer' : 'default' }}
+              >
+                SAVE NOTE
+              </button>
+              <button
+                onClick={() => {
+                  setNoting(false)
+                  setNoteDraft('')
+                }}
+                style={{ flex: 'none', height: 46, padding: '0 16px', border: '1px solid #DCE0E6', borderRadius: 10, background: '#fff', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600, color: '#4A5057', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </span>
+          </span>
+        ) : (
+          notes.length === 0 && (
+            <span style={{ display: 'block', padding: '15px', fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
+              Nothing yet. A note here is read by everyone on the job — the thing you would
+              otherwise have to say twice.
+            </span>
+          )
+        )}
+      </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {open && (
         <ScopeSheet
@@ -864,6 +889,7 @@ interface Contact {
   role: 'project_manager' | 'supervisor' | 'contract_admin' | 'accounts' | 'estimator' | 'other'
   mobile: string | null
   email: string | null
+  note: string | null
 }
 
 /**
@@ -872,9 +898,20 @@ interface Contact {
  * something is wrong. Everything here is one tap from doing something —
  * the phone numbers dial and the addresses are the addresses.
  */
-function ProjectDetails({ site, office }: { site: JobSiteRow; office: boolean }) {
+function ProjectDetails({
+  site,
+  office,
+  notes,
+  onOpenNotes,
+}: {
+  site: JobSiteRow
+  office: boolean
+  notes: NoteRow[]
+  onOpenNotes: () => void
+}) {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [dates, setDates] = useState<{ start: string | null; end: string | null }>({ start: null, end: null })
+  const [openContact, setOpenContact] = useState<Contact | null>(null)
   const [editing, setEditing] = useState(false)
   const [client, setClient] = useState(site.client_name ?? '')
   const [address, setAddress] = useState(site.address ?? '')
@@ -906,12 +943,12 @@ function ProjectDetails({ site, office }: { site: JobSiteRow; office: boolean })
        * linked to one yet.
        */
       const sup = site.supervisor_contact_id
-        ? await c.from('builder_contacts').select('id, name, role, mobile, email, builder_id').eq('id', site.supervisor_contact_id).maybeSingle()
+        ? await c.from('builder_contacts').select('id, name, role, mobile, email, note, builder_id').eq('id', site.supervisor_contact_id).maybeSingle()
         : { data: null }
       const supRow = sup.data as (Contact & { builder_id: string }) | null
       const builderId = site.builder_id ?? supRow?.builder_id ?? null
       const all = builderId
-        ? await c.from('builder_contacts').select('id, name, role, mobile, email').eq('builder_id', builderId)
+        ? await c.from('builder_contacts').select('id, name, role, mobile, email, note').eq('builder_id', builderId)
         : { data: [] }
       if (cancelled) return
       const rows = (all.data ?? []) as Contact[]
@@ -948,57 +985,98 @@ function ProjectDetails({ site, office }: { site: JobSiteRow; office: boolean })
   const longDate = (v: string | null) =>
     v ? new Date(`${v}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'
 
-  const row = (glyph: ReactNode, label: string, body: ReactNode, tint: string) => (
-    <span style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 13px 12px 14px', borderBottom: '1px solid #EDEFF1' }}>
-      <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 9, background: tint }}>{glyph}</span>
-      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-.005em', color: s.ink }}>{label}</span>
+  /**
+   * One card per fact, as drawn — not one card with hairlines through it. The
+   * difference matters on a phone: each row is its own tap target and its own
+   * thing, and the ones that go somewhere say so with a chevron.
+   */
+  const rowCard = (glyph: ReactNode, label: string, body: ReactNode, onTap?: () => void) => (
+    <span
+      onClick={onTap}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 11,
+        margin: '0 16px 8px',
+        padding: '11px 12px 11px 12px',
+        background: '#fff',
+        border: '1px solid #E4E7EB',
+        borderRadius: 10,
+        cursor: onTap ? 'pointer' : 'default',
+      }}
+    >
+      <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 8, background: '#EFEBFB' }}>
+        {glyph}
+      </span>
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-.005em', color: s.ink }}>{label}</span>
         {body}
       </span>
+      {onTap && (
+        <svg width="10" height="10" viewBox="0 0 10 10" style={{ flex: 'none' }}>
+          <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
     </span>
   )
 
-  const value = (v: string) => <span style={{ fontSize: 13, lineHeight: 1.4, color: v === '—' ? '#9AA1A9' : '#5F666E' }}>{v}</span>
+  const value = (v: string) => (
+    <span style={{ fontSize: 12, lineHeight: 1.35, color: v === '—' ? '#9AA1A9' : '#6B7278' }}>{v}</span>
+  )
 
-  /** A person: their name, and the two ways to reach them, both live. */
+  /** Name, then the two ways to reach them side by side, as the client drew. */
   const person = (c: Contact | null, missing: string) =>
     c ? (
       <>
-        <span style={{ fontSize: 13, color: '#5F666E' }}>{c.name}</span>
-        <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 14px', marginTop: 1 }}>
+        <span style={{ fontSize: 12, color: '#6B7278' }}>{c.name}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, minWidth: 0 }}>
           {c.mobile && (
-            <a href={`tel:${c.mobile.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 600, color: s.accent, textDecoration: 'none' }}>
-              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinejoin="round">
+            <a
+              href={`tel:${c.mobile.replace(/\s/g, '')}`}
+              onClick={(e) => e.stopPropagation()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flex: 'none', fontSize: 11.5, fontWeight: 600, color: s.accent, textDecoration: 'none' }}
+            >
+              <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.8" strokeLinejoin="round">
                 <path d="M6.4 3.4l2 3-1.6 1.6a9 9 0 0 0 4.2 4.2L12.6 10.6l3 2-1.2 2.4a1.6 1.6 0 0 1-1.8.8C8.4 14.8 5.2 11.6 4.2 6.4a1.6 1.6 0 0 1 .8-1.8z" />
               </svg>
               {c.mobile}
             </a>
           )}
+          {c.mobile && c.email && <span style={{ flex: 'none', width: 1, height: 11, background: '#DCE0E6' }} />}
           {c.email && (
-            <a href={`mailto:${c.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, fontSize: 12.5, color: s.accent, textDecoration: 'none' }}>
-              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinejoin="round" style={{ flex: 'none' }}>
+            <a
+              href={`mailto:${c.email}`}
+              onClick={(e) => e.stopPropagation()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, fontSize: 11.5, color: s.accent, textDecoration: 'none' }}
+            >
+              <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.8" strokeLinejoin="round" style={{ flex: 'none' }}>
                 <rect x="2.8" y="5" width="14.4" height="10" rx="2" />
                 <path d="M3.2 6l6.8 5 6.8-5" />
               </svg>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</span>
             </a>
           )}
+          {!c.mobile && !c.email && <span style={{ fontSize: 11.5, color: '#9AA1A9' }}>No contact details on file</span>}
         </span>
       </>
     ) : (
-      <span style={{ fontSize: 13, color: '#9AA1A9' }}>{missing}</span>
+      <span style={{ fontSize: 12, color: '#9AA1A9' }}>{missing}</span>
     )
 
-  const G = { stroke: '#6E56CF', w: '17', h: '17' }
-  const glyph = (path: ReactNode, stroke = G.stroke) => (
-    <svg width={G.w} height={G.h} viewBox="0 0 20 20" fill="none" stroke={stroke} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round">
+  const glyph = (path: ReactNode) => (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round">
       {path}
     </svg>
   )
 
+  /** Directions, because an address on a phone is a place you have to get to. */
+  const mapsHref = shown.address
+    ? `https://maps.apple.com/?q=${encodeURIComponent(shown.address)}`
+    : null
+
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '16px 18px 8px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '15px 18px 8px' }}>
         <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>PROJECT DETAILS</span>
         {office && !editing && (
           <span onClick={() => setEditing(true)} style={{ fontSize: 13.5, fontWeight: 600, color: s.accent, cursor: 'pointer' }}>
@@ -1007,8 +1085,8 @@ function ProjectDetails({ site, office }: { site: JobSiteRow; office: boolean })
         )}
       </div>
 
-      <div style={{ margin: '0 16px', ...card }}>
-        {editing ? (
+      {editing ? (
+        <div style={{ margin: '0 16px', ...card }}>
           <span style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px 15px 16px' }}>
             <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>BUILDER</span>
@@ -1054,90 +1132,212 @@ function ProjectDetails({ site, office }: { site: JobSiteRow; office: boolean })
               </button>
             </span>
           </span>
-        ) : (
-          <>
-            {row(
-              glyph(
-                <>
-                  <path d="M4.6 3.4h10.8v13.2H4.6z" />
-                  <path d="M7.2 6.6h5.6M7.2 9.6h5.6M7.2 12.6h3" />
-                </>,
-              ),
-              'Builder',
-              value(shown.client || '—'),
-              '#EFEBFB',
-            )}
-            {row(
-              glyph(
-                <>
-                  <path d="M10 17.4S4.6 12.4 4.6 8.6a5.4 5.4 0 0 1 10.8 0c0 3.8-5.4 8.8-5.4 8.8z" />
-                  <circle cx="10" cy="8.5" r="1.9" />
-                </>,
-                '#2F5FD7',
-              ),
-              'Site address',
-              value(shown.address || '—'),
-              '#E7EEFB',
-            )}
-            {row(
-              glyph(
-                <>
-                  <rect x="3.2" y="4.6" width="13.6" height="12" rx="2" />
-                  <path d="M3.2 8.2h13.6M6.8 3.2v2.8M13.2 3.2v2.8" />
-                </>,
-                '#2F5FD7',
-              ),
-              'Project dates',
-              <span style={{ display: 'flex', gap: 22 }}>
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <span style={{ fontSize: 11.5, color: '#9AA1A9' }}>Start date</span>
-                  {value(longDate(dates.start))}
-                </span>
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <span style={{ fontSize: 11.5, color: '#9AA1A9' }}>End date</span>
-                  {value(longDate(dates.end))}
-                </span>
-              </span>,
-              '#E7EEFB',
-            )}
-            {row(
-              glyph(
-                <>
-                  <circle cx="10" cy="7" r="3" />
-                  <path d="M4.4 16.6a5.6 5.6 0 0 1 11.2 0" />
-                </>,
-              ),
-              'Project manager',
-              person(byRole('project_manager'), 'Not set for this job'),
-              '#EFEBFB',
-            )}
-            {row(
-              glyph(
-                <>
-                  <path d="M3.6 12.4a6.4 6.4 0 0 1 12.8 0z" />
-                  <path d="M2.6 12.4h14.8M10 6V3.4" />
-                </>,
-                '#C4700A',
-              ),
-              'Site supervisor',
-              person(byRole('supervisor'), 'Not set for this job'),
-              '#FDF0DF',
-            )}
-            {row(
-              glyph(
-                <>
-                  <path d="M5.4 3.4h6l3.2 3.2v10.4H5.4z" />
-                  <path d="M7.8 9h4.4M7.8 12h3" />
-                </>,
-                '#0E8074',
-              ),
-              'Contract administrator',
-              person(byRole('contract_admin'), 'Not set for this job'),
-              '#E4F3F1',
-            )}
-          </>
+        </div>
+      ) : (
+        <>
+          {rowCard(
+            glyph(
+              <>
+                <path d="M4.6 3.4h10.8v13.2H4.6z" />
+                <path d="M7.2 6.6h5.6M7.2 9.6h5.6M7.2 12.6h3" />
+              </>,
+            ),
+            'Builder',
+            value(shown.client || '—'),
+          )}
+
+          {rowCard(
+            glyph(
+              <>
+                <path d="M10 17.4S4.6 12.4 4.6 8.6a5.4 5.4 0 0 1 10.8 0c0 3.8-5.4 8.8-5.4 8.8z" />
+                <circle cx="10" cy="8.5" r="1.9" />
+              </>,
+            ),
+            'Site address',
+            value(shown.address || '—'),
+            mapsHref ? () => window.open(mapsHref, '_blank') : undefined,
+          )}
+
+          {rowCard(
+            glyph(
+              <>
+                <rect x="3.2" y="4.6" width="13.6" height="12" rx="2" />
+                <path d="M3.2 8.2h13.6M6.8 3.2v2.8M13.2 3.2v2.8" />
+              </>,
+            ),
+            'Project dates',
+            <span style={{ display: 'flex', gap: 20 }}>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <span style={{ fontSize: 11, color: '#9AA1A9' }}>Start date</span>
+                {value(longDate(dates.start))}
+              </span>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <span style={{ fontSize: 11, color: '#9AA1A9' }}>End date</span>
+                {value(longDate(dates.end))}
+              </span>
+            </span>,
+          )}
+
+          {rowCard(
+            glyph(
+              <>
+                <circle cx="10" cy="7" r="3" />
+                <path d="M4.4 16.6a5.6 5.6 0 0 1 11.2 0" />
+              </>,
+            ),
+            'Project manager',
+            person(byRole('project_manager'), 'Not set for this job'),
+            byRole('project_manager') ? () => setOpenContact(byRole('project_manager')) : undefined,
+          )}
+
+          {rowCard(
+            glyph(
+              <>
+                <path d="M3.6 12.4a6.4 6.4 0 0 1 12.8 0z" />
+                <path d="M2.6 12.4h14.8M10 6V3.4" />
+              </>,
+            ),
+            'Site supervisor',
+            person(byRole('supervisor'), 'Not set for this job'),
+            byRole('supervisor') ? () => setOpenContact(byRole('supervisor')) : undefined,
+          )}
+
+          {rowCard(
+            glyph(
+              <>
+                <path d="M5.4 3.4h6l3.2 3.2v10.4H5.4z" />
+                <path d="M7.8 9h4.4M7.8 12h3" />
+              </>,
+            ),
+            'Contract administrator',
+            person(byRole('contract_admin'), 'Not set for this job'),
+            byRole('contract_admin') ? () => setOpenContact(byRole('contract_admin')) : undefined,
+          )}
+
+          {rowCard(
+            glyph(
+              <>
+                <path d="M5 3.4h7.4l2.6 2.6v10.6H5z" />
+                <path d="M7.6 8h6M7.6 11h4.4M7.6 13.8h3" />
+              </>,
+            ),
+            'Notes',
+            notes.length === 0 ? (
+              <span style={{ fontSize: 12, color: '#9AA1A9' }}>Nothing yet</span>
+            ) : (
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {notes.slice(0, 3).map((n) => (
+                  <span
+                    key={n.id}
+                    style={{ fontSize: 12, lineHeight: 1.35, color: '#6B7278', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    {n.body}
+                  </span>
+                ))}
+                {notes.length > 3 && (
+                  <span style={{ fontSize: 11.5, color: '#9AA1A9' }}>+{notes.length - 3} more</span>
+                )}
+              </span>
+            ),
+            onOpenNotes,
+          )}
+        </>
+      )}
+
+      {openContact && <ContactSheet contact={openContact} onClose={() => setOpenContact(null)} />}
+    </>
+  )
+}
+
+const ROLE_LABEL: Record<Contact['role'], string> = {
+  project_manager: 'Project manager',
+  supervisor: 'Site supervisor',
+  contract_admin: 'Contract administrator',
+  accounts: 'Accounts',
+  estimator: 'Estimator',
+  other: 'Contact',
+}
+
+/**
+ * One of the builder's people, with the two buttons a phone is for. The links
+ * on the row itself are small; on a wet slab in a hurry this is the target.
+ */
+function ContactSheet({ contact, onClose }: { contact: Contact; onClose: () => void }) {
+  const btn = {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 50,
+    borderRadius: 11,
+    fontFamily: 'inherit',
+    fontSize: 14.5,
+    fontWeight: 700,
+    letterSpacing: '.02em',
+    textDecoration: 'none',
+  } as const
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.5)' }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 14, padding: `18px 16px calc(22px + ${SAFE_BOTTOM})`, background: '#F5F6F7', borderRadius: '16px 16px 0 0' }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 46, height: 46, borderRadius: '50%', background: '#EFEBFB', fontSize: 16, fontWeight: 800, color: s.accent }}>
+            {contact.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+          </span>
+          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>{contact.name}</span>
+            <span style={{ fontSize: 13, color: '#7B838B' }}>{ROLE_LABEL[contact.role]}</span>
+          </span>
+          <span
+            onClick={onClose}
+            style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#E9ECEF', cursor: 'pointer' }}
+          >
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="2" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </span>
+        </span>
+
+        {contact.note && (
+          <span style={{ padding: '11px 13px', background: '#fff', border: '1px solid #E4E7EB', borderRadius: 10, fontSize: 13, lineHeight: 1.45, color: '#4A5057' }}>
+            {contact.note}
+          </span>
+        )}
+
+        <span style={{ display: 'flex', gap: 10 }}>
+          {contact.mobile && (
+            <a href={`tel:${contact.mobile.replace(/\s/g, '')}`} style={{ ...btn, background: '#1A1D21', color: '#fff' }}>
+              <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinejoin="round">
+                <path d="M6.4 3.4l2 3-1.6 1.6a9 9 0 0 0 4.2 4.2L12.6 10.6l3 2-1.2 2.4a1.6 1.6 0 0 1-1.8.8C8.4 14.8 5.2 11.6 4.2 6.4a1.6 1.6 0 0 1 .8-1.8z" />
+              </svg>
+              Call
+            </a>
+          )}
+          {contact.email && (
+            <a href={`mailto:${contact.email}`} style={{ ...btn, background: '#fff', border: '1px solid #DCE0E6', color: s.accent }}>
+              <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinejoin="round">
+                <rect x="2.8" y="5" width="14.4" height="10" rx="2" />
+                <path d="M3.2 6l6.8 5 6.8-5" />
+              </svg>
+              Email
+            </a>
+          )}
+        </span>
+
+        {(contact.mobile || contact.email) && (
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12.5, color: '#8B9096' }}>
+            {contact.mobile && <span>{contact.mobile}</span>}
+            {contact.email && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{contact.email}</span>}
+          </span>
         )}
       </div>
-    </>
+    </div>
   )
 }
