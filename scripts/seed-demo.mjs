@@ -179,6 +179,24 @@ try {
   const companyId = me.company_id
   console.log(`company ${COMPANY_NAME} — ${companyId}`)
 
+  // ------------------------------------------------- who we are on paper
+  // A Certificate of Compliance names the entity that gave the warranty and
+  // the licensed contractor who signed it, so this tenant needs both or the
+  // document has a hole in its identity line.
+  //
+  // These are the DEMO company's, invented to match the demo company's name.
+  // The real ABN and builders licence belong on the real tenant and are set
+  // there — printing a live licence number on a made-up business's compliance
+  // certificate would be a false record, whoever is reading it.
+  const identity = {
+    legal_name: 'Semaphore Trades Pty. Ltd.',
+    abn: '54002000004',
+    licence_no: 'BLD 214477',
+    certifier_name: OWNER_NAME,
+  }
+  const coUpd = await boss.patch('companies', `id=eq.${companyId}`, identity)
+  if (!coUpd.ok) throw new Error(`company identity patch failed: HTTP ${coUpd.status} ${await coUpd.text()}`)
+
   // ------------------------------------- retire the pre-design demo world
   for (const oldName of ['Lot 22, Golden Grove', 'Semaphore Beach House Reno']) {
     const rows = await boss.get('job_sites', `select=id,status&company_id=eq.${companyId}&name=eq.${encodeURIComponent(oldName)}`)
@@ -690,6 +708,120 @@ try {
     )
     const res = await boss.post('site_files', rows)
     if (!res.ok) throw new Error(`photos insert failed (${key}): HTTP ${res.status} ${await res.text()}`)
+  }
+
+  // -------------------------------------------------- waterproofing packages
+  // The six-step record a Certificate of Compliance is issued from, seeded as
+  // the two ends of the same story:
+  //
+  //   Glenelg  the membrane is on and the flood test is not done, so the
+  //            Overview card is red and nothing on the job can be claimed
+  //   Lot 42   tested, signed, photographed — everything but the certificate,
+  //            which is one tap away
+  //
+  // Files are uploaded for real rather than pointed at dangling paths: the
+  // thumbnails on these steps are the evidence, and a broken image would
+  // misrepresent what the app does.
+  const WP_PKGS = [
+    ['glenelg', {
+      product_internal: 'Mapei Mapelastic AquaDefense',
+      product_external: 'Mapei Mapelastic Smart',
+      installed_on: adDay(-2),
+      installed_by: 'Proven Tiling Solutions',
+      // Booked, not held. flood_test_result stays 'not_completed', which is
+      // what makes this the outstanding item.
+      flood_test_on: adDay(-1),
+      scope_of_work: 'waterproofing to balconies B301 - B307',
+      warranty_years: 2,
+    }],
+    ['lot42', {
+      product_internal: 'Mapei Mapelastic AquaDefense',
+      product_external: 'Mapei Mapelastic Smart',
+      installed_on: adDay(-9),
+      installed_by: 'Proven Tiling Solutions',
+      flood_test_on: adDay(-2),
+      flood_test_result: 'pass',
+      flood_test_hours: 24,
+      builder_signed_name: 'Marco Ferraro',
+      builder_signed_at: adAt(-1, '15:20'),
+      completion_on: adDay(-2),
+      scope_of_work: 'waterproofing to ensuite 1 + ensuite 2 + bath 1 + laundry',
+      warranty_years: 2,
+    }],
+  ]
+
+  // A 1x1 JPEG and a one-line PDF. Enough to be a real object in the bucket,
+  // small enough to be honest about being demo evidence.
+  const TINY_JPEG = Buffer.from(
+    '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a' +
+    'HBwcJC4nICIsIxwcKDcpLDA1NTU1MDVAQEBAQEBAQEBAQEBAQEBAQEBAQP/bAEMBCQkJDAsMGA0N' +
+    'GDIhHCEyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMv/A' +
+    'ABEIAAEAAQMBIgACEQEDEQH/xABTAAEBAQAAAAAAAAAAAAAAAAABAgMBAQEBAAAAAAAAAAAAAAAA' +
+    'AAECAxABAQAAAAAAAAAAAAAAAAAAABEBAAIRAxIhMQARAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQAC' +
+    'EQMRAD8AmgAf/9k=', 'base64')
+  const TINY_PDF = Buffer.from(
+    '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
+    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj\n' +
+    '4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n' +
+    '5 0 obj<</Length 96>>stream\nBT /F1 14 Tf 60 760 Td (Mapei product warranty - demo document) Tj ET\nendstream endobj\n' +
+    'trailer<</Root 1 0 R>>\n%%EOF\n', 'latin1')
+
+  /** PUT an object into a storage bucket as the signed-in owner. */
+  async function putObject(path, bytes, contentType) {
+    const r = await fetch(`${SB}/storage/v1/object/site-files/${path}`, {
+      method: 'POST',
+      headers: { Authorization: boss.H.Authorization, apikey: ANON, 'Content-Type': contentType, 'x-upsert': 'true' },
+      body: bytes,
+    })
+    if (!r.ok && r.status !== 409) throw new Error(`storage put failed (${path}): HTTP ${r.status} ${await r.text()}`)
+    return path
+  }
+
+  const WP_FILES = [
+    // key, step, kind, category, filename
+    ['glenelg', 'products', 'document', null, 'mapelastic-aquadefense-tds.pdf'],
+    ['glenelg', 'products', 'document', null, 'mapelastic-smart-tds.pdf'],
+    ['glenelg', 'install', 'photo', null, 'b305-membrane-first-coat.jpg'],
+    ['glenelg', 'install', 'photo', null, 'b305-upstand-150.jpg'],
+    ['glenelg', 'install', 'photo', null, 'b306-angle-fillet.jpg'],
+    ['lot42', 'products', 'document', null, 'mapelastic-aquadefense-tds.pdf'],
+    ['lot42', 'install', 'photo', null, 'ensuite-1-membrane.jpg'],
+    ['lot42', 'install', 'photo', null, 'ensuite-2-membrane.jpg'],
+    ['lot42', 'install', 'photo', null, 'bath-1-hob-detail.jpg'],
+    ['lot42', 'install', 'photo', null, 'laundry-membrane.jpg'],
+    ['lot42', 'flood_test', 'photo', null, 'ensuite-1-flood-test-24h.jpg'],
+    ['lot42', 'flood_test', 'photo', null, 'bath-1-flood-test-24h.jpg'],
+    ['lot42', 'certificates', 'document', 'supplier_warranty', 'mapei-product-warranty.pdf'],
+  ]
+
+  const wpPkg = {}
+  for (const [key, values] of WP_PKGS) {
+    wpPkg[key] = await ensureRow(boss, 'waterproofing_packages',
+      `select=id&site_id=eq.${site[key].id}`,
+      { company_id: companyId, site_id: site[key].id, created_by: me.id, ...values },
+      `waterproofing package (${key})`)
+    // ensureRow only inserts, so an existing record is brought up to date here
+    // — otherwise a re-run would leave last week's state on screen.
+    const upd = await boss.patch('waterproofing_packages', `id=eq.${wpPkg[key].id}`, values)
+    if (!upd.ok) throw new Error(`wp package patch failed (${key}): HTTP ${upd.status} ${await upd.text()}`)
+  }
+
+  for (const [key, step, kind, category, filename] of WP_FILES) {
+    const pkgId = wpPkg[key].id
+    const have = await boss.get('site_files',
+      `select=id&waterproofing_package_id=eq.${pkgId}&name=eq.${encodeURIComponent(filename)}&limit=1`)
+    if (Array.isArray(have) && have.length > 0) continue
+    const isPhoto = kind === 'photo'
+    const path = `${companyId}/${site[key].id}/demo-wp-${step}-${filename}`
+    await putObject(path, isPhoto ? TINY_JPEG : TINY_PDF, isPhoto ? 'image/jpeg' : 'application/pdf')
+    const res = await boss.post('site_files', [{
+      company_id: companyId, site_id: site[key].id, waterproofing_package_id: pkgId, wp_step: step,
+      uploaded_by: me.id, kind, category, storage_path: path, name: filename,
+      mime: isPhoto ? 'image/jpeg' : 'application/pdf',
+      size_bytes: (isPhoto ? TINY_JPEG : TINY_PDF).length,
+    }])
+    if (!res.ok) throw new Error(`wp file insert failed (${key}/${filename}): HTTP ${res.status} ${await res.text()}`)
   }
 
   // ------------------------------------------------------------------ chat

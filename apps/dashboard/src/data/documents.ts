@@ -6,7 +6,7 @@ import type {
   InvoiceRow,
   WaterproofingRow,
 } from './supabase'
-import { LEFT, Page, RIGHT, WIDTH, buildPdf, details, footer, formatAbn, header, wrap } from './pdf'
+import { LEFT, Page, RIGHT, WIDTH, buildPdf, details, footer, formatAbn, header, textWidth, wrap } from './pdf'
 
 /**
  * The three documents this business hands to somebody else.
@@ -22,6 +22,10 @@ import { LEFT, Page, RIGHT, WIDTH, buildPdf, details, footer, formatAbn, header,
 
 export interface CompanyDetails {
   name: string
+  /** The Pty Ltd behind the trading name, when there is one (schema_v30). */
+  legal_name?: string | null
+  /** The licensed contractor who signs a certificate (schema_v30). */
+  certifier_name?: string | null
   abn: string | null
   acn: string | null
   licence_no: string | null
@@ -407,4 +411,212 @@ export function waterproofingPdf(opts: {
   if (foot.length) footer(page, foot)
 
   return buildPdf([page], `${ref} ${record.area}`)
+}
+
+// ------------------------------------- Certificate of Compliance (a package)
+
+/**
+ * The client's own Certificate of Compliance, reproduced.
+ *
+ * This is not a document to design. Proven Tiling hands this exact page to a
+ * builder, the builder countersigns the acknowledgement at the bottom, and it
+ * goes in the handover file — so the headings, the clause wording and the
+ * standards it cites are copied from theirs, not improved on. Where a fact is
+ * missing the line still prints, empty, because a builder reading a certificate
+ * with no completion date should see that rather than not see the field.
+ *
+ * Distinct from waterproofingPdf() above, which certifies ONE wet area from the
+ * install register. This certifies the apartment: "waterproofing to bathroom +
+ * ensuite + wc + balcony + laundry", one number, one signature.
+ */
+export interface WpPackageDoc {
+  unit: string | null
+  scope_of_work: string | null
+  completion_on: string | null
+  warranty_years: number
+  certificate_no: string | null
+  builder_signed_name: string | null
+  builder_signed_at: string | null
+}
+
+/**
+ * PTS-WP-250817-001 — initials, the document type, the day, the day's counter.
+ * The initials come off the trading name so this is not one client's format
+ * hardcoded, and the date is the issue date because that is what makes the
+ * number unique and sortable in a builder's filing.
+ */
+export function certificateNo(companyName: string, on: Date, sequence: number): string {
+  const initials =
+    companyName
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => w[0])
+      .join('')
+      .replace(/[^A-Za-z]/g, '')
+      .slice(0, 3)
+      .toUpperCase() || 'WP'
+  const yy = String(on.getFullYear()).slice(2)
+  const mm = String(on.getMonth() + 1).padStart(2, '0')
+  const dd = String(on.getDate()).padStart(2, '0')
+  return `${initials}-WP-${yy}${mm}${dd}-${String(sequence).padStart(3, '0')}`
+}
+
+/** The identity line under the letterhead rule, centred as on theirs. */
+function identityLine(company: CompanyDetails): string {
+  const who = company.legal_name && company.legal_name !== company.name
+    ? `${company.legal_name} Trading as ${company.name}`
+    : company.name
+  return [
+    company.abn ? `ABN: ${formatAbn(company.abn)}` : null,
+    who,
+    company.licence_no ? `BLD ${company.licence_no.replace(/^BLD\s*/i, '')}` : null,
+  ]
+    .filter(Boolean)
+    .join('   |   ')
+}
+
+export function wpCertificatePdf(opts: {
+  company: CompanyDetails
+  pkg: WpPackageDoc
+  siteName: string
+  siteAddress: string | null
+  builderName: string | null
+  /** The licensed contractor who signs. Not whoever tapped the button. */
+  signatoryName: string
+  issuedOn: Date
+}): Blob {
+  const { company, pkg, siteName, siteAddress, builderName, signatoryName, issuedOn } = opts
+  const page = new Page()
+
+  // ------------------------------------------------------------- letterhead
+  // Their letterhead is a wordmark top right over a rule, with the identity
+  // line centred beneath it. No logo file is on record yet, so the trading
+  // name sets in its place — same position, same weight.
+  page.textRight(company.name, RIGHT, { size: 15, font: 'HB' })
+  page.down(24)
+  page.rule(LEFT, RIGHT, { grey: 0.55, width: 0.8 })
+  page.down(9)
+
+  const ident = identityLine(company)
+  page.text(ident, LEFT + (WIDTH - textWidth(ident, 8, 'H')) / 2, { size: 8, grey: 0.25 })
+  page.down(26)
+
+  // ------------------------------------------------------------- the heading
+  // The number goes on the same line, right-aligned: their template has no
+  // field for it, but a builder filing this needs something to file it under,
+  // and a document that cannot be referred to cannot be chased.
+  page.text('Certificate of Compliance', LEFT, { size: 11.5, font: 'HB' })
+  if (pkg.certificate_no) page.textRight(pkg.certificate_no, RIGHT, { size: 9, grey: 0.35, y: page.y + 3 })
+  page.down(17)
+
+  const scope = pkg.scope_of_work?.trim() || 'waterproofing'
+  const label = 'Description of Work: '
+  page.text(label, LEFT, { size: 9.5, font: 'HB' })
+  const scopeX = LEFT + textWidth(label, 9.5, 'HB')
+  const scopeLines = wrap(scope, RIGHT - scopeX, 9.5)
+  scopeLines.forEach((l, i) => {
+    page.text(l, i === 0 ? scopeX : LEFT, { size: 9.5, y: page.y + i * 13 })
+  })
+  page.down(scopeLines.length * 13 + 14)
+
+  // ---------------------------------------------------------------- section
+  const heading = (t: string) => {
+    page.text(t, LEFT, { size: 9.5, font: 'HB' })
+    page.down(14)
+  }
+  const line = (t: string, opts_: { grey?: number } = {}) => {
+    for (const l of wrap(t, WIDTH, 9.5)) {
+      page.text(l, LEFT, { size: 9.5, grey: opts_.grey })
+      page.down(13)
+    }
+  }
+  /** "Builder: Palumbo" — bold label, plain value, on one line. */
+  const field = (k: string, v: string) => {
+    page.text(k, LEFT, { size: 9.5 })
+    page.text(v, LEFT + textWidth(k, 9.5, 'H') + 3, { size: 9.5 })
+    page.down(13)
+  }
+
+  heading('Project Details')
+  field('Project Name:', siteName)
+  // Printed even on a house, blank — their form has the field and a builder
+  // filling one in by hand is better than a missing line.
+  field('Apartment No.', pkg.unit ?? '')
+  field('Builder:', builderName ?? '')
+  field('Date of Completion:', date(pkg.completion_on))
+  if (siteAddress) field('Site Address:', siteAddress)
+  page.down(9)
+
+  heading('Standards and Regulations')
+  line('This waterproofing work has been carried out in accordance with:')
+  line('AS 3740:2021 - Waterproofing of domestic wet areas')
+  line('Building Code of Australia (NCC Volume 2)')
+  line("Manufacturer's installation instructions and specifications")
+  page.down(9)
+
+  heading('Statement of Compliance')
+  line(
+    'I, the undersigned, being a licensed waterproofing contractor, hereby certify that the ' +
+      'waterproofing work described above:',
+  )
+  line('Has been completed in accordance with the relevant Australian Standards and manufacturer requirements.')
+  line(
+    'Has been applied to a clean, sound, and properly prepared surface; and is fit for its intended ' +
+      'purpose at the time of completion.',
+  )
+  page.down(9)
+
+  heading('Warranty')
+  line(
+    `The workmanship for the waterproofing installation is warranted for a period of ${pkg.warranty_years} ` +
+      `year${pkg.warranty_years === 1 ? '' : 's'} from the date of completion, subject to normal use and ` +
+      'maintenance and excluding damage caused by structural movement, abuse, or subsequent trades.',
+  )
+  line('Product warranties apply as provided by the respective manufacturers.')
+  page.down(12)
+
+  heading('Contractor Declaration')
+  // Space for the signature. Theirs is an image; until one is on file this is
+  // the room to sign in, which is what a printed certificate needs anyway.
+  page.down(34)
+  page.rule(LEFT, LEFT + 190, { grey: 0.7 })
+  page.down(13)
+  field('Name', signatoryName)
+  field('Date:', date(pkg.completion_on) === '-' ? dateOf(issuedOn) : date(pkg.completion_on))
+  page.down(12)
+
+  heading('Builder Acknowledgement')
+  line(
+    'I acknowledge receipt of this Certificate of Compliance and confirm that the waterproofing areas ' +
+      'have been inspected prior to tiling.',
+  )
+  page.down(6)
+
+  // Signed already, or the blanks to sign in.
+  if (pkg.builder_signed_at) {
+    field('Signature:', pkg.builder_signed_name ?? '')
+    field('Name (print):', pkg.builder_signed_name ?? '')
+    field(
+      'Date:',
+      new Date(pkg.builder_signed_at).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' }),
+    )
+  } else {
+    const blank = (k: string) => {
+      page.text(k, LEFT, { size: 9.5 })
+      page.rule(LEFT + textWidth(k, 9.5, 'H') + 8, LEFT + textWidth(k, 9.5, 'H') + 190, { grey: 0.6, y: page.y + 10 })
+      page.down(20)
+    }
+    blank('Signature:')
+    blank('Name (print):')
+    page.text('Date:      /      /', LEFT, { size: 9.5 })
+    page.down(13)
+  }
+
+  const ref = pkg.certificate_no ?? 'DRAFT'
+  return buildPdf([page], `${ref} ${siteName}`)
+}
+
+/** A JS Date in the same shape as the date() helper's output. */
+function dateOf(d: Date): string {
+  return d.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })
 }
