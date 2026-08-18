@@ -294,22 +294,41 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
   const R = 29
   const C = 2 * Math.PI * R
   const frac = total === 0 ? 0 : done / total
+  const green = C * frac
+  const amber = C - green
+
+  /**
+   * Two things were wrong with this ring, and both showed worst at 0 of 6.
+   *
+   * The amber arc was drawn at cx/cy 33 while everything else moved to 37 when
+   * the ring grew — so it sat four pixels off centre and the two arcs did not
+   * share a circle. And a zero-length arc with a round cap is not nothing, it
+   * is a dot: at 0 complete that put a green pip on top of an all-amber ring.
+   *
+   * Now both arcs come from one function, an arc with no length is not drawn,
+   * and a full circle loses its caps so they do not overlap at the join.
+   */
+  const arc = (colour: string, length: number, offset: number) =>
+    length < 0.5 ? null : (
+      <circle
+        cx="37"
+        cy="37"
+        r={R}
+        fill="none"
+        stroke={colour}
+        strokeWidth="6"
+        strokeLinecap={length >= C - 0.5 ? 'butt' : 'round'}
+        strokeDasharray={`${length} ${C}`}
+        strokeDashoffset={offset}
+      />
+    )
+
   return (
     <span style={{ position: 'relative', flex: 'none', width: 74, height: 74 }}>
       <svg width="74" height="74" viewBox="0 0 74 74" style={{ transform: 'rotate(-90deg)' }}>
         <circle cx="37" cy="37" r={R} fill="none" stroke="#E6E9EC" strokeWidth="6" />
-        <circle
-          cx="33"
-          cy="33"
-          r={R}
-          fill="none"
-          stroke="#E08600"
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeDasharray={`${C * (1 - frac)} ${C}`}
-          strokeDashoffset={-C * frac}
-        />
-        <circle cx="37" cy="37" r={R} fill="none" stroke="#1B7A2C" strokeWidth="6" strokeLinecap="round" strokeDasharray={`${C * frac} ${C}`} />
+        {arc('#E08600', amber, -green)}
+        {arc('#1B7A2C', green, 0)}
       </svg>
       <span style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-.02em', color: s.ink, lineHeight: 1 }}>

@@ -1,6 +1,18 @@
 html, body, #root { margin: 0; padding: 0; height: 100%; }
 * { box-sizing: border-box; }
 
+/*
+ * Double-tap to zoom off, pinch to zoom left alone.
+ *
+ * A sheet that closes when you save it takes its button out from under your
+ * finger, and the next tap lands on the page — which iOS reads as a double
+ * tap and zooms the whole app to 2x, where it stays. That is what happened
+ * after a builder sign-off. `manipulation` is the narrow fix: it removes the
+ * double-tap gesture and nothing else, so someone who needs to pinch a
+ * drawing still can.
+ */
+html { touch-action: manipulation; }
+
 body {
   background: #F5F6F7;
   color: #1A1D21;
