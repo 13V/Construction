@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
-import { PlansScreen } from '../PlansScreen'
+import { DrawingsButton, DrawingsSheet } from './Drawings'
 import { WaterproofingButton, WaterproofingSheet } from './Waterproofing'
 import { s } from './stheme'
 
@@ -207,6 +207,7 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
   const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [open, setOpen] = useState<{ line: ScopeLine; row: SelectionRow | null } | null>(null)
   const [wetOpen, setWetOpen] = useState(false)
+  const [drawingsOpen, setDrawingsOpen] = useState(false)
   const [noting, setNoting] = useState(false)
   const [noteDraft, setNoteDraft] = useState('')
   const [files, setFiles] = useState<Map<string, AttachmentRow[]>>(new Map())
@@ -369,11 +370,12 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
 
   return (
     <div style={{ height: '100%', overflow: 'auto', paddingBottom: 26 }}>
-      {/* Drawings first — the sheet is what everything below describes. */}
+      {/* Drawings first — the sheet is what everything below describes — but
+          as a door, not the register itself. Ten storeys at three drawings a
+          level is thirty rows, and printed here they push the scope, the notes
+          and the details below anything anyone scrolls to. */}
       <span style={sectionLabel}>DRAWINGS</span>
-      <div style={{ margin: '0 18px', ...card }}>
-        <PlansScreen me={me} siteId={site.id} siteName={site.name} embedded onClose={() => {}} />
-      </div>
+      <DrawingsButton site={site} onOpen={() => setDrawingsOpen(true)} />
 
       {/* Waterproofing under the drawings, as one door rather than a list —
           it is the thing that holds up every claim, so it gets the weight. */}
@@ -527,6 +529,7 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
       )}
 
       {wetOpen && <WaterproofingSheet me={me} site={site} onClose={() => setWetOpen(false)} />}
+      {drawingsOpen && <DrawingsSheet me={me} site={site} onClose={() => setDrawingsOpen(false)} />}
 
       {open && (
         <ScopeSheet

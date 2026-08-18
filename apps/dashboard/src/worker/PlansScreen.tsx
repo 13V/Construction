@@ -30,6 +30,28 @@ interface Pin {
   resolved_at: string | null
 }
 
+/**
+ * What level a sheet belongs to, read off its own name.
+ *
+ * "I do a 10 storey apartment building, that's 3 drawings per level" — thirty
+ * sheets in one flat list is not a register, it is a scroll. Nobody is going
+ * to retype thirty levels into a form either, so the level comes from how the
+ * office already names the file: L03, Level 3, LVL3, Floor 3, GF, Basement 1.
+ *
+ * A sheet whose name says nothing falls into "Other sheets" rather than being
+ * guessed at — a drawing filed under the wrong level is worse than one filed
+ * under none.
+ */
+export function levelOf(name: string): { label: string; sort: number } | null {
+  const n = name.replace(/\.[a-z0-9]+$/i, '')
+  const basement = n.match(/\b(?:basement|bsmt|b)\s*[-_ ]?(\d{1,2})\b/i)
+  if (basement) return { label: `Basement ${Number(basement[1])}`, sort: -100 + Number(basement[1]) }
+  if (/\b(?:ground floor|ground|gf)\b/i.test(n)) return { label: 'Ground floor', sort: 0 }
+  const level = n.match(/\b(?:level|lvl|floor|fl|l)\s*[-_ ]?(\d{1,2})\b/i)
+  if (level) return { label: `Level ${Number(level[1])}`, sort: Number(level[1]) }
+  return null
+}
+
 const PIN_COLOUR: Record<Pin['kind'], string> = {
   issue: theme.alert,
   note: theme.accent,
@@ -69,6 +91,7 @@ export function PlansScreen({
   const [sheets, setSheets] = useState<SiteFileRow[]>([])
   const [pins, setPins] = useState<Pin[]>([])
   const [open, setOpen] = useState<SiteFileRow | null>(null)
+  const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -80,7 +103,17 @@ export function PlansScreen({
     setLoading(true)
     const client = supabase()
     const [f, p] = await Promise.all([
-      client.from('site_files').select('*').eq('site_id', siteId).eq('kind', 'document').order('name'),
+      // Drawings only. A scope line's data sheet and a waterproofing product
+      // sheet are both kind='document' on the same job, and without this they
+      // turned up in the drawing register as sheets to build from.
+      client
+        .from('site_files')
+        .select('*')
+        .eq('site_id', siteId)
+        .eq('kind', 'document')
+        .is('selection_id', null)
+        .is('waterproofing_package_id', null)
+        .order('name'),
       client.from('plan_pins').select('*').eq('site_id', siteId),
     ])
     if (f.error) setError(f.error.message)
@@ -99,9 +132,31 @@ export function PlansScreen({
    * something newer exists.
    */
   const supersededIds = useMemo(() => new Set(sheets.map((s) => s.supersedes).filter(Boolean) as string[]), [sheets])
-  const current = sheets.filter((s) => !supersededIds.has(s.id))
-  const old = sheets.filter((s) => supersededIds.has(s.id))
+  const q = query.trim().toLowerCase()
+  const shown = q ? sheets.filter((x) => x.name.toLowerCase().includes(q)) : sheets
+  const current = shown.filter((x) => !supersededIds.has(x.id))
+  const old = shown.filter((x) => supersededIds.has(x.id))
   const pinsFor = (id: string) => pins.filter((p) => p.file_id === id && !p.resolved_at)
+
+  /**
+   * Levels, once there are enough sheets for a flat list to stop working.
+   * Below that the grouping is noise — six sheets read fine as six sheets.
+   */
+  const levels = useMemo(() => {
+    if (current.length < 9) return null
+    const groups = new Map<string, { sort: number; sheets: SiteFileRow[] }>()
+    for (const sheet of current) {
+      const lv = levelOf(sheet.name)
+      const label = lv?.label ?? 'Other sheets'
+      const sort = lv?.sort ?? 1000
+      const g = groups.get(label) ?? { sort, sheets: [] }
+      g.sheets.push(sheet)
+      groups.set(label, g)
+    }
+    // One group is not a grouping.
+    if (groups.size < 2) return null
+    return [...groups.entries()].sort((a, b) => a[1].sort - b[1].sort)
+  }, [current])
 
   return (
     <div
@@ -146,8 +201,46 @@ export function PlansScreen({
           </div>
         )}
 
-        {current.length > 0 && <SectionLabel>CURRENT</SectionLabel>}
-        <SheetList sheets={current} pinsFor={pinsFor} onOpen={setOpen} superseded={false} />
+        {sheets.length >= 9 && (
+          <div style={{ padding: '12px 14px 0' }}>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`Search ${sheets.length} sheets`}
+              style={{
+                width: '100%',
+                height: 44,
+                padding: '0 13px',
+                boxSizing: 'border-box',
+                background: theme.panel,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 10,
+                font: 'inherit',
+                fontSize: 16,
+                color: theme.ink,
+                outline: 'none',
+              }}
+            />
+          </div>
+        )}
+
+        {q && shown.length === 0 && (
+          <div style={{ padding: '18px', fontSize: 13.5, color: theme.inkSoft }}>Nothing matches “{query}”.</div>
+        )}
+
+        {levels ? (
+          levels.map(([label, g]) => (
+            <div key={label}>
+              <SectionLabel>{label.toUpperCase()} · {g.sheets.length}</SectionLabel>
+              <SheetList sheets={g.sheets} pinsFor={pinsFor} onOpen={setOpen} superseded={false} />
+            </div>
+          ))
+        ) : (
+          <>
+            {current.length > 0 && <SectionLabel>CURRENT</SectionLabel>}
+            <SheetList sheets={current} pinsFor={pinsFor} onOpen={setOpen} superseded={false} />
+          </>
+        )}
 
         {old.length > 0 && <SectionLabel tone="alert">SUPERSEDED — DO NOT BUILD FROM</SectionLabel>}
         <SheetList sheets={old} pinsFor={pinsFor} onOpen={setOpen} superseded />

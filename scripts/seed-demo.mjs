@@ -824,6 +824,51 @@ try {
     if (!res.ok) throw new Error(`wp file insert failed (${key}/${filename}): HTTP ${res.status} ${await res.text()}`)
   }
 
+  // ------------------------------------------------------------------ drawings
+  // The client's own worked example: "I do a 10 storey apartment building,
+  // that's 3 drawings per level." Glenelg is that building, so it carries the
+  // register at the size it actually reaches — thirty current sheets across
+  // ten levels, plus two the office has since reissued.
+  //
+  // The names carry the level because that is how a drawing office names a
+  // file, and it is what the register groups on. No column, no form field.
+  const SHEET_KINDS = ['Tile layout', 'Bathroom setout', 'Balcony waterproofing']
+  const DRAWINGS = []
+  for (let level = 1; level <= 10; level++) {
+    for (const kind of SHEET_KINDS) {
+      DRAWINGS.push([`L${String(level).padStart(2, '0')} - ${kind}`, false])
+    }
+  }
+  // Two reissued sheets: the superseded pair is what a foreman has to be
+  // stopped from building off, so the demo has to contain some.
+  DRAWINGS.push(['L03 - Tile layout REV A', true], ['L07 - Bathroom setout REV A', true])
+
+  const haveSheets = await boss.get('site_files',
+    `select=id&site_id=eq.${site.glenelg.id}&kind=eq.document&selection_id=is.null&waterproofing_package_id=is.null&limit=1`)
+  if (!Array.isArray(haveSheets) || haveSheets.length === 0) {
+    const made = {}
+    for (const [name, isOld] of DRAWINGS) {
+      const filename = `${name.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase()}.pdf`
+      const path = `${companyId}/${site.glenelg.id}/demo-drawing-${filename}`
+      await putObject(path, TINY_PDF, 'application/pdf')
+      const res = await boss.post('site_files', [{
+        company_id: companyId, site_id: site.glenelg.id, uploaded_by: me.id,
+        kind: 'document', category: 'drawing', storage_path: path, name,
+        mime: 'application/pdf', size_bytes: TINY_PDF.length,
+        version: isOld ? 'A' : 'B',
+      }])
+      if (!res.ok) throw new Error(`drawing insert failed (${name}): HTTP ${res.status} ${await res.text()}`)
+      made[name] = (await body(res))[0]
+    }
+    // The REV A sheets supersede the originals they were reissued from — a
+    // version string on its own cannot tell you something newer exists, so
+    // the newer sheet has to name the one it replaces.
+    for (const [oldName, newName] of [['L03 - Tile layout', 'L03 - Tile layout REV A'],
+                                      ['L07 - Bathroom setout', 'L07 - Bathroom setout REV A']]) {
+      await boss.patch('site_files', `id=eq.${made[newName].id}`, { supersedes: made[oldName].id })
+    }
+  }
+
   // ------------------------------------------------------------ safety shelves
   // The four shelves a builder means when he asks for your safety paperwork.
   // Two of them are only ever uploads; the SWMS shelf also holds the company
