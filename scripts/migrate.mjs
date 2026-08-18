@@ -53,6 +53,7 @@ const MIGRATIONS = [
   { file: 'schema_v29.sql', proves: ['site_files.selection_id'] },
   { file: 'schema_v30.sql', proves: ['waterproofing_packages', 'site_files.wp_step', 'companies.legal_name'] },
   { file: 'schema_v31.sql', proves: ['safety_documents.storage_path', 'safety_documents.expires_on', 'safety_shelf_v'] },
+  { file: 'schema_v32.sql', proves: ['builder_contacts_role_check_v32'] },
 ]
 
 // ------------------------------------------------------------- credentials
@@ -135,7 +136,11 @@ try {
                   where ns.nspname = 'public'
                  union all
                  select table_name || '.' || column_name as n
-                   from information_schema.columns where table_schema = 'public'`)
+                   from information_schema.columns where table_schema = 'public'
+                 union all
+                 select c.conname as n from pg_constraint c
+                   join pg_namespace ns on ns.oid = c.connamespace
+                  where ns.nspname = 'public'`)
     ).map((r) => r.n),
   )
 
@@ -185,7 +190,11 @@ try {
                   where ns.nspname = 'public'
                  union all
                  select table_name || '.' || column_name as n
-                   from information_schema.columns where table_schema = 'public'`)
+                   from information_schema.columns where table_schema = 'public'
+                 union all
+                 select c.conname as n from pg_constraint c
+                   join pg_namespace ns on ns.oid = c.connamespace
+                  where ns.nspname = 'public'`)
     ).map((r) => r.n),
   )
   const missing = MIGRATIONS.flatMap((m) => m.proves).filter((t) => !after.has(t))

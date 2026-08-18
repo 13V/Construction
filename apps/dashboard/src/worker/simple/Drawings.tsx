@@ -15,7 +15,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { PlansScreen } from '../PlansScreen'
-import { s, SAFE_BOTTOM } from './stheme'
+import { s } from './stheme'
 
 /**
  * What the button says, without mounting the register to find out: how many
@@ -117,33 +117,7 @@ export function DrawingsButton({ site, onOpen }: { site: JobSiteRow; onOpen: () 
   )
 }
 
-/** The register, over the job. Searchable and grouped by level once it is big. */
-export function DrawingsSheet({ me, site, onClose }: { me: WorkerRow; site: JobSiteRow; onClose: () => void }) {
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.45)' }}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: '100%', maxHeight: '92%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
-      >
-        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '16px 16px 13px 18px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>Drawings</span>
-            <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
-          </span>
-          <span
-            onClick={onClose}
-            style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}
-          >
-            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="2" strokeLinecap="round">
-              <path d="M5 5l10 10M15 5L5 15" />
-            </svg>
-          </span>
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: `calc(20px + ${SAFE_BOTTOM})` }}>
-          <PlansScreen me={me} siteId={site.id} siteName={site.name} embedded onClose={onClose} />
-        </div>
-      </div>
-    </div>
-  )
+/** The register itself, as a section of Overview. */
+export function DrawingsPanel({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
+  return <PlansScreen me={me} siteId={site.id} siteName={site.name} embedded onClose={() => {}} />
 }

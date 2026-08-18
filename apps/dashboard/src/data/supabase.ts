@@ -69,6 +69,8 @@ export interface JobSiteRow {
   captain_id: string | null
   /** The builder's person on this job, in builder_contacts. */
   supervisor_contact_id: string | null
+  /** The builder this job is for (schema_v15). Null until somebody links it. */
+  builder_id: string | null
   /** The job's chosen rail colour (schema_v25). Null → hash-derived. */
   colour: string | null
 }

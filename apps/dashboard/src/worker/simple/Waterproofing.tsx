@@ -509,7 +509,7 @@ export function WaterproofingButton({ site, onOpen }: { site: JobSiteRow; onOpen
  * page, top to bottom: where it is up to, the six steps, what the certificate
  * will say, and the wet areas it covers.
  */
-export function WaterproofingSheet({ me, site, onClose }: { me: WorkerRow; site: JobSiteRow; onClose: () => void }) {
+export function WaterproofingPanel({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
   const wp = useWaterproofing(site)
   const { pkg, files, wet, loading, steps, done, outstanding } = wp
   const [step, setStep] = useState<StepKey | null>(null)
@@ -566,28 +566,8 @@ export function WaterproofingSheet({ me, site, onClose }: { me: WorkerRow; site:
   const allDone = done === 6
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.45)' }}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: '100%', maxHeight: '92%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
-      >
-        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '16px 16px 13px 18px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>Waterproofing</span>
-            <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {site.name}
-              {pkg?.unit ? ` · ${pkg.unit}` : ''}
-            </span>
-          </span>
-          <span
-            onClick={onClose}
-            style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}
-          >
-            {closeGlyph}
-          </span>
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: `calc(24px + ${SAFE_BOTTOM})` }}>
+    <>
+        <div>
           {error && (
             <span style={{ display: 'block', margin: '12px 16px 0', padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 13, color: '#8E2A31' }}>{error}</span>
           )}
@@ -702,7 +682,6 @@ export function WaterproofingSheet({ me, site, onClose }: { me: WorkerRow; site:
             </span>
           )}
         </div>
-      </div>
 
       {step && (
         <StepSheet
@@ -718,7 +697,7 @@ export function WaterproofingSheet({ me, site, onClose }: { me: WorkerRow; site:
           reload={wp.reload}
         />
       )}
-    </div>
+    </>
   )
 }
 

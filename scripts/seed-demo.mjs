@@ -385,7 +385,21 @@ try {
       company_id: companyId, builder_id: kesselman.id, name: 'Marco Ferraro',
       role: 'supervisor', mobile: '0412 345 678', email: 'marco@kesselmanhomes.example',
     }, 'builder contact (Marco)')
-  await boss.patch('job_sites', `id=eq.${site.lot42.id}`, { supervisor_contact_id: marco.id })
+  await boss.patch('job_sites', `id=eq.${site.lot42.id}`, { supervisor_contact_id: marco.id, builder_id: kesselman.id })
+
+  // The other two the client's project details screen names. A tiler rings
+  // the supervisor about the slab and the contract administrator about the
+  // variation, and they are rarely the same person.
+  const KESSELMAN_PEOPLE = [
+    ['Dana Whitlock', 'project_manager', '0407 118 224', 'dana@kesselmanhomes.example'],
+    ['Priya Raman', 'contract_admin', '0428 663 190', 'priya@kesselmanhomes.example'],
+  ]
+  for (const [name, role, mobile, email] of KESSELMAN_PEOPLE) {
+    await ensureRow(boss, 'builder_contacts',
+      `select=id&builder_id=eq.${kesselman.id}&name=eq.${encodeURIComponent(name)}`,
+      { company_id: companyId, builder_id: kesselman.id, name, role, mobile, email },
+      `builder contact (${name})`)
+  }
 
   // ------------------------------------------------------------- the scope
   // The tiling scope, as the client wants it read: tile selections settled,

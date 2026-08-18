@@ -194,3 +194,51 @@ export function useSimpleData(me: WorkerRow): SimpleData {
     refresh: useCallback(() => setNonce((n) => n + 1), []),
   }
 }
+
+// ------------------------------------------------------------- when a job runs
+
+/**
+ * A job's span, from the three things that know about it.
+ *
+ * The rule is programme-first: if the builder's programme has lines that are
+ * ours, those dates ARE the job, because that is what we agreed to. Only when
+ * there is no programme does the span fall back to what the crew is actually
+ * booked and clocked on to — which is a description of what happened rather
+ * than a plan, and would otherwise overwrite the plan with it.
+ *
+ * It lives here because two screens ask the question — the programme bar on
+ * the Schedule and the project dates on a job — and a job that runs to
+ * different dates depending on which screen you are looking at is worse than
+ * one with no dates at all.
+ */
+export interface SpanRows {
+  tasks: Array<{ starts_on: string | null; ends_on: string | null }>
+  assignments: Array<{ starts_at: string; ends_at: string | null }>
+  shifts: Array<{ started_at: string }>
+}
+
+export function siteSpan(rows: SpanRows): { s: number; e: number } | null {
+  const span = (from: number, to: number, acc: { s: number; e: number } | null) =>
+    acc ? { s: Math.min(acc.s, from), e: Math.max(acc.e, to) } : { s: from, e: to }
+
+  let planned: { s: number; e: number } | null = null
+  for (const t of rows.tasks) {
+    if (!t.starts_on) continue
+    planned = span(
+      new Date(`${t.starts_on}T00:00:00`).getTime(),
+      new Date(`${t.ends_on ?? t.starts_on}T00:00:00`).getTime(),
+      planned,
+    )
+  }
+  if (planned) return planned
+
+  let actual: { s: number; e: number } | null = null
+  for (const a of rows.assignments) {
+    actual = span(new Date(a.starts_at).getTime(), new Date(a.ends_at ?? a.starts_at).getTime(), actual)
+  }
+  for (const x of rows.shifts) {
+    const t = new Date(x.started_at).getTime()
+    actual = span(t, t, actual)
+  }
+  return actual
+}

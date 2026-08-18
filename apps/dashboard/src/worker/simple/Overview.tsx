@@ -17,8 +17,9 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
-import { DrawingsButton, DrawingsSheet } from './Drawings'
-import { WaterproofingButton, WaterproofingSheet } from './Waterproofing'
+import { siteSpan, type SpanRows } from './data'
+import { DrawingsPanel } from './Drawings'
+import { WaterproofingPanel } from './Waterproofing'
 import { s } from './stheme'
 
 type ScopeStatus = 'pending' | 'chosen' | 'not_applicable'
@@ -200,14 +201,147 @@ const sectionLabel = {
   color: '#7B838B',
 } as const
 
+// ------------------------------------------------------------ the sub-tabs
+
+/**
+ * "Like this across the top."
+ *
+ * Overview was one long scroll — drawings, waterproofing, scope, notes,
+ * details — and each of those grew until the one below it was unreachable.
+ * Thirty drawings will do that on their own. So the page splits into the four
+ * things it was always four of, and the row across the top is how you get
+ * between them.
+ */
+export type OverviewSection = 'details' | 'scope' | 'drawings' | 'waterproofing'
+
+const SECTIONS: Array<{ key: OverviewSection; label: string; glyph: (c: string) => ReactNode }> = [
+  {
+    key: 'details',
+    label: 'Project details',
+    glyph: (c) => (
+      <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round">
+        <path d="M3.4 4.6h13.2v8.8H10l-3.2 2.8v-2.8H3.4z" />
+      </svg>
+    ),
+  },
+  {
+    key: 'scope',
+    label: 'Scope of works',
+    glyph: (c) => (
+      <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round">
+        <path d="M5.4 3.4h6l3.2 3.2v10.4H5.4z" />
+        <path d="M11.2 3.4v3.4h3.4M7.8 10h4.4M7.8 12.8h3" />
+      </svg>
+    ),
+  },
+  {
+    key: 'drawings',
+    label: 'Drawings',
+    glyph: (c) => (
+      <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round">
+        <path d="M5 2.8h6.4L15.6 7v10.2H5z" />
+        <path d="M11.2 2.8V7h4.4M7.4 10.2h5M7.4 13h3.2" />
+      </svg>
+    ),
+  },
+  {
+    key: 'waterproofing',
+    label: 'Waterproofing',
+    glyph: (c) => (
+      <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke={c} strokeWidth="1.5" strokeLinejoin="round">
+        <path d="M10 3.2c2.7 3.1 4.5 5.2 4.5 7.5a4.5 4.5 0 0 1-9 0c0-2.3 1.8-4.4 4.5-7.5z" />
+      </svg>
+    ),
+  },
+]
+
+function SectionTabs({ current, onPick }: { current: OverviewSection; onPick: (s: OverviewSection) => void }) {
+  return (
+    <div style={{ flex: 'none', display: 'flex', alignItems: 'stretch', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
+      {SECTIONS.map((sec) => {
+        const on = sec.key === current
+        return (
+          <span
+            key={sec.key}
+            onClick={() => onPick(sec.key)}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 4,
+              padding: '9px 2px 0',
+              cursor: 'pointer',
+            }}
+          >
+            {sec.glyph(on ? s.accent : '#98A0A8')}
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: on ? 700 : 500,
+                letterSpacing: '-.01em',
+                color: on ? s.accent : '#7B838B',
+                textAlign: 'center',
+                lineHeight: 1.2,
+              }}
+            >
+              {sec.label}
+            </span>
+            <span style={{ width: '100%', height: 2.5, marginTop: 5, borderRadius: '2px 2px 0 0', background: on ? s.accent : 'transparent' }} />
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * The tally the client drew along the foot of the screen. It counts the scope
+ * of works, because those three words ARE the scope statuses — a line is
+ * confirmed, still required, or does not apply to this job. It stays put while
+ * you move between sections so the answer to "what is left on this job" does
+ * not disappear when you go looking at a drawing.
+ */
+function ReadinessBar({ counts }: { counts: Record<ScopeStatus, number> }) {
+  const CELLS: Array<{ k: ScopeStatus; label: string }> = [
+    { k: 'chosen', label: 'Complete' },
+    { k: 'pending', label: 'Required' },
+    { k: 'not_applicable', label: 'Not applicable' },
+  ]
+  return (
+    <div
+      style={{
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'stretch',
+        background: '#fff',
+        borderTop: '1px solid #E1E5E9',
+      }}
+    >
+      {CELLS.map(({ k, label }, i) => (
+        <span
+          key={k}
+          style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '9px 4px 10px', borderLeft: i === 0 ? 'none' : '1px solid #EDEFF1' }}
+        >
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: STATUS_META[k].fg }}>
+            {STATUS_META[k].glyph}
+            {label}
+          </span>
+          <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-.01em', color: s.ink }}>{counts[k]}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
   const office = me.is_office
   const [rows, setRows] = useState<SelectionRow[]>([])
   const [notes, setNotes] = useState<NoteRow[]>([])
   const [people, setPeople] = useState<Map<string, string>>(new Map())
   const [open, setOpen] = useState<{ line: ScopeLine; row: SelectionRow | null } | null>(null)
-  const [wetOpen, setWetOpen] = useState(false)
-  const [drawingsOpen, setDrawingsOpen] = useState(false)
+  const [section, setSection] = useState<OverviewSection>('details')
   const [noting, setNoting] = useState(false)
   const [noteDraft, setNoteDraft] = useState('')
   const [files, setFiles] = useState<Map<string, AttachmentRow[]>>(new Map())
@@ -369,92 +503,13 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
   }
 
   return (
-    <div style={{ height: '100%', overflow: 'auto', paddingBottom: 26 }}>
-      {/* Drawings first — the sheet is what everything below describes — but
-          as a door, not the register itself. Ten storeys at three drawings a
-          level is thirty rows, and printed here they push the scope, the notes
-          and the details below anything anyone scrolls to. */}
-      <span style={sectionLabel}>DRAWINGS</span>
-      <DrawingsButton site={site} onOpen={() => setDrawingsOpen(true)} />
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <SectionTabs current={section} onPick={setSection} />
 
-      {/* Waterproofing under the drawings, as one door rather than a list —
-          it is the thing that holds up every claim, so it gets the weight. */}
-      <span style={sectionLabel}>WATERPROOFING</span>
-      <WaterproofingButton site={site} onOpen={() => setWetOpen(true)} />
-
-      {/* The scope lines. */}
-      <span style={sectionLabel}>SCOPE OF WORKS</span>
-      <div style={{ margin: '0 18px', ...card }}>
-        {lines.map(({ line, row }, i) => {
-          const status: ScopeStatus = row?.status ?? 'pending'
-          const meta = STATUS_META[status]
-          const icon = ICON[line.key] ?? ICON.tiles!
-          return (
-            <span
-              key={line.key}
-              onClick={() => office && setOpen({ line, row })}
-              style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 13px 13px 15px', borderBottom: i === lines.length - 1 ? 'none' : '1px solid #EDEFF1', cursor: office ? 'pointer' : 'default' }}
-            >
-              <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 9, background: icon.bg }}>
-                <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke={icon.stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  {icon.path}
-                </svg>
-              </span>
-              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-.005em', color: s.ink }}>{line.name}</span>
-                <span style={{ fontSize: 12.5, lineHeight: 1.35, color: '#7B838B' }}>{line.detail}</span>
-                {row?.chosen && (
-                  <span style={{ marginTop: 2, fontSize: 12.5, fontWeight: 600, color: '#1B7A2C' }}>{row.chosen}</span>
-                )}
-                {(() => {
-                  const n = (row && files.get(row.id)?.length) || 0
-                  if (n === 0) return null
-                  return (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 3, fontSize: 12, color: '#7B838B' }}>
-                      <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#8B9096" strokeWidth="1.7" strokeLinejoin="round">
-                        <path d="M4.6 2.8h7l4 4v10.4H4.6z" />
-                        <path d="M11.4 2.8v4.2h4.2" />
-                      </svg>
-                      {n} {n === 1 ? 'attachment' : 'attachments'}
-                    </span>
-                  )
-                })()}
-              </span>
-              <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7, paddingTop: 2 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 22, padding: '0 8px', borderRadius: 11, background: meta.bg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', color: meta.fg }}>
-                  {meta.glyph}
-                  {meta.label}
-                </span>
-                {office && (
-                  <svg width="10" height="10" viewBox="0 0 10 10" style={{ flex: 'none' }}>
-                    <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-            </span>
-          )
-        })}
-
-        {/* The tally the client drew under the list. */}
-        <span style={{ display: 'flex', alignItems: 'stretch', borderTop: '1px solid #E1E5E9', background: '#FAFBFC' }}>
-          {(['chosen', 'pending', 'not_applicable'] as const).map((k, i) => (
-            <span key={k} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '11px 4px', borderLeft: i === 0 ? 'none' : '1px solid #E9EDF0' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: STATUS_META[k].fg }}>
-                {STATUS_META[k].glyph}
-                {STATUS_META[k].label}
-              </span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: s.ink }}>{counts[k]}</span>
-            </span>
-          ))}
-        </span>
-      </div>
-
-      {!office && (
-        <span style={{ display: 'block', padding: '9px 18px 0', fontSize: 12.5, lineHeight: 1.45, color: '#8B9096' }}>
-          The office confirms these. Anything wrong or missing, say so in the job chat.
-        </span>
-      )}
-
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 26 }}>
+      {section === 'details' && (
+        <>
+          <ProjectDetails site={site} office={office} />
       {/* Notes for whoever is next on the job. */}
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '18px 18px 9px' }}>
         <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>NOTES</span>
@@ -522,14 +577,84 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
         )}
       </div>
 
-      <ProjectDetails site={site} office={office} />
+        </>
+      )}
+
+      {section === 'drawings' && <DrawingsPanel me={me} site={site} />}
+
+      {section === 'waterproofing' && <WaterproofingPanel me={me} site={site} />}
+
+      {section === 'scope' && (
+        <>
+      {/* The scope lines. */}
+      <span style={sectionLabel}>SCOPE OF WORKS</span>
+      <div style={{ margin: '0 18px', ...card }}>
+        {lines.map(({ line, row }, i) => {
+          const status: ScopeStatus = row?.status ?? 'pending'
+          const meta = STATUS_META[status]
+          const icon = ICON[line.key] ?? ICON.tiles!
+          return (
+            <span
+              key={line.key}
+              onClick={() => office && setOpen({ line, row })}
+              style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 13px 13px 15px', borderBottom: i === lines.length - 1 ? 'none' : '1px solid #EDEFF1', cursor: office ? 'pointer' : 'default' }}
+            >
+              <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 9, background: icon.bg }}>
+                <svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke={icon.stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  {icon.path}
+                </svg>
+              </span>
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-.005em', color: s.ink }}>{line.name}</span>
+                <span style={{ fontSize: 12.5, lineHeight: 1.35, color: '#7B838B' }}>{line.detail}</span>
+                {row?.chosen && (
+                  <span style={{ marginTop: 2, fontSize: 12.5, fontWeight: 600, color: '#1B7A2C' }}>{row.chosen}</span>
+                )}
+                {(() => {
+                  const n = (row && files.get(row.id)?.length) || 0
+                  if (n === 0) return null
+                  return (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 3, fontSize: 12, color: '#7B838B' }}>
+                      <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#8B9096" strokeWidth="1.7" strokeLinejoin="round">
+                        <path d="M4.6 2.8h7l4 4v10.4H4.6z" />
+                        <path d="M11.4 2.8v4.2h4.2" />
+                      </svg>
+                      {n} {n === 1 ? 'attachment' : 'attachments'}
+                    </span>
+                  )
+                })()}
+              </span>
+              <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7, paddingTop: 2 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 22, padding: '0 8px', borderRadius: 11, background: meta.bg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', color: meta.fg }}>
+                  {meta.glyph}
+                  {meta.label}
+                </span>
+                {office && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" style={{ flex: 'none' }}>
+                    <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+            </span>
+          )
+        })}
+      </div>
+
+      {!office && (
+        <span style={{ display: 'block', padding: '9px 18px 0', fontSize: 12.5, lineHeight: 1.45, color: '#8B9096' }}>
+          The office confirms these. Anything wrong or missing, say so in the job chat.
+        </span>
+      )}
+
+        </>
+      )}
 
       {error && (
         <span style={{ display: 'block', padding: '12px 18px 0', fontSize: 13, lineHeight: 1.45, color: '#A3282E' }}>{error}</span>
       )}
+      </div>
 
-      {wetOpen && <WaterproofingSheet me={me} site={site} onClose={() => setWetOpen(false)} />}
-      {drawingsOpen && <DrawingsSheet me={me} site={site} onClose={() => setDrawingsOpen(false)} />}
+      <ReadinessBar counts={counts} />
 
       {open && (
         <ScopeSheet
@@ -734,20 +859,22 @@ function AttachmentTile({ file, onRemove }: { file: AttachmentRow; onRemove: () 
 // -------------------------------------------------------- project details
 
 interface Contact {
+  id: string
   name: string
-  role: string | null
+  role: 'project_manager' | 'supervisor' | 'contract_admin' | 'accounts' | 'estimator' | 'other'
   mobile: string | null
   email: string | null
 }
 
 /**
- * Who and where — assembled from what the job already knows: the builder's
- * supervisor from `builder_contacts`, the crew captain as the job's manager
- * with the mobile they set on their own profile.
+ * The project, as the client's screen names it: who it is for, where it is,
+ * when it runs, and the three people on the builder's side you ring when
+ * something is wrong. Everything here is one tap from doing something —
+ * the phone numbers dial and the addresses are the addresses.
  */
 function ProjectDetails({ site, office }: { site: JobSiteRow; office: boolean }) {
-  const [supervisor, setSupervisor] = useState<Contact | null>(null)
-  const [manager, setManager] = useState<Contact | null>(null)
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [dates, setDates] = useState<{ start: string | null; end: string | null }>({ start: null, end: null })
   const [editing, setEditing] = useState(false)
   const [client, setClient] = useState(site.client_name ?? '')
   const [address, setAddress] = useState(site.address ?? '')
@@ -770,81 +897,121 @@ function ProjectDetails({ site, office }: { site: JobSiteRow; office: boolean })
 
   useEffect(() => {
     let cancelled = false
-    const client = supabase()
+    const c = supabase()
     void (async () => {
-      const [sup, cap] = await Promise.all([
-        site.supervisor_contact_id
-          ? client.from('builder_contacts').select('name, role, mobile, email').eq('id', site.supervisor_contact_id).maybeSingle()
-          : Promise.resolve({ data: null }),
-        site.captain_id
-          ? client.from('workers').select('id, name, trade').eq('id', site.captain_id).maybeSingle()
-          : Promise.resolve({ data: null }),
+      /**
+       * The builder's people. The job points at one contact directly (its
+       * supervisor); the rest belong to the builder, so the supervisor is
+       * also how we find out which builder that is when the job has not been
+       * linked to one yet.
+       */
+      const sup = site.supervisor_contact_id
+        ? await c.from('builder_contacts').select('id, name, role, mobile, email, builder_id').eq('id', site.supervisor_contact_id).maybeSingle()
+        : { data: null }
+      const supRow = sup.data as (Contact & { builder_id: string }) | null
+      const builderId = site.builder_id ?? supRow?.builder_id ?? null
+      const all = builderId
+        ? await c.from('builder_contacts').select('id, name, role, mobile, email').eq('builder_id', builderId)
+        : { data: [] }
+      if (cancelled) return
+      const rows = (all.data ?? []) as Contact[]
+      // The job's own supervisor wins over anyone else holding that role.
+      setContacts(supRow ? [supRow, ...rows.filter((r) => r.id !== supRow.id)] : rows)
+
+      // When the job runs, by the same rule the Schedule draws its bar with.
+      const [pt, asg, sh] = await Promise.all([
+        c.from('programme_tasks').select('starts_on, ends_on').eq('site_id', site.id).eq('is_ours', true),
+        c.from('assignments').select('starts_at, ends_at').eq('site_id', site.id),
+        c.from('shifts').select('started_at').eq('site_id', site.id),
       ])
       if (cancelled) return
-      setSupervisor((sup.data as Contact | null) ?? null)
-      const capRow = cap.data as { id: string; name: string; trade: string } | null
-      if (!capRow) return
-      const { data: prof } = await client.from('worker_profiles').select('phone').eq('worker_id', capRow.id).maybeSingle()
-      if (cancelled) return
-      setManager({
-        name: capRow.name,
-        role: capRow.trade || 'Crew captain',
-        mobile: (prof as { phone: string | null } | null)?.phone ?? null,
-        email: null,
+      const span = siteSpan({
+        tasks: (pt.data ?? []) as SpanRows['tasks'],
+        assignments: (asg.data ?? []) as SpanRows['assignments'],
+        shifts: (sh.data ?? []) as SpanRows['shifts'],
       })
+      // Local parts, not toISOString(): a programme date is a calendar date in
+      // Adelaide, and UTC midnight is the previous afternoon here — which
+      // printed every start date a day early.
+      const iso = (n: number) => {
+        const d = new Date(n)
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      }
+      setDates({ start: span ? iso(span.s) : null, end: span ? iso(span.e) : null })
     })()
     return () => {
       cancelled = true
     }
-  }, [site.supervisor_contact_id, site.captain_id])
+  }, [site.id, site.supervisor_contact_id, site.builder_id])
 
-  const row = (label: string, glyph: ReactNode, body: ReactNode) => (
-    <span style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 15px', borderBottom: '1px solid #EDEFF1' }}>
-      <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, marginTop: 1 }}>{glyph}</span>
-      <span style={{ flex: 'none', width: 88, fontSize: 12.5, color: '#7B838B', paddingTop: 2 }}>{label}</span>
-      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 14, color: s.ink }}>{body}</span>
+  const byRole = (role: Contact['role']) => contacts.find((x) => x.role === role) ?? null
+  const longDate = (v: string | null) =>
+    v ? new Date(`${v}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'
+
+  const row = (glyph: ReactNode, label: string, body: ReactNode, tint: string) => (
+    <span style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 13px 12px 14px', borderBottom: '1px solid #EDEFF1' }}>
+      <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 9, background: tint }}>{glyph}</span>
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-.005em', color: s.ink }}>{label}</span>
+        {body}
+      </span>
     </span>
   )
 
-  const pin = (
-    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#8B9096" strokeWidth="1.6" strokeLinejoin="round">
-      <path d="M10 17.4S4.6 12.4 4.6 8.6a5.4 5.4 0 0 1 10.8 0c0 3.8-5.4 8.8-5.4 8.8z" />
-      <circle cx="10" cy="8.5" r="1.9" />
-    </svg>
-  )
+  const value = (v: string) => <span style={{ fontSize: 13, lineHeight: 1.4, color: v === '—' ? '#9AA1A9' : '#5F666E' }}>{v}</span>
 
-  const contactBlock = (c: Contact) => (
-    <>
-      <span style={{ fontWeight: 600 }}>{c.name}</span>
-      {c.email && (
-        <a href={`mailto:${c.email}`} style={{ fontSize: 13, color: s.accent, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {c.email}
-        </a>
-      )}
-      {c.mobile && (
-        <a href={`tel:${c.mobile.replace(/\s/g, '')}`} style={{ fontSize: 13, fontWeight: 600, color: s.accent, textDecoration: 'none' }}>
-          {c.mobile}
-        </a>
-      )}
-      {!c.email && !c.mobile && <span style={{ fontSize: 13, color: '#9AA1A9' }}>No contact details on file</span>}
-    </>
+  /** A person: their name, and the two ways to reach them, both live. */
+  const person = (c: Contact | null, missing: string) =>
+    c ? (
+      <>
+        <span style={{ fontSize: 13, color: '#5F666E' }}>{c.name}</span>
+        <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 14px', marginTop: 1 }}>
+          {c.mobile && (
+            <a href={`tel:${c.mobile.replace(/\s/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 600, color: s.accent, textDecoration: 'none' }}>
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinejoin="round">
+                <path d="M6.4 3.4l2 3-1.6 1.6a9 9 0 0 0 4.2 4.2L12.6 10.6l3 2-1.2 2.4a1.6 1.6 0 0 1-1.8.8C8.4 14.8 5.2 11.6 4.2 6.4a1.6 1.6 0 0 1 .8-1.8z" />
+              </svg>
+              {c.mobile}
+            </a>
+          )}
+          {c.email && (
+            <a href={`mailto:${c.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, fontSize: 12.5, color: s.accent, textDecoration: 'none' }}>
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinejoin="round" style={{ flex: 'none' }}>
+                <rect x="2.8" y="5" width="14.4" height="10" rx="2" />
+                <path d="M3.2 6l6.8 5 6.8-5" />
+              </svg>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</span>
+            </a>
+          )}
+        </span>
+      </>
+    ) : (
+      <span style={{ fontSize: 13, color: '#9AA1A9' }}>{missing}</span>
+    )
+
+  const G = { stroke: '#6E56CF', w: '17', h: '17' }
+  const glyph = (path: ReactNode, stroke = G.stroke) => (
+    <svg width={G.w} height={G.h} viewBox="0 0 20 20" fill="none" stroke={stroke} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round">
+      {path}
+    </svg>
   )
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '18px 18px 9px' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>PROJECT DETAILS</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '16px 18px 8px' }}>
+        <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>PROJECT DETAILS</span>
         {office && !editing && (
           <span onClick={() => setEditing(true)} style={{ fontSize: 13.5, fontWeight: 600, color: s.accent, cursor: 'pointer' }}>
-            Edit details
+            Edit
           </span>
         )}
       </div>
-      <div style={{ margin: '0 18px', ...card }}>
+
+      <div style={{ margin: '0 16px', ...card }}>
         {editing ? (
           <span style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px 15px 16px' }}>
             <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>CLIENT</span>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>BUILDER</span>
               <input
                 value={client}
                 onChange={(e) => setClient(e.target.value)}
@@ -853,7 +1020,7 @@ function ProjectDetails({ site, office }: { site: JobSiteRow; office: boolean })
               />
             </span>
             <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>ADDRESS</span>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>SITE ADDRESS</span>
               <textarea
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
@@ -864,15 +1031,15 @@ function ProjectDetails({ site, office }: { site: JobSiteRow; office: boolean })
             </span>
             {saveError && <span style={{ fontSize: 13, color: '#A3282E' }}>{saveError}</span>}
             <span style={{ fontSize: 12.5, lineHeight: 1.45, color: '#8B9096' }}>
-              The supervisor and job manager are set where the job is set up, on the office
-              dashboard — this keeps one list of contacts rather than two.
+              The builder's people and the programme dates are set where the job is set up, on the
+              office dashboard — this keeps one list of contacts rather than two.
             </span>
             <span style={{ display: 'flex', gap: 9 }}>
               <button
                 onClick={() => void saveDetails()}
                 style={{ flex: 1, height: 46, border: 0, borderRadius: 10, background: '#1A1D21', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 700, letterSpacing: '.03em', color: '#fff', cursor: 'pointer' }}
               >
-                SAVE DETAILS
+                SAVE
               </button>
               <button
                 onClick={() => {
@@ -889,35 +1056,85 @@ function ProjectDetails({ site, office }: { site: JobSiteRow; office: boolean })
           </span>
         ) : (
           <>
-        {row(
-          'Client',
-          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#8B9096" strokeWidth="1.6" strokeLinejoin="round">
-            <path d="M4.6 3.4h10.8v13.2H4.6z" />
-            <path d="M7.2 6.6h5.6M7.2 9.6h5.6M7.2 12.6h3" />
-          </svg>,
-          <span style={{ fontWeight: 600 }}>{shown.client || '—'}</span>,
-        )}
-        {row('Address', pin, <span style={{ lineHeight: 1.4 }}>{shown.address || '—'}</span>)}
-        {row(
-          'Site supervisor',
-          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#8B9096" strokeWidth="1.6" strokeLinejoin="round">
-            <path d="M3.6 9.4a6.4 6.4 0 0 1 12.8 0z" />
-            <path d="M2.6 9.4h14.8" />
-          </svg>,
-          supervisor ? contactBlock(supervisor) : <span style={{ fontSize: 13, color: '#9AA1A9' }}>Not set for this job</span>,
-        )}
-        <span style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 15px' }}>
-          <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, marginTop: 1 }}>
-            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#8B9096" strokeWidth="1.6" strokeLinejoin="round">
-              <circle cx="10" cy="6.8" r="2.9" />
-              <path d="M4.4 16.4a5.6 5.6 0 0 1 11.2 0z" />
-            </svg>
-          </span>
-          <span style={{ flex: 'none', width: 88, fontSize: 12.5, color: '#7B838B', paddingTop: 2 }}>Job manager</span>
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 14, color: s.ink }}>
-            {manager ? contactBlock(manager) : <span style={{ fontSize: 13, color: '#9AA1A9' }}>No captain on this job</span>}
-          </span>
-        </span>
+            {row(
+              glyph(
+                <>
+                  <path d="M4.6 3.4h10.8v13.2H4.6z" />
+                  <path d="M7.2 6.6h5.6M7.2 9.6h5.6M7.2 12.6h3" />
+                </>,
+              ),
+              'Builder',
+              value(shown.client || '—'),
+              '#EFEBFB',
+            )}
+            {row(
+              glyph(
+                <>
+                  <path d="M10 17.4S4.6 12.4 4.6 8.6a5.4 5.4 0 0 1 10.8 0c0 3.8-5.4 8.8-5.4 8.8z" />
+                  <circle cx="10" cy="8.5" r="1.9" />
+                </>,
+                '#2F5FD7',
+              ),
+              'Site address',
+              value(shown.address || '—'),
+              '#E7EEFB',
+            )}
+            {row(
+              glyph(
+                <>
+                  <rect x="3.2" y="4.6" width="13.6" height="12" rx="2" />
+                  <path d="M3.2 8.2h13.6M6.8 3.2v2.8M13.2 3.2v2.8" />
+                </>,
+                '#2F5FD7',
+              ),
+              'Project dates',
+              <span style={{ display: 'flex', gap: 22 }}>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <span style={{ fontSize: 11.5, color: '#9AA1A9' }}>Start date</span>
+                  {value(longDate(dates.start))}
+                </span>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <span style={{ fontSize: 11.5, color: '#9AA1A9' }}>End date</span>
+                  {value(longDate(dates.end))}
+                </span>
+              </span>,
+              '#E7EEFB',
+            )}
+            {row(
+              glyph(
+                <>
+                  <circle cx="10" cy="7" r="3" />
+                  <path d="M4.4 16.6a5.6 5.6 0 0 1 11.2 0" />
+                </>,
+              ),
+              'Project manager',
+              person(byRole('project_manager'), 'Not set for this job'),
+              '#EFEBFB',
+            )}
+            {row(
+              glyph(
+                <>
+                  <path d="M3.6 12.4a6.4 6.4 0 0 1 12.8 0z" />
+                  <path d="M2.6 12.4h14.8M10 6V3.4" />
+                </>,
+                '#C4700A',
+              ),
+              'Site supervisor',
+              person(byRole('supervisor'), 'Not set for this job'),
+              '#FDF0DF',
+            )}
+            {row(
+              glyph(
+                <>
+                  <path d="M5.4 3.4h6l3.2 3.2v10.4H5.4z" />
+                  <path d="M7.8 9h4.4M7.8 12h3" />
+                </>,
+                '#0E8074',
+              ),
+              'Contract administrator',
+              person(byRole('contract_admin'), 'Not set for this job'),
+              '#E4F3F1',
+            )}
           </>
         )}
       </div>

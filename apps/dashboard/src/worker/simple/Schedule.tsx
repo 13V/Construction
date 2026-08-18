@@ -20,7 +20,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow } from '../../data/supabase'
 import { avatarGrey, builderOf, railOf, s, SAFE_TOP, streetLine } from './stheme'
-import type { SimpleData } from './data'
+import { siteSpan, type SimpleData, type SpanRows } from './data'
 import type { JobTab } from './Job'
 
 const DAY = 86_400_000
@@ -86,32 +86,28 @@ function useProgrammeRows(progress: Map<string, number>): { rows: ProgRow[]; loa
       client.from('shifts').select('site_id, started_at').limit(5000),
     ]).then(([js, pt, asg, sh]) => {
       if (cancelled) return
-      const grow = (m: Map<string, { s: number; e: number }>, id: string, from: number, to: number) => {
-        const cur = m.get(id)
-        if (!cur) m.set(id, { s: from, e: to })
-        else {
-          cur.s = Math.min(cur.s, from)
-          cur.e = Math.max(cur.e, to)
-        }
+      // Grouped per job, then handed to the one place that decides what a
+      // job's dates are — the project details screen asks the same question
+      // and has to get the same answer.
+      const per = new Map<string, SpanRows>()
+      const bucket = (id: string) => {
+        const b = per.get(id) ?? { tasks: [], assignments: [], shifts: [] }
+        per.set(id, b)
+        return b
       }
-      const prog = new Map<string, { s: number; e: number }>()
       for (const t of (pt.data ?? []) as Array<{ site_id: string; starts_on: string | null; ends_on: string | null }>) {
-        if (!t.starts_on) continue
-        const from = new Date(`${t.starts_on}T00:00:00`).getTime()
-        const to = new Date(`${t.ends_on ?? t.starts_on}T00:00:00`).getTime()
-        grow(prog, t.site_id, from, to)
+        bucket(t.site_id).tasks.push(t)
       }
-      const act = new Map<string, { s: number; e: number }>()
       for (const a of (asg.data ?? []) as Array<{ site_id: string; starts_at: string; ends_at: string }>) {
-        grow(act, a.site_id, new Date(a.starts_at).getTime(), new Date(a.ends_at).getTime())
+        bucket(a.site_id).assignments.push(a)
       }
       for (const x of (sh.data ?? []) as Array<{ site_id: string; started_at: string }>) {
-        const t = new Date(x.started_at).getTime()
-        grow(act, x.site_id, t, t)
+        bucket(x.site_id).shifts.push(x)
       }
       const merged = new Map<string, { s: number; e: number }>()
       for (const site of (js.data ?? []) as JobSiteRow[]) {
-        const span = prog.get(site.id) ?? act.get(site.id)
+        const rows = per.get(site.id)
+        const span = rows ? siteSpan(rows) : null
         if (span) merged.set(site.id, span)
       }
       setSites((js.data ?? []) as JobSiteRow[])
