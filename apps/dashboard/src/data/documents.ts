@@ -620,3 +620,141 @@ export function wpCertificatePdf(opts: {
 function dateOf(d: Date): string {
   return d.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' })
 }
+
+// -------------------------------------------------- safe work method statement
+
+/**
+ * A SWMS, issued for one job.
+ *
+ * "Each SWMS will require the project, the builder, the date. The rest stays
+ * the same." So this renders exactly that: a cover block with those three
+ * facts, then the body verbatim from the company's template. The body is data
+ * — the office edits it — which is why this function knows nothing about
+ * tiling, waterproofing or high risk construction work. It knows how to set a
+ * heading and how to set a paragraph.
+ *
+ * Headings are lines beginning `## `, which is the least a person editing a
+ * text box has to learn and the most this needs to know.
+ */
+export function swmsPdf(opts: {
+  company: CompanyDetails
+  title: string
+  body: string
+  reference: string | null
+  siteName: string
+  siteAddress: string | null
+  builderName: string | null
+  documentDate: string | null
+  version: string
+  preparedBy: string
+}): Blob {
+  const { company, title, body, reference, siteName, siteAddress, builderName, documentDate, version, preparedBy } = opts
+  const pages: Page[] = []
+  let page = new Page()
+  pages.push(page)
+
+  /** A SWMS runs to several pages; every one of them says which job it is. */
+  const continueOnNewPage = () => {
+    page = new Page()
+    pages.push(page)
+    page.text(`${title} — ${siteName}`, LEFT, { size: 8, grey: 0.45 })
+    page.textRight(reference ?? '', RIGHT, { size: 8, grey: 0.45 })
+    page.down(12)
+    page.rule(LEFT, RIGHT, { grey: 0.85 })
+    page.down(16)
+  }
+  /**
+   * The footer is drawn from the bottom of the last page after the body is
+   * laid out, so the body has to stop short of it — without this reserve the
+   * last paragraph and the footer print on top of each other.
+   */
+  const FOOTER_RESERVE = 44
+  const room = (need: number) => {
+    if (page.full(need + FOOTER_RESERVE)) continueOnNewPage()
+  }
+
+  header(page, { company, title: 'Safe work method statement', reference: reference ?? 'DRAFT' })
+
+  details(page, [
+    ['Project', siteName],
+    ['Builder', builderName ?? '-'],
+    ['Site address', siteAddress ?? '-'],
+    ['Date', date(documentDate)],
+    ['Prepared by', preparedBy],
+    ['Version', version],
+  ])
+  page.down(16)
+  page.rule(LEFT, RIGHT, { grey: 0.75, width: 1 })
+  page.down(18)
+
+  page.text(title, LEFT, { size: 12, font: 'HB' })
+  page.down(20)
+
+  for (const raw of body.split('\n')) {
+    const line = raw.trimEnd()
+    if (!line.trim()) {
+      page.down(8)
+      continue
+    }
+    if (line.startsWith('## ')) {
+      room(34)
+      page.down(6)
+      page.text(line.slice(3), LEFT, { size: 10.5, font: 'HB' })
+      page.down(16)
+      continue
+    }
+    // "- " keeps its bullet and hangs its wrap under the text, not the dot.
+    const bullet = /^[-*]\s+/.test(line)
+    const text = bullet ? line.replace(/^[-*]\s+/, '') : line
+    const x = bullet ? LEFT + 12 : LEFT
+    const wrapped = wrap(text, RIGHT - x, 9.5)
+    wrapped.forEach((l, i) => {
+      room(14)
+      if (bullet && i === 0) page.text('•', LEFT, { size: 9.5, grey: 0.4 })
+      page.text(l, x, { size: 9.5 })
+      page.down(13)
+    })
+  }
+
+  // ------------------------------------------------------------- the sign-on
+  // A SWMS nobody signed is a document, not a control. The register is part of
+  // the document so the copy the builder files shows who was briefed on it.
+  // Header, blurb, column titles and nine rules — 252pt, measured, not guessed.
+  room(260)
+  page.down(14)
+  page.rule(LEFT, RIGHT, { grey: 0.75, width: 1 })
+  page.down(16)
+  page.text('Worker sign-on', LEFT, { size: 10.5, font: 'HB' })
+  page.down(14)
+  page.text(
+    'Everyone carrying out this work has read this statement, understands the controls and agrees to work to them.',
+    LEFT,
+    { size: 9, grey: 0.3 },
+  )
+  page.down(20)
+
+  const colName = LEFT
+  const colSig = LEFT + 190
+  const colDate = RIGHT - 90
+  page.text('NAME', colName, { size: 7.5, font: 'HB', grey: 0.5 })
+  page.text('SIGNATURE', colSig, { size: 7.5, font: 'HB', grey: 0.5 })
+  page.text('DATE', colDate, { size: 7.5, font: 'HB', grey: 0.5 })
+  page.down(12)
+  for (let i = 0; i < 8; i++) {
+    page.rule(LEFT, RIGHT, { grey: 0.8 })
+    page.down(22)
+  }
+  page.rule(LEFT, RIGHT, { grey: 0.8 })
+
+  footer(pages[pages.length - 1]!, [
+    `${title} · version ${version}${documentDate ? ` · ${date(documentDate)}` : ''}`,
+    'This statement must be kept on site and reviewed if the work, the plant or the site conditions change.',
+  ])
+
+  return buildPdf(pages, `${reference ?? 'SWMS'} ${siteName}`)
+}
+
+/** PTS-SWMS-260818-001 — the same shape as a certificate number. */
+export function swmsReference(companyName: string, on: Date, sequence: number): string {
+  return certificateNo(companyName, on, sequence).replace('-WP-', '-SWMS-')
+}

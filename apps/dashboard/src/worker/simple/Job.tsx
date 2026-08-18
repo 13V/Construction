@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase, type JobSiteRow, type SiteFileRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
-import { SafetyScreen } from '../SafetyScreen'
+import { SafetyTab } from './Safety'
 import { OverviewTab } from './Overview'
 import { addressLine, avatarGrey, builderOf, s, SAFE_BOTTOM, SAFE_TOP, ticketTone, TICKET_MISSING } from './stheme'
 
@@ -823,7 +823,7 @@ export function JobScreen({
       <div style={{ flex: 1, minHeight: 0, background: '#F5F6F7', paddingBottom: SAFE_BOTTOM }}>
         {tab === 'photos' && <PhotoGrid me={me} site={site} onTakePhoto={onTakePhoto} />}
         {tab === 'overview' && <OverviewTab me={me} site={site} />}
-        {tab === 'safety' && <SafetyScreen me={me} siteId={site.id} siteName={site.name} embedded onClose={() => setTab('overview')} />}
+        {tab === 'safety' && <SafetyTab me={me} site={site} />}
         {tab === 'chat' && chat(() => setTab('overview'))}
         {tab === 'money' && office && <MoneyTab site={site} floodHoldCount={floodHoldCount} onAddInvoice={onAddInvoice} />}
         {tab === 'crew' && <CrewTab site={site} />}

@@ -824,6 +824,97 @@ try {
     if (!res.ok) throw new Error(`wp file insert failed (${key}/${filename}): HTTP ${res.status} ${await res.text()}`)
   }
 
+  // ------------------------------------------------------------ safety shelves
+  // The four shelves a builder means when he asks for your safety paperwork.
+  // Two of them are only ever uploads; the SWMS shelf also holds the company
+  // template that every issued statement is copied from.
+  //
+  // The generic statement below is a placeholder with real bones — it is
+  // shaped the way a SWMS has to be shaped, and it is meant to be replaced by
+  // the company's own. It lives in the database precisely so replacing it is
+  // an edit and not a release.
+  const SWMS_BODY = [
+    '## Scope of work',
+    'Wall and floor tiling, waterproofing of internal wet areas and external balconies, screeding,',
+    'grouting and silicone sealing, including preparation and clean-up.',
+    '',
+    '## High risk construction work',
+    '- Work on or near a surface a person could fall more than 2 metres from.',
+    '- Work involving a risk of a person being exposed to hazardous chemicals (membranes, primers,',
+    '  epoxy grouts, cleaning acids).',
+    '- Use of powered plant that generates respirable crystalline silica dust.',
+    '',
+    '## Hazards and controls',
+    '- Silica dust from cutting tiles. Cut wet, or on-tool extraction with an H-class vacuum. P2',
+    '  respirator fitted and fit-tested. Nobody else within the cutting area.',
+    '- Chemical exposure from membranes, primers and epoxies. Read the SDS before opening the pail.',
+    '  Nitrile gloves, eye protection, ventilation. Eyewash on site.',
+    '- Falls from balconies and stairwells. Do not work outside the edge protection. Report removed',
+    '  or damaged handrail to the site supervisor and stop until it is back.',
+    '- Manual handling of tile boxes and pails. Two people over 20 kg, or use the trolley. Break',
+    '  pallets down where they land rather than carrying full boxes up.',
+    '- Slips on wet membrane and screed. Barricade and sign wet areas. Nobody walks a membrane',
+    '  before it has cured.',
+    '- Kneeling injuries. Knee pads worn for all floor work.',
+    '- Electrical. Test and tag current on every tool. RCD at the board before anything is plugged in.',
+    '',
+    '## Personal protective equipment',
+    'Safety boots, hi-vis, safety glasses, gloves suited to the product, P2 respirator for cutting and',
+    'for mixing powders, knee pads, hearing protection when cutting.',
+    '',
+    '## Plant and equipment',
+    'Wet tile saw, angle grinder with on-tool extraction, mixing drill and paddle, laser level,',
+    'trestles and planks within their rated height, extension leads on RCD.',
+    '',
+    '## Before work starts',
+    '- Site induction complete for everyone on the crew.',
+    '- This statement read and signed by everyone carrying out the work.',
+    '- SDS on site for every product being used that day.',
+    '- Edge protection, lighting and access checked and acceptable.',
+    '',
+    '## If something changes',
+    'Stop. A change to the work, the plant, the products or the site conditions means this statement',
+    'is reviewed and re-signed before work continues. Report incidents and near misses to the site',
+    'supervisor and to the office the same day.',
+  ].join('\n')
+
+  const swmsTemplate = await ensureRow(boss, 'safety_documents',
+    `select=id&company_id=eq.${companyId}&is_template=is.true&kind=eq.swms`,
+    {
+      company_id: companyId, site_id: null, kind: 'swms', is_template: true,
+      title: 'Tiling and waterproofing', body: SWMS_BODY, version: '3',
+      created_by: me.id, updated_by: me.id,
+    },
+    'SWMS template')
+  // Keep the body current on a re-run without minting a second template.
+  await boss.patch('safety_documents', `id=eq.${swmsTemplate.id}`, { body: SWMS_BODY, version: '3' })
+
+  // key: null means the document is the company's and shows on every job.
+  const SAFETY_DOCS = [
+    [null, 'induction', 'Site induction and toolbox talk record', null, 'site-induction-record.pdf'],
+    ['lot42', 'swms', 'Tiling and waterproofing — Lot 42, Kentish Ave', adDay(28), 'PTS-SWMS-current.pdf'],
+    ['lot42', 'sds', 'Ardex WPM 300 safety data sheet', null, 'ardex-wpm-300-sds.pdf'],
+    [null, 'sds', 'Mapei Keraflex Maxi S1 safety data sheet', null, 'mapei-keraflex-sds.pdf'],
+    [null, 'policy', 'Work health and safety policy', null, 'whs-policy.pdf'],
+  ]
+
+  for (const [key, kind, title, expires, filename] of SAFETY_DOCS) {
+    const siteId = key ? site[key].id : null
+    const have = await boss.get('safety_documents',
+      `select=id&company_id=eq.${companyId}&kind=eq.${kind}&title=eq.${encodeURIComponent(title)}&limit=1`)
+    if (Array.isArray(have) && have.length > 0) continue
+    const path = `${companyId}/${siteId ?? 'company'}/demo-safety-${filename}`
+    await putObject(path, TINY_PDF, 'application/pdf')
+    const res = await boss.post('safety_documents', [{
+      company_id: companyId, site_id: siteId, kind, title,
+      expires_on: expires, storage_path: path, file_name: filename,
+      mime: 'application/pdf', size_bytes: TINY_PDF.length,
+      created_by: me.id, updated_by: me.id,
+      ...(kind === 'swms' ? { document_date: adDay(-14), builder_name: 'Kesselman Homes', version: '3' } : {}),
+    }])
+    if (!res.ok) throw new Error(`safety doc insert failed (${title}): HTTP ${res.status} ${await res.text()}`)
+  }
+
   // ------------------------------------------------------------------ chat
   // The drawn job-channel threads. Messages are pinned to their author by
   // RLS, so seeding other people's words goes through the service role. The
