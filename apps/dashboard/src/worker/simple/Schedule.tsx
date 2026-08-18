@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow } from '../../data/supabase'
-import { avatarGrey, railOf, s, SAFE_TOP } from './stheme'
+import { avatarGrey, builderOf, railOf, s, SAFE_TOP, streetLine } from './stheme'
 import type { SimpleData } from './data'
 import type { JobTab } from './Job'
 
@@ -155,7 +155,7 @@ function useProgrammeRows(progress: Map<string, number>): { rows: ProgRow[]; loa
  * grew taller than its lane would shear the whole chart.
  */
 const TILE_W = 144
-const ROW_H = 98
+const ROW_H = 112
 
 const CHIP_TONE: Record<BarStatus, { bg: string; fg: string }> = {
   progress: { bg: '#EAF7EC', fg: '#1F7A4D' },
@@ -295,14 +295,22 @@ function Gantt({
                 {/* The job as a charcoal tile — the app's dark card: white
                     name, trade line, the dates it runs, and the job's own
                     rail colour on the edge, as its cards carry elsewhere. */}
-                <span style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center', padding: '9px 10px 9px 13px', borderRadius: 10, background: 'linear-gradient(#23272C,#15181C)' }}>
+                <span style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 3, justifyContent: 'center', padding: '9px 10px 9px 13px', borderRadius: 10, background: 'linear-gradient(#23272C,#15181C)' }}>
                   <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: railOf(r.site) }} />
                   <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.01em', lineHeight: 1.25, color: '#fff', textTransform: 'uppercase', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                     {r.site.name}
                   </span>
-                  {r.site.job_type && (
+                  {/* Where it is and who it is for. The trade was here and
+                      told a foreman nothing he could act on — every one of
+                      these jobs is tiling. */}
+                  {streetLine(r.site) && (
                     <span style={{ fontSize: 9.5, lineHeight: 1.3, color: '#98A0A8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {r.site.job_type}
+                      {streetLine(r.site)}
+                    </span>
+                  )}
+                  {builderOf(r.site) && (
+                    <span style={{ fontSize: 9.5, lineHeight: 1.3, fontWeight: 600, color: '#C2C8CE', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {builderOf(r.site)}
                     </span>
                   )}
                   <span style={{ alignSelf: 'flex-start', padding: '2px 7px', borderRadius: 999, background: CHIP_TONE[r.status].bg, fontSize: 9.5, fontWeight: 800, whiteSpace: 'nowrap', color: CHIP_TONE[r.status].fg }}>

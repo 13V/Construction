@@ -83,6 +83,19 @@ export const addressLine = (site: { name?: string; address: string | null }) => 
 /** The builder we are under. Blank until somebody sets it on the job. */
 export const builderOf = (site: { client_name: string | null }) => (site.client_name ?? '').trim()
 
+/**
+ * The street on its own, for somewhere too narrow to hold the rest — a
+ * programme tile is 144px and an ellipsised suburb is worse than no suburb.
+ * The suburb is usually in the job's name anyway, which is what makes the
+ * street the half worth keeping.
+ */
+export const streetLine = (site: { name?: string; address: string | null }) => {
+  const line = addressLine(site)
+  if (!line) return ''
+  const street = line.split(',')[0]!.trim()
+  return site.name && street.toLowerCase() === site.name.trim().toLowerCase() ? '' : street
+}
+
 export const sFont =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
 
