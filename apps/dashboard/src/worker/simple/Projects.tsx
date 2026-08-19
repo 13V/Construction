@@ -32,14 +32,6 @@ const whenLabel = (iso: string) => {
   return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')
 }
 
-const localeOf = (site: { name: string; address: string }) => {
-  const m = site.address.match(/,\s*([^,\d]+?)\s+SA\b/)
-  const suburb = m?.[1]?.trim()
-  if (suburb && suburb !== site.name) return suburb
-  const street = (site.address.split(',')[0] ?? '').trim()
-  return street.startsWith(site.name) ? '' : street
-}
-
 interface Notif {
   key: string
   text: string
@@ -74,6 +66,7 @@ export function ProjectsScreen({
   const [bookings, setBookings] = useState<AssignmentRow[]>([])
   const [roster, setRoster] = useState<Map<string, { name: string; initials: string }>>(new Map())
   const [showAll, setShowAll] = useState(false)
+  const [tab, setTab] = useState<'active' | 'future'>('active')
   const [open, setOpen] = useState('')
   const [nonce, setNonce] = useState(0)
 
@@ -237,6 +230,17 @@ export function ProjectsScreen({
   const future = data.sites.filter((x) => x.status === 'starting_soon')
   const shown = showAll ? notifs : notifs.slice(0, 3)
 
+  /**
+   * "Do the two different tab, as list could get long." Both lists were
+   * stacked, so a company with twenty running jobs pushed everything starting
+   * next month somewhere nobody scrolls to. They are separate lists now, and
+   * the tab carries its own count so the number is answered without opening
+   * it.
+   *
+   * Active leads because that is the list somebody is on this screen for.
+   */
+  const list = tab === 'active' ? active : future
+
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: `calc(52px + ${SAFE_TOP})`, padding: `${SAFE_TOP} 20px 0`, background: '#fff' }}>
@@ -292,13 +296,33 @@ export function ProjectsScreen({
           )}
         </div>
 
-        {/* ACTIVE PROJECTS. */}
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '20px 18px 9px' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>ACTIVE PROJECTS</span>
-          <span style={{ fontSize: 12.5, color: '#7B838B' }}>{active.length} running</span>
+        {/* Active or future — two lists, one at a time. */}
+        <div style={{ display: 'flex', alignItems: 'stretch', margin: '18px 0 0', background: '#fff', borderTop: '1px solid #E9EDF0', borderBottom: '1px solid #E1E5E9' }}>
+          {([
+            ['active', 'Active projects', active.length],
+            ['future', 'Future projects', future.length],
+          ] as const).map(([key, label, n]) => {
+            const on = tab === key
+            return (
+              <span
+                key={key}
+                onClick={() => setTab(key)}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '11px 4px 0', cursor: 'pointer' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: on ? 700 : 500, letterSpacing: '-.01em', color: on ? s.ink : '#7B838B' }}>{label}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 19, height: 19, padding: '0 5px', borderRadius: 10, background: on ? s.ink : '#EDEFF1', fontSize: 11, fontWeight: 700, color: on ? '#fff' : '#7B838B' }}>
+                    {n}
+                  </span>
+                </span>
+                <span style={{ width: '100%', height: 2.5, marginTop: 8, borderRadius: '2px 2px 0 0', background: on ? s.ink : 'transparent' }} />
+              </span>
+            )
+          })}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 18px' }}>
-          {active.map((site) => {
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 18px 0' }}>
+          {tab === 'active' && list.map((site) => {
             const chip = chipOf(site)
             const people = peopleOf(site.id)
             const isOpen = open === site.id
@@ -308,14 +332,21 @@ export function ProjectsScreen({
               <div key={site.id} style={{ position: 'relative', display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, boxShadow: '0 1px 2px rgba(16,20,24,.05)', overflow: 'hidden' }}>
                 <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site), zIndex: 1 }} />
                 <span onClick={() => onOpenJob(site)} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 14px 13px 19px', cursor: 'pointer' }}>
-                  <span style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-.015em', color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
-                      {where && (
-                        <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{where}</span>
-                      )}
+                  {/* The chip sits under the address rather than beside it: an
+                      address is a good deal longer than a trade name was, and
+                      side by side the two fought over the width until one of
+                      them lost its ending. */}
+                  <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                    <span style={{ width: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      {/* The address IS the title now — the trade name above
+                          it told nobody anything they could act on, and the
+                          job is found by where it is. Falling back to the name
+                          covers a job with no address on it yet. */}
+                      <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-.015em', color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {where || site.name}
+                      </span>
                       {builder && (
-                        <span style={{ fontSize: 12.5, color: '#8B9096', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{builder}</span>
+                        <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{builder}</span>
                       )}
                     </span>
                     {chip && (
@@ -324,7 +355,7 @@ export function ProjectsScreen({
                           e.stopPropagation()
                           onOpenJob(site, chip.tab)
                         }}
-                        style={{ display: 'inline-flex', flex: 'none', alignItems: 'center', gap: 5, maxWidth: 172, height: 23, padding: '0 9px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: chip.bg, color: chip.fg, cursor: 'pointer' }}
+                        style={{ display: 'inline-flex', flex: 'none', alignItems: 'center', gap: 5, maxWidth: '100%', height: 23, padding: '0 9px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: chip.bg, color: chip.fg, cursor: 'pointer' }}
                       >
                         <span style={{ flex: 'none', width: 5, height: 5, borderRadius: '50%', background: chip.fg }} />
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chip.chip}</span>
@@ -391,41 +422,44 @@ export function ProjectsScreen({
         </div>
 
         {/* FUTURE PROJECTS. */}
-        {future.length > 0 && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '20px 18px 9px' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.12em', color: '#7B838B' }}>FUTURE PROJECTS</span>
-              <span style={{ fontSize: 12.5, color: '#7B838B' }}>
-                {future.length} {future.length === 1 ? 'starting soon' : 'coming up'}
-              </span>
-            </div>
-            <div style={{ margin: '0 18px 22px', display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, boxShadow: '0 1px 2px rgba(16,20,24,.05)', overflow: 'hidden' }}>
-              {future.map((site, i) => (
-                <span
-                  key={site.id}
-                  onClick={() => onOpenJob(site, 'crew')}
-                  style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, minHeight: 68, padding: '11px 14px 11px 19px', borderTop: `1px solid ${i === 0 ? 'transparent' : '#EDEFF1'}`, cursor: 'pointer' }}
-                >
-                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site) }} />
-                  <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ fontSize: 15.5, fontWeight: 600, color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{site.name}</span>
-                    <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {[localeOf(site), site.job_type, site.client_name].filter(Boolean).join(' · ')}
-                    </span>
+        {tab === 'future' && (
+          <div style={{ margin: '0 18px 22px', display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, boxShadow: '0 1px 2px rgba(16,20,24,.05)', overflow: 'hidden' }}>
+            {future.map((site, i) => (
+              <span
+                key={site.id}
+                onClick={() => onOpenJob(site, 'crew')}
+                style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, minHeight: 68, padding: '11px 14px 11px 19px', borderTop: `1px solid ${i === 0 ? 'transparent' : '#EDEFF1'}`, cursor: 'pointer' }}
+              >
+                <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site) }} />
+                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 15.5, fontWeight: 600, color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {addressLine(site) || site.name}
                   </span>
-                  <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 5, height: 23, padding: '0 9px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#FFF6E3', color: '#8A6100' }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#8A6100' }} />
-                    {site.schedule_note || 'Starting soon'}
-                  </span>
-                  <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none' }}>
-                    <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  {builderOf(site) && (
+                    <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{builderOf(site)}</span>
+                  )}
                 </span>
-              ))}
-            </div>
-          </>
+                <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 5, height: 23, padding: '0 9px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#FFF6E3', color: '#8A6100' }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#8A6100' }} />
+                  {site.schedule_note || 'Starting soon'}
+                </span>
+                <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none' }}>
+                  <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            ))}
+          </div>
         )}
-        {future.length === 0 && <div style={{ height: 22 }} />}
+
+        {/* An empty list still has to say so, or the tab looks broken. */}
+        {list.length === 0 && (
+          <div style={{ margin: '14px 18px 22px', padding: '18px 16px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
+            {tab === 'active'
+              ? 'No jobs running right now. Anything starting soon is on the other tab.'
+              : 'Nothing lined up yet. A job set to start later shows here until the day it does.'}
+          </div>
+        )}
+        {list.length > 0 && <div style={{ height: 22 }} />}
       </div>
     </div>
   )
