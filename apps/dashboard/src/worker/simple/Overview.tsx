@@ -19,6 +19,7 @@ import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
 import { siteSpan, type SpanRows } from './data'
 import { DrawingsPanel } from './Drawings'
+import { ProgrammeSheet, programmeLine, useProgrammes } from './Programme'
 import { WaterproofingPanel } from './Waterproofing'
 import { s, SAFE_BOTTOM } from './stheme'
 
@@ -509,7 +510,7 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 26 }}>
       {section === 'details' && (
-        <ProjectDetails site={site} office={office} notes={notes} onOpenNotes={() => setNotesOpen(true)} />
+        <ProjectDetails me={me} site={site} office={office} notes={notes} onOpenNotes={() => setNotesOpen(true)} />
       )}
 
       {section === 'drawings' && <DrawingsPanel me={me} site={site} />}
@@ -899,11 +900,13 @@ interface Contact {
  * the phone numbers dial and the addresses are the addresses.
  */
 function ProjectDetails({
+  me,
   site,
   office,
   notes,
   onOpenNotes,
 }: {
+  me: WorkerRow
   site: JobSiteRow
   office: boolean
   notes: NoteRow[]
@@ -912,6 +915,8 @@ function ProjectDetails({
   const [contacts, setContacts] = useState<Contact[]>([])
   const [dates, setDates] = useState<{ start: string | null; end: string | null }>({ start: null, end: null })
   const [editRow, setEditRow] = useState<EditRow | null>(null)
+  const [programmeOpen, setProgrammeOpen] = useState(false)
+  const { current: programme, loading: programmeLoading } = useProgrammes(site.id)
   const [shown, setShown] = useState({ client: site.client_name ?? '', address: site.address ?? '' })
 
   const reloadDetails = useCallback(() => {
@@ -1126,6 +1131,21 @@ function ProjectDetails({
             () => setEditRow('dates'),
           )}
 
+          {/* Under the dates, because it is where the dates come from. */}
+          {rowCard(
+            glyph(
+              <>
+                <path d="M5 3.4h7.4l2.6 2.6v10.6H5z" />
+                <path d="M7.6 8.4h5.2M7.6 11h3.8M7.6 13.4h2.4" />
+              </>,
+            ),
+            "Builder's programme",
+            <span style={{ fontSize: 12, lineHeight: 1.35, color: programme ? '#6B7278' : '#9AA1A9' }}>
+              {programmeLine(programme, programmeLoading)}
+            </span>,
+            () => setProgrammeOpen(true),
+          )}
+
           {rowCard(
             glyph(
               <>
@@ -1191,6 +1211,8 @@ function ProjectDetails({
           )}
         </>
       )}
+
+      {programmeOpen && <ProgrammeSheet me={me} site={site} onClose={() => setProgrammeOpen(false)} />}
 
       {editRow && (
         <DetailEditor

@@ -899,6 +899,31 @@ try {
     }
   }
 
+  // --------------------------------------------------- the builder's programme
+  // Two revisions on Lot 42, because one revision proves nothing. The trigger
+  // in schema_v21 demotes whatever was current when the newer one lands, so
+  // seeding them oldest-first leaves Rev C current and Rev B superseded —
+  // which is the state the screen exists to make obvious.
+  const PROGRAMMES = [
+    ['lot42', 'Rev B', adDay(-38), adDay(-36)],
+    ['lot42', 'Rev C', adDay(-9), adDay(-7)],
+  ]
+  for (const [key, revision, issued, received] of PROGRAMMES) {
+    const have = await boss.get('programmes',
+      `select=id&site_id=eq.${site[key].id}&revision=eq.${encodeURIComponent(revision)}&limit=1`)
+    if (Array.isArray(have) && have.length > 0) continue
+    const filename = `kesselman-construction-programme-${revision.toLowerCase().replace(/\s+/g, '-')}.pdf`
+    const path = `${companyId}/${site[key].id}/demo-programme-${filename}`
+    await putObject(path, TINY_PDF, 'application/pdf')
+    const res = await boss.post('programmes', [{
+      company_id: companyId, site_id: site[key].id,
+      name: 'Construction programme', revision,
+      issued_on: issued, received_on: received,
+      source: 'pdf', storage_path: path, status: 'current', imported_by: me.id,
+    }])
+    if (!res.ok) throw new Error(`programme insert failed (${revision}): HTTP ${res.status} ${await res.text()}`)
+  }
+
   // ------------------------------------------------------------ safety shelves
   // The four shelves a builder means when he asks for your safety paperwork.
   // Two of them are only ever uploads; the SWMS shelf also holds the company
