@@ -912,6 +912,9 @@ function StepSheet({
 
   const mine = files.filter((f) => f.wp_step === stepKey)
   const allPhotos = files.filter((f) => f.kind === 'photo')
+  // site_files DELETE is office-only under RLS, so a crew member's × would
+  // always be refused — better not to draw a control that always lies.
+  const canRemove = me.is_office
 
   /**
    * Uploads land in site_files against the package and the step, so a data
@@ -954,9 +957,12 @@ function StepSheet({
   }
 
   async function removeFileRow(id: string) {
-    const { error: err } = await supabase().from('site_files').delete().eq('id', id)
-    if (err) {
-      setError(err.message)
+    // A refused DELETE still matches zero rows rather than erroring, and
+    // PostgREST reports that as success — so the row coming back is the only
+    // proof it actually went, same shape as the pin close in PlansScreen.
+    const { data, error: err } = await supabase().from('site_files').delete().eq('id', id).select('id')
+    if (err || !data || data.length === 0) {
+      setError(err?.message ?? 'That did not delete. Tell the office.')
       return
     }
     await reload()
@@ -1001,7 +1007,7 @@ function StepSheet({
                 product data sheets belong here too — a builder's handover file asks for them.
               </Note>
               <Uploader label="Attach data sheet or photo" busy={busy} onFiles={(l) => void attach(l)} />
-              <FileList files={mine} onRemove={(id) => void removeFileRow(id)} />
+              <FileList files={mine} onRemove={canRemove ? (id) => void removeFileRow(id) : undefined} />
               <button
                 disabled={busy}
                 onClick={() => void save({ product_internal: inner.trim() || null, product_external: outer.trim() || null })}
@@ -1021,7 +1027,7 @@ function StepSheet({
                 evidence that survives the tiler — take more than you think you need.
               </Note>
               <Uploader label="Add membrane photos" busy={busy} camera onFiles={(l) => void attach(l)} />
-              <FileList files={mine} onRemove={(id) => void removeFileRow(id)} />
+              <FileList files={mine} onRemove={canRemove ? (id) => void removeFileRow(id) : undefined} />
               <button
                 disabled={busy}
                 onClick={() => void save({ installed_on: installedOn || null, installed_by: installedBy.trim() || null })}
@@ -1042,7 +1048,7 @@ function StepSheet({
                 Overview card red.
               </Note>
               <Uploader label="Add flood test photos" busy={busy} camera onFiles={(l) => void attach(l)} />
-              <FileList files={mine} onRemove={(id) => void removeFileRow(id)} />
+              <FileList files={mine} onRemove={canRemove ? (id) => void removeFileRow(id) : undefined} />
               {pkg?.flood_test_result !== 'not_completed' && pkg && (
                 <span style={{ padding: '11px 13px', background: pkg.flood_test_result === 'pass' ? '#EAF7EC' : '#FDECEE', borderRadius: 10, fontSize: 13.5, fontWeight: 600, color: pkg.flood_test_result === 'pass' ? '#1B7A2C' : '#A3282E' }}>
                   Recorded as {pkg.flood_test_result === 'pass' ? 'PASSED' : 'FAILED'}
@@ -1135,7 +1141,7 @@ function StepSheet({
               ) : (
                 <span style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 7 }}>
                   {allPhotos.map((f) => (
-                    <PhotoTile key={f.id} file={f} onRemove={() => void removeFileRow(f.id)} />
+                    <PhotoTile key={f.id} file={f} onRemove={canRemove ? () => void removeFileRow(f.id) : undefined} />
                   ))}
                 </span>
               )}
@@ -1224,19 +1230,19 @@ function Uploader({ label, busy, camera, onFiles }: { label: string; busy: boole
   )
 }
 
-function FileList({ files, onRemove }: { files: WpFile[]; onRemove: (id: string) => void }) {
+function FileList({ files, onRemove }: { files: WpFile[]; onRemove?: (id: string) => void }) {
   if (files.length === 0) return null
   return (
     <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
       {files.map((f) => (
-        <AttachmentTile key={f.id} file={f} onRemove={() => onRemove(f.id)} />
+        <AttachmentTile key={f.id} file={f} onRemove={onRemove ? () => onRemove(f.id) : undefined} />
       ))}
     </span>
   )
 }
 
 /** One attached file: a thumbnail if it is an image, its name either way. */
-function AttachmentTile({ file, onRemove }: { file: WpFile; onRemove: () => void }) {
+function AttachmentTile({ file, onRemove }: { file: WpFile; onRemove?: () => void }) {
   const [url, setUrl] = useState<string | null>(null)
   const isImage = /^image\//.test(file.mime ?? '') || /\.(png|jpe?g|gif|webp|heic|heif|avif)$/i.test(file.name)
 
@@ -1267,16 +1273,18 @@ function AttachmentTile({ file, onRemove }: { file: WpFile; onRemove: () => void
       <a href={url ?? undefined} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: s.ink, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {file.name}
       </a>
-      <span onClick={onRemove} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, cursor: 'pointer' }}>
-        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#9AA1A9" strokeWidth="2" strokeLinecap="round">
-          <path d="M5 5l10 10M15 5L5 15" />
-        </svg>
-      </span>
+      {onRemove && (
+        <span onClick={onRemove} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, cursor: 'pointer' }}>
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#9AA1A9" strokeWidth="2" strokeLinecap="round">
+            <path d="M5 5l10 10M15 5L5 15" />
+          </svg>
+        </span>
+      )}
     </span>
   )
 }
 
-function PhotoTile({ file, onRemove }: { file: WpFile; onRemove: () => void }) {
+function PhotoTile({ file, onRemove }: { file: WpFile; onRemove?: () => void }) {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -1294,14 +1302,16 @@ function PhotoTile({ file, onRemove }: { file: WpFile; onRemove: () => void }) {
           <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </a>
       )}
-      <span
-        onClick={onRemove}
-        style={{ position: 'absolute', top: 4, right: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(16,20,24,.6)', cursor: 'pointer' }}
-      >
-        <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round">
-          <path d="M5 5l10 10M15 5L5 15" />
-        </svg>
-      </span>
+      {onRemove && (
+        <span
+          onClick={onRemove}
+          style={{ position: 'absolute', top: 4, right: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(16,20,24,.6)', cursor: 'pointer' }}
+        >
+          <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round">
+            <path d="M5 5l10 10M15 5L5 15" />
+          </svg>
+        </span>
+      )}
     </span>
   )
 }
@@ -1372,6 +1382,11 @@ function CertificateStep({
   const supplier = files.find((f) => f.wp_step === 'certificates' && f.category === 'supplier_warranty')
   const installer = files.find((f) => f.wp_step === 'certificates' && f.category === 'installer_warranty')
   const issued = Boolean(pkg?.certificate_generated_at)
+  // The number and the sent-at are office actions under wp_package_guard —
+  // generating and sending are gated on this rather than on the trigger's
+  // rejection, so a crew member never uploads a certificate the package
+  // refuses to record.
+  const office = me.is_office
 
   const scope =
     pkg?.scope_of_work?.trim() ||
@@ -1406,7 +1421,7 @@ function CertificateStep({
    * jobs certified on the same afternoon do not collide.
    */
   async function generate() {
-    if (!company || !pkg) return
+    if (!company || !pkg || !office) return
     setWorking('generate')
     setError(null)
     try {
@@ -1601,7 +1616,7 @@ function CertificateStep({
       {/* ------------------------------------------------ supplier warranty */}
       <span style={fieldLabel}>SUPPLIER WARRANTY CERTIFICATE</span>
       {supplier ? (
-        <AttachmentTile file={supplier} onRemove={() => onRemove(supplier.id)} />
+        <AttachmentTile file={supplier} onRemove={office ? () => onRemove(supplier.id) : undefined} />
       ) : (
         <>
           <Note>The manufacturer's own warranty for the membrane — Mapei's, on their letterhead. Attach the PDF they issue.</Note>
@@ -1611,13 +1626,20 @@ function CertificateStep({
 
       {/* ------------------------------------------------------- the actions */}
       {!issued ? (
-        <button
-          disabled={busy || working !== null || blockers.length > 0 || !company || !pkg}
-          onClick={() => void generate()}
-          style={{ ...primaryBtn, marginTop: 4, opacity: busy || working !== null || blockers.length > 0 || !pkg ? 0.5 : 1 }}
-        >
-          {working === 'generate' ? 'GENERATING…' : 'GENERATE CERTIFICATE'}
-        </button>
+        office ? (
+          <button
+            disabled={busy || working !== null || blockers.length > 0 || !company || !pkg}
+            onClick={() => void generate()}
+            style={{ ...primaryBtn, marginTop: 4, opacity: busy || working !== null || blockers.length > 0 || !pkg ? 0.5 : 1 }}
+          >
+            {working === 'generate' ? 'GENERATING…' : 'GENERATE CERTIFICATE'}
+          </button>
+        ) : (
+          <span style={{ display: 'block', marginTop: 4, fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+            The office issues this certificate. Say so in the job chat once everything above is
+            ticked.
+          </span>
+        )
       ) : (
         <span style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 4 }}>
           <button
@@ -1645,7 +1667,7 @@ function CertificateStep({
               Marked sent {shortDate(pkg.certificate_sent_at.slice(0, 10))}
               {pkg.certificate_sent_to ? ` to ${pkg.certificate_sent_to}` : ''}
             </span>
-          ) : (
+          ) : office ? (
             <button
               disabled={working !== null}
               onClick={() => void onPatch({ certificate_sent_at: new Date().toISOString(), certificate_sent_to: builderEmail ?? site.client_name })}
@@ -1653,6 +1675,10 @@ function CertificateStep({
             >
               MARK AS SENT
             </button>
+          ) : (
+            <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+              The office marks it as sent. Say so in the job chat once it has gone out.
+            </span>
           )}
         </span>
       )}
@@ -1660,7 +1686,7 @@ function CertificateStep({
       {installer && (
         <>
           <span style={fieldLabel}>FILED IN PROJECT DOCUMENTS</span>
-          <AttachmentTile file={installer} onRemove={() => onRemove(installer.id)} />
+          <AttachmentTile file={installer} onRemove={office ? () => onRemove(installer.id) : undefined} />
         </>
       )}
       <Note>

@@ -471,9 +471,13 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
   }
 
   async function removeAttachment(id: string) {
-    const { error: err } = await supabase().from('site_files').delete().eq('id', id)
-    if (err) {
-      setError(err.message)
+    // A refused DELETE matches zero rows rather than erroring, and PostgREST
+    // reports that as success — so the row coming back is the only proof it
+    // actually went. site_files DELETE is office-only, which is why a crew
+    // member tapping × here used to watch nothing happen, twice.
+    const { data, error: err } = await supabase().from('site_files').delete().eq('id', id).select('id')
+    if (err || !data || data.length === 0) {
+      setError(err?.message ?? 'That did not delete — the office removes attachments.')
       return
     }
     await load()
@@ -496,9 +500,12 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
   }
 
   async function removeNote(id: string) {
-    const { error: err } = await supabase().from('site_notes').delete().eq('id', id)
-    if (err) {
-      setError(err.message)
+    // Same trap: site_notes DELETE is the author's or the office's, so
+    // somebody removing another person's note gets a silent no-op unless the
+    // row is read back.
+    const { data, error: err } = await supabase().from('site_notes').delete().eq('id', id).select('id')
+    if (err || !data || data.length === 0) {
+      setError(err?.message ?? 'That note is not yours to delete.')
       return
     }
     setNotes((prev) => prev.filter((n) => n.id !== id))

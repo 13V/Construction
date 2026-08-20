@@ -85,7 +85,11 @@ export function SafetyScreen({
     const client = supabase()
     const [c, d, s, u] = await Promise.all([
       client.from('certifications').select('id,name,expires_on,restriction').eq('worker_id', me.id).order('expires_on', { nullsFirst: false }),
-      client.from('safety_documents').select('id,kind,title,body,cost_code,version').eq('active', true).order('kind'),
+      // Same scope as unsigned_safety_docs() below: a document with no site is
+      // company-wide, one with a site belongs only to that job.
+      siteId
+        ? client.from('safety_documents').select('id,kind,title,body,cost_code,version').eq('active', true).or(`site_id.is.null,site_id.eq.${siteId}`).order('kind')
+        : Promise.resolve({ data: [], error: null }),
       client.from('safety_signatures').select('document_id,signed_at').eq('worker_id', me.id),
       // The gate itself, asked of the database rather than recomputed here —
       // the re-sign window is the function's business, not the screen's.
@@ -108,6 +112,8 @@ export function SafetyScreen({
   const expired = certs.filter((c) => ticketState(c).expired)
   const gateOpen = unsigned.length === 0
   const siteDocs = docs.filter((d) => d.kind !== 'policy')
+  // Nothing to sign if it's not on the gate — the sheet just shows what was signed.
+  const openSig = openDoc && !unsigned.some((u) => u.id === openDoc.id) ? signed.find((s) => s.document_id === openDoc.id) : undefined
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: theme.appBg }}>
@@ -158,7 +164,7 @@ export function SafetyScreen({
               return (
                 <button
                   key={d.id}
-                  onClick={() => need && setOpenDoc(d)}
+                  onClick={() => setOpenDoc(d)}
                   style={{
                     width: '100%',
                     display: 'flex',
@@ -173,7 +179,7 @@ export function SafetyScreen({
                     background: theme.panel,
                     font: 'inherit',
                     textAlign: 'left',
-                    cursor: need ? 'pointer' : 'default',
+                    cursor: 'pointer',
                   }}
                 >
                   <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -262,6 +268,7 @@ export function SafetyScreen({
           me={me}
           doc={openDoc}
           siteId={siteId}
+          signedAt={openSig?.signed_at ?? null}
           onClose={() => setOpenDoc(null)}
           onSigned={() => {
             setOpenDoc(null)
@@ -293,17 +300,24 @@ function Band({ tone, children }: { tone: 'alert' | 'warn'; children: React.Reac
  * Read it, then sign it. The button stays dead until there is a signature in
  * the box — a SWMS acknowledged with an empty canvas is worth nothing after an
  * incident, which is the only time anyone reads one.
+ *
+ * A document already off the gate opens the same sheet with `signedAt` set,
+ * rather than a second viewer — it drops the canvas and the button, since
+ * nothing here needs signing twice.
  */
 function SignSheet({
   me,
   doc,
   siteId,
+  signedAt,
   onClose,
   onSigned,
 }: {
   me: WorkerRow
   doc: SafetyDoc
   siteId: string | null
+  /** Set when this doc is already signed and off the gate — read it, nothing to sign. */
+  signedAt: string | null
   onClose: () => void
   onSigned: () => void
 }) {
@@ -354,9 +368,9 @@ function SignSheet({
     <div style={{ position: 'fixed', inset: 0, zIndex: 58, background: theme.panel, display: 'flex', flexDirection: 'column', paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${theme.border}` }}>
         <button onClick={onClose} style={{ border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 15, color: theme.accent, cursor: 'pointer' }}>
-          Cancel
+          {signedAt ? 'Close' : 'Cancel'}
         </button>
-        <span style={{ flex: 1, textAlign: 'center', fontSize: 15.5, fontWeight: 600 }}>Sign on</span>
+        <span style={{ flex: 1, textAlign: 'center', fontSize: 15.5, fontWeight: 600 }}>{signedAt ? 'Signed' : 'Sign on'}</span>
         <span style={{ width: 50 }} />
       </div>
 
@@ -370,7 +384,7 @@ function SignSheet({
         {controls.length > 0 && (
           <>
             <span style={{ display: 'block', fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: theme.inkFaint, marginBottom: 9 }}>
-              {controls.length === 1 ? 'WHAT YOU ARE SIGNING' : `THE ${controls.length} CONTROLS`}
+              {controls.length === 1 ? (signedAt ? 'WHAT YOU SIGNED' : 'WHAT YOU ARE SIGNING') : `THE ${controls.length} CONTROLS`}
             </span>
             {controls.map((c, i) => (
               <span key={i} style={{ display: 'flex', gap: 11, marginBottom: 11 }}>
@@ -397,83 +411,93 @@ function SignSheet({
           </>
         )}
 
-        <span style={{ display: 'block', marginTop: 18, fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: theme.inkFaint, marginBottom: 8 }}>
-          YOUR SIGNATURE
-        </span>
-        <div style={{ position: 'relative', border: `1px dashed ${hasInk ? theme.accent : theme.border}`, borderRadius: 8, background: theme.rowFill }}>
-          <canvas
-            ref={canvas}
-            style={{ display: 'block', width: '100%', height: 150, touchAction: 'none' }}
-            onPointerDown={(e) => {
-              e.currentTarget.setPointerCapture(e.pointerId)
-              const ctx = canvas.current?.getContext('2d')
-              if (!ctx) return
-              const { x, y } = pos(e)
-              ctx.beginPath()
-              ctx.moveTo(x, y)
-              drawing.current = true
+        {signedAt ? (
+          <span style={{ display: 'block', marginTop: 18, padding: '12px 13px', borderRadius: 8, background: theme.successFill, color: theme.successInk, fontSize: 13, lineHeight: 1.5 }}>
+            Signed {fullDate(signedAt)}. Nothing more needed here.
+          </span>
+        ) : (
+          <>
+            <span style={{ display: 'block', marginTop: 18, fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: theme.inkFaint, marginBottom: 8 }}>
+              YOUR SIGNATURE
+            </span>
+            <div style={{ position: 'relative', border: `1px dashed ${hasInk ? theme.accent : theme.border}`, borderRadius: 8, background: theme.rowFill }}>
+              <canvas
+                ref={canvas}
+                style={{ display: 'block', width: '100%', height: 150, touchAction: 'none' }}
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                  const ctx = canvas.current?.getContext('2d')
+                  if (!ctx) return
+                  const { x, y } = pos(e)
+                  ctx.beginPath()
+                  ctx.moveTo(x, y)
+                  drawing.current = true
+                }}
+                onPointerMove={(e) => {
+                  if (!drawing.current) return
+                  const ctx = canvas.current?.getContext('2d')
+                  if (!ctx) return
+                  const { x, y } = pos(e)
+                  ctx.lineTo(x, y)
+                  ctx.stroke()
+                  if (!hasInk) setHasInk(true)
+                }}
+                onPointerUp={() => {
+                  drawing.current = false
+                }}
+              />
+              {!hasInk && (
+                <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', fontSize: 13.5, color: theme.inkGhost }}>
+                  Sign here with your finger
+                </span>
+              )}
+            </div>
+            {hasInk && (
+              <button
+                onClick={() => {
+                  const c = canvas.current
+                  const ctx = c?.getContext('2d')
+                  if (c && ctx) ctx.clearRect(0, 0, c.width, c.height)
+                  setHasInk(false)
+                }}
+                style={{ marginTop: 8, border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 13, color: theme.accent, cursor: 'pointer' }}
+              >
+                Clear and sign again
+              </button>
+            )}
+            {err && <span style={{ display: 'block', marginTop: 10, fontSize: 12.5, color: theme.alertInk }}>{err}</span>}
+          </>
+        )}
+      </div>
+
+      {!signedAt && (
+        <div style={{ flex: 'none', padding: '10px 18px 18px', borderTop: `1px solid ${theme.border}` }}>
+          <button
+            onClick={() => void sign()}
+            disabled={!hasInk || busy}
+            style={{
+              width: '100%',
+              height: 52,
+              border: 'none',
+              borderRadius: 6,
+              background: hasInk ? theme.ink : theme.fill,
+              color: hasInk ? '#fff' : theme.inkGhost,
+              font: 'inherit',
+              fontSize: 14,
+              fontWeight: 700,
+              letterSpacing: '.03em',
+              cursor: hasInk ? 'pointer' : 'default',
             }}
-            onPointerMove={(e) => {
-              if (!drawing.current) return
-              const ctx = canvas.current?.getContext('2d')
-              if (!ctx) return
-              const { x, y } = pos(e)
-              ctx.lineTo(x, y)
-              ctx.stroke()
-              if (!hasInk) setHasInk(true)
-            }}
-            onPointerUp={() => {
-              drawing.current = false
-            }}
-          />
+          >
+            {busy ? 'SIGNING…' : 'SIGN AND START'}
+          </button>
           {!hasInk && (
-            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', fontSize: 13.5, color: theme.inkGhost }}>
-              Sign here with your finger
+            <span style={{ display: 'block', marginTop: 8, textAlign: 'center', fontSize: 12, color: theme.inkFaint }}>
+              Sign in the box above first.
             </span>
           )}
         </div>
-        {hasInk && (
-          <button
-            onClick={() => {
-              const c = canvas.current
-              const ctx = c?.getContext('2d')
-              if (c && ctx) ctx.clearRect(0, 0, c.width, c.height)
-              setHasInk(false)
-            }}
-            style={{ marginTop: 8, border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 13, color: theme.accent, cursor: 'pointer' }}
-          >
-            Clear and sign again
-          </button>
-        )}
-        {err && <span style={{ display: 'block', marginTop: 10, fontSize: 12.5, color: theme.alertInk }}>{err}</span>}
-      </div>
-
-      <div style={{ flex: 'none', padding: '10px 18px 18px', borderTop: `1px solid ${theme.border}` }}>
-        <button
-          onClick={() => void sign()}
-          disabled={!hasInk || busy}
-          style={{
-            width: '100%',
-            height: 52,
-            border: 'none',
-            borderRadius: 6,
-            background: hasInk ? theme.ink : theme.fill,
-            color: hasInk ? '#fff' : theme.inkGhost,
-            font: 'inherit',
-            fontSize: 14,
-            fontWeight: 700,
-            letterSpacing: '.03em',
-            cursor: hasInk ? 'pointer' : 'default',
-          }}
-        >
-          {busy ? 'SIGNING…' : 'SIGN AND START'}
-        </button>
-        {!hasInk && (
-          <span style={{ display: 'block', marginTop: 8, textAlign: 'center', fontSize: 12, color: theme.inkFaint }}>
-            Sign in the box above first.
-          </span>
-        )}
-      </div>
+      )}
     </div>
   )
 }

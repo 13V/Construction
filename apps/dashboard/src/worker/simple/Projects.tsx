@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow, type WorkerRow } from '../../data/supabase'
-import { addressLine, avatarGrey, builderOf, railOf, s, SAFE_TOP } from './stheme'
+import { addressLine, avatarGrey, builderOf, railOf, s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
 import type { SimpleData } from './data'
 import type { JobTab } from './Job'
 
@@ -62,13 +62,14 @@ export function ProjectsScreen({
   const office = me.is_office
   const [defectRows, setDefectRows] = useState<Array<{ site_id: string; location: string | null; created_at: string }>>([])
   const [wpRows, setWpRows] = useState<Array<{ site_id: string; area: string; flood_test_on: string | null }>>([])
-  const [varRows, setVarRows] = useState<Array<{ site_id: string | null; cost_impact: number; raised_on: string }>>([])
+  const [varRows, setVarRows] = useState<Array<{ id: string; site_id: string | null; cost_impact: number | null; raised_on: string }>>([])
   const [bookings, setBookings] = useState<AssignmentRow[]>([])
   const [roster, setRoster] = useState<Map<string, { name: string; initials: string }>>(new Map())
   const [showAll, setShowAll] = useState(false)
   const [tab, setTab] = useState<'active' | 'future'>('active')
   const [open, setOpen] = useState('')
   const [nonce, setNonce] = useState(0)
+  const [newOpen, setNewOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -79,7 +80,13 @@ export function ProjectsScreen({
     void Promise.all([
       client.from('defects').select('site_id, location, created_at').in('status', ['open', 'in_progress']),
       client.from('waterproofing').select('site_id, area, flood_test_on').in('status', ['complete', 'signed_off']).eq('flood_tested', false),
-      client.from('change_orders').select('site_id, cost_impact, raised_on').eq('status', 'pending_client'),
+      // The office reads change_orders for the dollar figure the notification
+      // leads with. A captain reads site_variations_v instead (schema_v24) —
+      // the same pending list with cost_impact left off — and the notification
+      // below says so in words rather than a number it was never sent.
+      office
+        ? client.from('change_orders').select('id, site_id, cost_impact, raised_on').eq('status', 'pending_client')
+        : client.from('site_variations_v').select('id, site_id, raised_on').eq('status', 'pending_client'),
       client
         .from('assignments')
         .select('*')
@@ -91,14 +98,23 @@ export function ProjectsScreen({
       if (cancelled) return
       setDefectRows((df.data as Array<{ site_id: string; location: string | null; created_at: string }>) ?? [])
       setWpRows(wp.error ? [] : ((wp.data as Array<{ site_id: string; area: string; flood_test_on: string | null }>) ?? []))
-      setVarRows(co.error ? [] : ((co.data as Array<{ site_id: string | null; cost_impact: number; raised_on: string }>) ?? []))
+      setVarRows(
+        co.error
+          ? []
+          : ((co.data as Array<{ id: string; site_id: string | null; cost_impact?: number; raised_on: string }>) ?? []).map((v) => ({
+              id: v.id,
+              site_id: v.site_id,
+              cost_impact: v.cost_impact ?? null,
+              raised_on: v.raised_on,
+            })),
+      )
       setBookings((asg.data as AssignmentRow[]) ?? [])
       setRoster(new Map(((cv.data as Array<{ id: string; name: string; initials: string }>) ?? []).map((w) => [w.id, w])))
     })
     return () => {
       cancelled = true
     }
-  }, [me.id, nonce])
+  }, [me.id, office, nonce])
 
   const byId = useMemo(() => new Map(data.sites.map((x) => [x.id, x])), [data.sites])
 
@@ -145,18 +161,20 @@ export function ProjectsScreen({
       const site = v.site_id ? byId.get(v.site_id) : undefined
       if (!site) continue
       out.push({
-        key: `v|${v.site_id}|${v.raised_on}|${v.cost_impact}`,
-        text: `${money0(Number(v.cost_impact))} variation waiting on the builder`,
+        key: `v|${v.id}`,
+        // A captain's row came from site_variations_v and never carried
+        // cost_impact — the same reason the chip below has no dollar sign.
+        text: office ? `${money0(Number(v.cost_impact))} variation waiting on the builder` : 'A variation is waiting on the builder',
         meta: `${site.name} · ${whenLabel(v.raised_on)}`,
         tone: 'a',
         at: v.raised_on,
         site,
-        tab: 'money',
+        tab: office ? 'money' : 'overview',
       })
     }
     out.sort((a, b) => (a.at > b.at ? -1 : 1))
     return out
-  }, [defectRows, wpRows, varRows, byId])
+  }, [defectRows, wpRows, varRows, byId, office])
 
   /** Everyone attached to a job: on the clock there now, or booked ahead. */
   const peopleOf = useCallback(
@@ -245,7 +263,7 @@ export function ProjectsScreen({
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: `calc(52px + ${SAFE_TOP})`, padding: `${SAFE_TOP} 20px 0`, background: '#fff' }}>
         <span style={{ fontSize: 21, fontWeight: 600, letterSpacing: '-.015em', color: s.ink }}>Projects</span>
-        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }}>
+        <span onClick={() => setNewOpen(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, cursor: 'pointer' }}>
           <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: '50%', background: '#14171A', boxShadow: '0 2px 6px rgba(16,20,24,.22)' }}>
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round">
               <path d="M10 4.4v11.2M4.4 10h11.2" />
@@ -460,6 +478,215 @@ export function ProjectsScreen({
           </div>
         )}
         {list.length > 0 && <div style={{ height: 22 }} />}
+      </div>
+
+      {newOpen && (
+        <NewProjectSheet
+          me={me}
+          office={office}
+          onClose={() => setNewOpen(false)}
+          onCreated={() => {
+            setNewOpen(false)
+            setTab('future')
+            data.refresh()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------- new project
+
+/**
+ * The one flow the header's + opens: a name, who it is for, and the fence a
+ * job needs before anyone can clock on to it — that last part is why this
+ * exists at all, since a job with no fence is a job nobody can start. Office
+ * only, on the same rule as every other write on this screen: `job_sites_write`
+ * checks `current_is_office()`, so the SAVE button is the thing that is not
+ * live for anyone else, same as DetailEditor in Overview.tsx.
+ *
+ * There is no geocoder in this bundle, and the honest case for opening this
+ * sheet is standing on the job — so the fence starts at wherever the phone
+ * says that is, not at an address somebody has to type and hope matches.
+ */
+function NewProjectSheet({
+  me,
+  office,
+  onClose,
+  onCreated,
+}: {
+  me: WorkerRow
+  office: boolean
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [name, setName] = useState('')
+  const [builder, setBuilder] = useState('')
+  const [address, setAddress] = useState('')
+  const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null)
+  // 150 is job_sites' own default (schema.sql) and what most seeded sites
+  // carry. The slider tops out at 600, same as the office dashboard's own
+  // new-site form — the schema allows up to 2000, but nothing this size
+  // needs a fence wider than that ever has.
+  const [radius, setRadius] = useState(150)
+  const [locating, setLocating] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function locateMe() {
+    if (!('geolocation' in navigator)) {
+      setError('This device has no location service — set the fence from the office dashboard instead.')
+      return
+    }
+    setLocating(true)
+    setError(null)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setLocating(false)
+      },
+      (err) => {
+        setError(err.message || 'Could not get your location.')
+        setLocating(false)
+      },
+      { enableHighAccuracy: true, timeout: 15_000 },
+    )
+  }
+
+  async function save() {
+    if (!name.trim() || !center) {
+      setError('A name and a location for the fence are both required.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const { error: err } = await supabase()
+      .from('job_sites')
+      .insert({
+        company_id: me.company_id,
+        name: name.trim(),
+        address: address.trim(),
+        client_name: builder.trim() || null,
+        status: 'starting_soon',
+        lat: center.lat,
+        lng: center.lng,
+        radius_m: radius,
+      })
+    setBusy(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    onCreated()
+  }
+
+  const label = { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' } as const
+  const input = {
+    width: '100%',
+    height: 48,
+    padding: '0 13px',
+    boxSizing: 'border-box' as const,
+    background: '#F5F6F7',
+    border: '1px solid #DCE0E6',
+    borderRadius: 10,
+    font: 'inherit',
+    fontSize: 16,
+    color: s.ink,
+    outline: 'none',
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.5)' }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxHeight: '92%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
+      >
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '15px 15px 12px 18px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>New project</span>
+          <span onClick={onClose} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}>
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="2" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </span>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `15px 16px calc(20px + ${SAFE_BOTTOM})` }}>
+          {office ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+              {error && <span style={{ padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 13, color: '#8E2A31' }}>{error}</span>}
+
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={label}>PROJECT NAME</span>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Maple Ridge" style={input} />
+              </span>
+
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={label}>BUILDER</span>
+                <input value={builder} onChange={(e) => setBuilder(e.target.value)} placeholder="Who the job is for" style={input} />
+              </span>
+
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={label}>SITE ADDRESS</span>
+                <textarea
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  rows={2}
+                  placeholder="Street, suburb, state, postcode"
+                  style={{ ...input, height: 'auto', padding: '11px 13px', fontFamily: 'inherit', lineHeight: 1.4, resize: 'none' }}
+                />
+              </span>
+
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                <span style={label}>GEOFENCE</span>
+                {center ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 13px', background: '#EAF7EC', border: '1px solid #C8E6D5', borderRadius: 10 }}>
+                    <span style={{ flex: 'none', width: 8, height: 8, borderRadius: '50%', background: '#1F7A4D' }} />
+                    <span style={{ flex: 1, fontSize: 13, color: '#14532B' }}>
+                      Centred where you are now ({center.lat.toFixed(5)}, {center.lng.toFixed(5)})
+                    </span>
+                    <span
+                      onClick={locating ? undefined : locateMe}
+                      style={{ flex: 'none', fontSize: 12.5, fontWeight: 700, color: locating ? '#8B9096' : s.accent, cursor: locating ? 'default' : 'pointer' }}
+                    >
+                      {locating ? 'Finding…' : 'Update'}
+                    </span>
+                  </span>
+                ) : (
+                  <button
+                    onClick={locateMe}
+                    disabled={locating}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 48, border: '1px solid #DCE0E6', borderRadius: 10, background: '#fff', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600, color: '#1A1D21', cursor: locating ? 'default' : 'pointer' }}
+                  >
+                    {locating ? 'Finding you…' : 'Use my current location'}
+                  </button>
+                )}
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 12.5, color: '#4A5057' }}>Fence radius — {radius} m</span>
+                  <input type="range" min={25} max={600} step={5} value={radius} onChange={(e) => setRadius(Number(e.target.value))} style={{ width: '100%' }} />
+                </span>
+                <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+                  Crew can only clock on inside this circle, so a job needs one before anyone can
+                  start it. It's centred on you for now — move it from the office dashboard once
+                  the real boundary is known.
+                </span>
+              </span>
+
+              <button
+                disabled={busy}
+                onClick={() => void save()}
+                style={{ width: '100%', height: 48, border: 0, borderRadius: 10, background: '#1A1D21', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 700, letterSpacing: '.03em', color: '#fff', opacity: busy ? 0.6 : 1, cursor: 'pointer' }}
+              >
+                {busy ? 'SAVING…' : 'SAVE'}
+              </button>
+            </div>
+          ) : (
+            <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+              The office sets up new projects, including the geofence a job needs before anyone
+              can clock in. If one's missing, say so in the job chat.
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )

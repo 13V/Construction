@@ -55,6 +55,7 @@ const MIGRATIONS = [
   { file: 'schema_v31.sql', proves: ['safety_documents.storage_path', 'safety_documents.expires_on', 'safety_shelf_v'] },
   { file: 'schema_v32.sql', proves: ['builder_contacts_role_check_v32'] },
   { file: 'schema_v33.sql', proves: ['job_sites.starts_on', 'job_sites.ends_on'] },
+  { file: 'schema_v34.sql', proves: ['shifts_read_v34', 'channels_dm_create', 'channel_members_dm_join'] },
 ]
 
 // ------------------------------------------------------------- credentials
@@ -141,7 +142,9 @@ try {
                  union all
                  select c.conname as n from pg_constraint c
                    join pg_namespace ns on ns.oid = c.connamespace
-                  where ns.nspname = 'public'`)
+                  where ns.nspname = 'public'
+                 union all
+                 select policyname as n from pg_policies where schemaname = 'public'`)
     ).map((r) => r.n),
   )
 
@@ -195,7 +198,9 @@ try {
                  union all
                  select c.conname as n from pg_constraint c
                    join pg_namespace ns on ns.oid = c.connamespace
-                  where ns.nspname = 'public'`)
+                  where ns.nspname = 'public'
+                 union all
+                 select policyname as n from pg_policies where schemaname = 'public'`)
     ).map((r) => r.n),
   )
   const missing = MIGRATIONS.flatMap((m) => m.proves).filter((t) => !after.has(t))

@@ -4,10 +4,11 @@
  * Every query here is safe for every role — RLS narrows rather than errors.
  * An employee's `shifts` come back as just their own, a captain's as their
  * jobs, the owner's as everyone: the ON SITE counter is honest for each of
- * them without this file knowing who is asking. `change_orders` is the one
- * office-only table queried; for anyone else it returns zero rows, which
- * renders as an ATTENTION count without variations in it — correct, not
- * broken.
+ * them without this file knowing who is asking. Pending variations used to
+ * be the exception — `change_orders` is office-only, so a captain's own
+ * count came back zero. This reads `site_variations_v` instead (schema_v24):
+ * the office's whole company or a captain's own jobs, with no cost_impact on
+ * it, which this hook never wanted anyway.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow, type WorkerRow } from '../../data/supabase'
@@ -26,7 +27,7 @@ export interface SimpleData {
   /** Published bookings, today and tomorrow, for the calendar card. */
   today: AssignmentRow[]
   tomorrow: AssignmentRow[]
-  /** Variations sitting with the builder. Zero for non-office by RLS. */
+  /** Variations sitting with the builder — the office's whole company, a captain's own jobs. */
   pendingVariations: number
   pendingVariationsBySite: Map<string, number>
   /** site_id → who is on the clock there, for the Who-is-where sheet. */
@@ -84,10 +85,10 @@ export function useSimpleData(me: WorkerRow): SimpleData {
         .lt('starts_at', t2)
         .gte('ends_at', t0)
         .order('starts_at'),
-      client.from('change_orders').select('id, site_id').eq('status', 'pending_client'),
+      client.from('site_variations_v').select('id, site_id').eq('status', 'pending_client'),
       client.from('crew_v').select('id, name, initials'),
       client.from('waterproofing').select('site_id, area, status, flood_tested').in('status', ['complete', 'signed_off']).eq('flood_tested', false),
-    ]).then(([st, pr, df, sh, asg, co, cv, wp]) => {
+    ]).then(([st, pr, df, sh, asg, vr, cv, wp]) => {
       if (cancelled) return
       const firstError = st.error || pr.error || df.error || sh.error || asg.error
       if (firstError) setError(firstError.message)
@@ -96,10 +97,11 @@ export function useSimpleData(me: WorkerRow): SimpleData {
       setDefectRows(df.data ?? [])
       setShiftRows(sh.data ?? [])
       setBookings((asg.data as AssignmentRow[]) ?? [])
-      // change_orders errors for nobody — RLS just empties it — but keep the
-      // guard so a future policy change cannot take the whole screen down.
-      setPendingVariations(co.error ? 0 : (co.data?.length ?? 0))
-      setVariationRows(co.error ? [] : ((co.data as Array<{ id: string; site_id: string | null }>) ?? []))
+      // site_variations_v has no RLS to reject with — its own where clause is
+      // the security boundary (schema_v24) — but the guard stays so a renamed
+      // or dropped view fails soft instead of taking the whole hook down.
+      setPendingVariations(vr.error ? 0 : (vr.data?.length ?? 0))
+      setVariationRows(vr.error ? [] : ((vr.data as Array<{ id: string; site_id: string | null }>) ?? []))
       setRoster((cv.data as Array<{ id: string; name: string; initials: string }>) ?? [])
       setWpRows(wp.error ? [] : ((wp.data as Array<{ site_id: string; area: string; status: string; flood_tested: boolean }>) ?? []))
       setLoading(false)
@@ -198,13 +200,20 @@ export function useSimpleData(me: WorkerRow): SimpleData {
 // ------------------------------------------------------------- when a job runs
 
 /**
- * A job's span, from the three things that know about it.
+ * A job's span, from everything that knows about it.
  *
- * The rule is programme-first: if the builder's programme has lines that are
- * ours, those dates ARE the job, because that is what we agreed to. Only when
- * there is no programme does the span fall back to what the crew is actually
- * booked and clocked on to — which is a description of what happened rather
- * than a plan, and would otherwise overwrite the plan with it.
+ * Dates somebody typed onto the job win outright — that is a person saying
+ * when this runs, and nothing derived gets to argue.
+ *
+ * Below that it is the widest of what is planned and what is happening:
+ * programme lines that are ours, plus what the crew is booked and clocked on
+ * to. This started out programme-first — a builder's programme being what we
+ * agreed to, and bookings being a mere description of what happened — and
+ * that was wrong in a way only visible once a line could be added by hand.
+ * Adding a single "tiling — wet areas" line to a job with eight weeks of
+ * bookings SHORTENED its bar to those four days, because one hand-typed line
+ * counted as a complete programme. A line somebody adds must be able to
+ * extend a job and never to truncate it.
  *
  * It lives here because two screens ask the question — the programme bar on
  * the Schedule and the project dates on a job — and a job that runs to
@@ -229,24 +238,17 @@ export function siteSpan(rows: SpanRows): { s: number; e: number } | null {
     return { s: day(rows.set.starts_on), e: day(rows.set.ends_on ?? rows.set.starts_on) }
   }
 
-  let planned: { s: number; e: number } | null = null
+  let out: { s: number; e: number } | null = null
   for (const t of rows.tasks) {
     if (!t.starts_on) continue
-    planned = span(
-      new Date(`${t.starts_on}T00:00:00`).getTime(),
-      new Date(`${t.ends_on ?? t.starts_on}T00:00:00`).getTime(),
-      planned,
-    )
+    out = span(day(t.starts_on), day(t.ends_on ?? t.starts_on), out)
   }
-  if (planned) return planned
-
-  let actual: { s: number; e: number } | null = null
   for (const a of rows.assignments) {
-    actual = span(new Date(a.starts_at).getTime(), new Date(a.ends_at ?? a.starts_at).getTime(), actual)
+    out = span(new Date(a.starts_at).getTime(), new Date(a.ends_at ?? a.starts_at).getTime(), out)
   }
   for (const x of rows.shifts) {
     const t = new Date(x.started_at).getTime()
-    actual = span(t, t, actual)
+    out = span(t, t, out)
   }
-  return actual
+  return out
 }

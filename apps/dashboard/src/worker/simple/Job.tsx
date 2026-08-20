@@ -6,10 +6,11 @@
  * renders only for the office — absent, not disabled, which is the drawing's
  * own caption and what RLS answers anyway.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase, type JobSiteRow, type SiteFileRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
+import { distanceM } from '../../geofence/geo'
 import { SafetyTab } from './Safety'
 import { OverviewTab } from './Overview'
 import { addressLine, avatarGrey, builderOf, s, SAFE_BOTTOM, SAFE_TOP, ticketTone, TICKET_MISSING } from './stheme'
@@ -44,35 +45,63 @@ const dayLabel = (iso: string) => {
   return d.getTime() >= today.getTime() ? `TODAY · ${upper}` : upper
 }
 
+/** "Today, 7:32 am" or "12 Aug, 7:32 am" — the viewer's one metadata line. */
+const takenLabel = (iso: string) => {
+  const d = new Date(iso)
+  const day = d.toDateString() === new Date().toDateString() ? 'Today' : d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+  return `${day}, ${timeOf(iso)}`
+}
+
+/**
+ * Was the phone inside the fence when the shutter went? Null — not false —
+ * when the photo carries no coordinates, because "we don't know" and "they
+ * weren't there" are different claims to put beside somebody's name.
+ */
+function onSite(file: SiteFileRow, site: JobSiteRow): boolean | null {
+  if (file.lat === null || file.lng === null) return null
+  return distanceM({ lat: Number(file.lat), lng: Number(file.lng) }, { lat: site.lat, lng: site.lng }) <= site.radius_m
+}
+
 function PhotoGrid({ me, site, onTakePhoto }: { me: WorkerRow; site: JobSiteRow; onTakePhoto: () => void }) {
   const [files, setFiles] = useState<SiteFileRow[]>([])
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    void supabase()
+  const load = useCallback(async () => {
+    const { data } = await supabase()
       .from('site_files')
       .select('*')
       .eq('site_id', site.id)
       .eq('kind', 'photo')
       .order('created_at', { ascending: false })
       .limit(60)
-      .then(async ({ data }) => {
+    return (data as SiteFileRow[]) ?? []
+  }, [site.id])
+
+  // A tile past the first 30 has no signed URL minted for it yet — this is
+  // how the viewer gets its own rather than sitting on "Loading…" forever.
+  const ensureUrl = useCallback(async (f: SiteFileRow) => {
+    const u = await signedUrl(BUCKET_FILES, f.storage_path)
+    if (u) setUrls((p) => ({ ...p, [f.id]: u }))
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void load().then(async (rows) => {
+      if (cancelled) return
+      setFiles(rows)
+      setLoading(false)
+      for (const f of rows.slice(0, 30)) {
+        const u = await signedUrl(BUCKET_FILES, f.storage_path)
         if (cancelled) return
-        const rows = (data as SiteFileRow[]) ?? []
-        setFiles(rows)
-        setLoading(false)
-        for (const f of rows.slice(0, 30)) {
-          const u = await signedUrl(BUCKET_FILES, f.storage_path)
-          if (cancelled) return
-          if (u) setUrls((p) => ({ ...p, [f.id]: u }))
-        }
-      })
+        if (u) setUrls((p) => ({ ...p, [f.id]: u }))
+      }
+    })
     return () => {
       cancelled = true
     }
-  }, [site.id, me.id])
+  }, [load, me.id])
 
   const groups = useMemo(() => {
     const by = new Map<string, SiteFileRow[]>()
@@ -109,7 +138,11 @@ function PhotoGrid({ me, site, onTakePhoto }: { me: WorkerRow; site: JobSiteRow;
           </span>
           <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {rows.map((f, i) => (
-              <span key={f.id} style={{ position: 'relative', flex: 'none', width: 'calc((100% - 12px) / 3)', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: shades[i % shades.length] }}>
+              <span
+                key={f.id}
+                onClick={() => setViewerIndex(files.indexOf(f))}
+                style={{ position: 'relative', flex: 'none', width: 'calc((100% - 12px) / 3)', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: shades[i % shades.length], cursor: 'pointer' }}
+              >
                 {urls[f.id] ? (
                   <img src={urls[f.id]} alt={f.caption ?? f.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
@@ -136,9 +169,190 @@ function PhotoGrid({ me, site, onTakePhoto }: { me: WorkerRow; site: JobSiteRow;
         </div>
       )}
       <div style={{ height: 14 }} />
+      {viewerIndex !== null && files[viewerIndex] && (
+        <PhotoViewer
+          files={files}
+          index={viewerIndex}
+          urls={urls}
+          site={site}
+          meId={me.id}
+          onIndex={setViewerIndex}
+          onClose={() => setViewerIndex(null)}
+          onChanged={() => { void load().then((rows) => setFiles(rows)) }}
+          ensureUrl={ensureUrl}
+        />
+      )}
     </div>
   )
 }
+
+/**
+ * Full-screen viewer for a tapped tile — paging, the on-site read and the
+ * flag-as-issue write, all previously built and sitting unimported in the
+ * standalone PhotosTab.tsx. That file wore the office dashboard's theme;
+ * this redraws the same three things in the Simple design's dark chrome.
+ */
+function PhotoViewer({
+  files,
+  index,
+  urls,
+  site,
+  meId,
+  onIndex,
+  onClose,
+  onChanged,
+  ensureUrl,
+}: {
+  files: SiteFileRow[]
+  index: number
+  urls: Record<string, string>
+  site: JobSiteRow
+  meId: string
+  onIndex: (n: number) => void
+  onClose: () => void
+  onChanged: () => void
+  ensureUrl: (f: SiteFileRow) => void
+}) {
+  const file = files[index]!
+  const url = urls[file.id]
+  const here = onSite(file, site)
+  const [busy, setBusy] = useState(false)
+  const [flagErr, setFlagErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!url) ensureUrl(file)
+  }, [file, url, ensureUrl])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft' && index > 0) onIndex(index - 1)
+      if (e.key === 'ArrowRight' && index < files.length - 1) onIndex(index + 1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [index, files.length, onIndex, onClose])
+
+  const flag = async () => {
+    if (busy || file.category === 'issue') return
+    setBusy(true)
+    // A missing policy answers an UPDATE with success and zero rows changed —
+    // reading the row back is the only way this button can tell "saved" from
+    // "refused" apart, and say the true one.
+    const { data, error } = await supabase()
+      .from('site_files')
+      .update({ category: 'issue' })
+      .eq('id', file.id)
+      .select('id,category')
+    setBusy(false)
+    if (error) setFlagErr(error.message)
+    else if (!data || data.length === 0) setFlagErr('That did not save. Tell the office.')
+    else {
+      setFlagErr(null)
+      onChanged()
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: s.inkDeep, display: 'flex', flexDirection: 'column', paddingTop: SAFE_TOP, paddingBottom: SAFE_BOTTOM }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px' }}>
+        <span onClick={onClose} style={vRound} aria-label="Close">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke={s.onDark} strokeWidth="1.9" strokeLinecap="round">
+            <path d="M5 5l10 10M15 5 5 15" />
+          </svg>
+        </span>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: s.onDark, fontVariantNumeric: 'tabular-nums' }}>
+          {index + 1} of {files.length}
+        </span>
+        <span style={{ width: 38 }} />
+      </div>
+
+      <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
+        {url ? (
+          <img src={url} alt={file.caption ?? file.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+        ) : (
+          <span style={{ color: s.onDarkMuted, fontSize: 13 }}>Loading…</span>
+        )}
+        {index > 0 && (
+          <span onClick={() => onIndex(index - 1)} style={{ ...vRound, position: 'absolute', left: 12 }} aria-label="Previous photo">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke={s.onDark} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12.2 4.4 6.6 10l5.6 5.6" />
+            </svg>
+          </span>
+        )}
+        {index < files.length - 1 && (
+          <span onClick={() => onIndex(index + 1)} style={{ ...vRound, position: 'absolute', right: 12 }} aria-label="Next photo">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke={s.onDark} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M7.8 4.4 13.4 10l-5.6 5.6" />
+            </svg>
+          </span>
+        )}
+      </div>
+
+      <div style={{ flex: 'none', padding: '14px 18px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {file.caption && <span style={{ fontSize: 14.5, lineHeight: 1.45, color: s.onDark }}>{file.caption}</span>}
+
+        <span style={{ fontSize: 12.5, color: s.onDarkMuted }}>
+          {file.uploaded_by === meId ? 'You' : 'Crew'}
+          {file.taken_at ? ` · ${takenLabel(file.taken_at)}` : ''}
+        </span>
+
+        <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <span style={here === true ? vChipOn : vChip}>
+            {here === true ? 'On site' : here === false ? 'Away from site' : 'No location'}
+          </span>
+          {file.category === 'issue' && <span style={vChipIssue}>Flagged as an issue</span>}
+        </span>
+
+        {file.category !== 'issue' && (
+          <button onClick={() => void flag()} disabled={busy} style={{ ...vFlagBtn, opacity: busy ? 0.6 : 1 }}>
+            {busy ? 'FLAGGING…' : 'FLAG AS AN ISSUE'}
+          </button>
+        )}
+        {flagErr && <span style={{ fontSize: 12.5, color: '#FF8A94' }}>{flagErr}</span>}
+      </div>
+    </div>
+  )
+}
+
+const vRound = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 38,
+  height: 38,
+  borderRadius: '50%',
+  background: 'rgba(255,255,255,.14)',
+  cursor: 'pointer',
+} as const
+
+const vChip = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  height: 26,
+  padding: '0 11px',
+  borderRadius: 13,
+  background: 'rgba(255,255,255,.08)',
+  color: '#B7BCC2',
+  fontSize: 12,
+  fontWeight: 700,
+} as const
+
+const vChipOn = { ...vChip, background: 'rgba(31,122,77,.28)', color: '#7EE29B' }
+const vChipIssue = { ...vChip, background: 'rgba(163,40,46,.32)', color: '#FF8A94' }
+
+const vFlagBtn = {
+  height: 46,
+  border: '1px solid rgba(255,255,255,.18)',
+  borderRadius: 8,
+  background: 'transparent',
+  color: s.onDark,
+  fontFamily: 'inherit',
+  fontSize: 14,
+  fontWeight: 700,
+  letterSpacing: '.02em',
+  cursor: 'pointer',
+} as const
 
 // ------------------------------------------------------------------- money
 
@@ -194,7 +408,9 @@ function MoneyTab({
 }: {
   site: JobSiteRow
   floodHoldCount: number
-  onAddInvoice: () => void
+  /** Which button sent them here — "cost" should open the form on amount and
+      category rather than force the camera first. */
+  onAddInvoice: (mode?: 'invoice' | 'cost') => void
 }) {
   const [row, setRow] = useState<ProfitRow | null>(null)
   const [donePct, setDonePct] = useState<number | null>(null)
@@ -327,13 +543,24 @@ function MoneyTab({
   const tileMats = mats.filter((m) => m.cost_code === 'tiles')
   const otherMats = mats.filter((m) => m.cost_code !== 'tiles')
   const tileSum = tileMats.reduce((a, m) => a + Number(m.total_cost ?? 0), 0)
+  // A subcontractor's invoice lands in the same expenses table as fuel and
+  // permits — category is the only clue the receipt form leaves behind — but
+  // it is labour bought in, not a material, and belongs counted with whoever
+  // else got paid to work this job.
+  const subExps = exps.filter((e) => e.category === 'Subcontractor')
+  const otherExps = exps.filter((e) => e.category !== 'Subcontractor')
+  const subExpLines: Array<{ k: string; cost: number }> = subExps.map((e) => ({
+    k: [e.vendor, e.category].filter(Boolean).join(' · '),
+    cost: Number(e.amount ?? 0) - Number(e.tax ?? 0),
+  }))
+  const subExpSum = subExpLines.reduce((a, l) => a + l.cost, 0)
   const matLines: Array<{ k: string; cost: number }> = [
     ...otherMats.map((m) => ({ k: [m.supplier, m.name].filter(Boolean).join(' · '), cost: Number(m.total_cost ?? 0) })),
-    ...exps.map((e) => ({ k: [e.vendor, e.category].filter(Boolean).join(' · '), cost: Number(e.amount ?? 0) - Number(e.tax ?? 0) })),
+    ...otherExps.map((e) => ({ k: [e.vendor, e.category].filter(Boolean).join(' · '), cost: Number(e.amount ?? 0) - Number(e.tax ?? 0) })),
   ].sort((a, b) => b.cost - a.cost)
   const matSum = matLines.reduce((a, l) => a + l.cost, 0)
   const pendingSum = pending.reduce((a, v) => a + Number(v.cost_impact ?? 0), 0)
-  const wageSum = Number(row.labour_cost ?? 0) + Number(row.sublet_cost ?? 0)
+  const wageSum = Number(row.labour_cost ?? 0) + Number(row.sublet_cost ?? 0) + subExpSum
 
   const rows: MoneyRowData[] = [
     {
@@ -349,8 +576,12 @@ function MoneyTab({
       key: 'wages',
       k: 'Contractors & wages',
       v: wageSum > 0 ? money(wageSum) : '—',
-      note: wageLines.length + sublets.length > 0 ? `${wageLines.length + sublets.length} people on the job` : 'nothing yet',
-      lines: [...wageLines, ...sublets.map((x) => ({ k: x.name, v: money(Math.round(x.cost)) }))],
+      note: wageLines.length + sublets.length + subExpLines.length > 0 ? `${wageLines.length + sublets.length + subExpLines.length} people on the job` : 'nothing yet',
+      lines: [
+        ...wageLines,
+        ...sublets.map((x) => ({ k: x.name, v: money(Math.round(x.cost)) })),
+        ...subExpLines.map((l) => ({ k: l.k, v: money(Math.round(l.cost)) })),
+      ],
       empty: 'Nobody has booked time to this job.',
     },
     {
@@ -446,14 +677,14 @@ function MoneyTab({
 
       <div style={{ flex: 'none', display: 'flex', gap: 9, paddingTop: 3 }}>
         <button
-          onClick={onAddInvoice}
+          onClick={() => onAddInvoice('invoice')}
           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, padding: '0 12px', background: '#1A1D21', border: 0, borderRadius: 10, color: '#fff', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap', cursor: 'pointer' }}
         >
           <CameraGlyph size={17} />
           ADD INVOICE
         </button>
         <button
-          onClick={onAddInvoice}
+          onClick={() => onAddInvoice('cost')}
           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, padding: '0 12px', background: '#fff', border: '1px solid #DCE0E6', borderRadius: 10, color: '#1A1D21', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, letterSpacing: '.02em', whiteSpace: 'nowrap', cursor: 'pointer' }}
         >
           <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="#1A1D21" strokeWidth="1.8" strokeLinecap="round">
@@ -500,7 +731,7 @@ interface Ticket {
  * lift" needs an answer at 7am and at 7pm alike. Certifications are
  * company-readable by RLS, so the tickets come back for the whole crew.
  */
-function CrewTab({ site }: { site: JobSiteRow }) {
+function CrewTab({ site, me }: { site: JobSiteRow; me: WorkerRow }) {
   const [rows, setRows] = useState<CrewMember[]>([])
   const [tickets, setTickets] = useState<Map<string, Ticket[]>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -573,8 +804,20 @@ function CrewTab({ site }: { site: JobSiteRow }) {
     }
   }, [site.id])
 
+  // shifts_read only widens past "your own row" for the office — a captain
+  // reads their own site fine, but a plain crew member cannot see whether
+  // anyone else here is actually clocked on, only who is booked.
+  const canSeeWhosOn = me.is_office || site.captain_id === me.id
+
   return (
     <div style={{ height: '100%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 16px 20px' }}>
+      {!canSeeWhosOn && (
+        <div style={{ flex: 'none', padding: '12px 14px', borderRadius: 10, background: s.amberFill, color: s.amber, fontSize: 13, lineHeight: 1.45 }}>
+          Whether someone is actually clocked on is not visible to you — only the
+          office and your crew captain can confirm that. What is below is who is
+          booked; the job chat is the place to check if it matters right now.
+        </div>
+      )}
       {rows.map((r, i) => {
         const held = tickets.get(r.id) ?? []
         return (
@@ -621,8 +864,9 @@ function CrewTab({ site }: { site: JobSiteRow }) {
       })}
       {!loading && rows.length === 0 && (
         <div style={{ padding: '36px 24px', textAlign: 'center', fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
-          Nobody rostered here today. Whoever the office books, or the geofence
-          clocks on, shows up here with the tickets they hold.
+          {canSeeWhosOn
+            ? 'Nobody rostered here today. Whoever the office books, or the geofence clocks on, shows up here with the tickets they hold.'
+            : 'Nobody is booked here today, by what is visible to you.'}
         </div>
       )}
     </div>
@@ -706,7 +950,8 @@ export function JobScreen({
   chat: (onClose: () => void) => React.ReactNode
   onBack: () => void
   onTakePhoto: () => void
-  onAddInvoice: () => void
+  /** "cost" is a manual entry with no camera step — see MoneyTab. */
+  onAddInvoice: (mode?: 'invoice' | 'cost') => void
   initialTab?: JobTab
 }) {
   const office = me.is_office
@@ -826,7 +1071,7 @@ export function JobScreen({
         {tab === 'safety' && <SafetyTab me={me} site={site} />}
         {tab === 'chat' && chat(() => setTab('overview'))}
         {tab === 'money' && office && <MoneyTab site={site} floodHoldCount={floodHoldCount} onAddInvoice={onAddInvoice} />}
-        {tab === 'crew' && <CrewTab site={site} />}
+        {tab === 'crew' && <CrewTab site={site} me={me} />}
       </div>
     </div>
   )

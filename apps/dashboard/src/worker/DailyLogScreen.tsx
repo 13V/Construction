@@ -20,6 +20,29 @@ import { theme } from '../theme'
  * Rather than draw an AUTO badge over a number nobody produced, it is a field.
  */
 
+/**
+ * POST to the drafting endpoint and hand back the saved row.
+ *
+ * It runs on the service role, so it is also the only way most crew get a
+ * daily_logs row into existence at all — RLS grants INSERT to office and the
+ * site captain, everyone else can only UPDATE a row that already exists.
+ * DRAFT TODAY FOR ME calls this for the suggestion itself; SEND calls it
+ * first when there is no row yet, purely to open one, then updates it with
+ * whatever is actually sitting in the fields.
+ */
+async function fetchDraft(siteId: string, date: string): Promise<DailyLogRow> {
+  const { data } = await supabase().auth.getSession()
+  const token = data.session?.access_token
+  const res = await fetch(api('/api/draft-log'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ siteId, date }),
+  })
+  const out = await res.json()
+  if (!res.ok) throw new Error(out.error ?? `Server returned ${res.status}`)
+  return out.row as DailyLogRow
+}
+
 export function DailyLogScreen({
   me,
   siteId: standingIn,
@@ -79,16 +102,7 @@ export function DailyLogScreen({
     setDrafting(true)
     setError(null)
     try {
-      const { data } = await supabase().auth.getSession()
-      const token = data.session?.access_token
-      const res = await fetch(api('/api/draft-log'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ siteId, date: today }),
-      })
-      const out = await res.json()
-      if (!res.ok) throw new Error(out.error ?? `Server returned ${res.status}`)
-      const saved = out.row as DailyLogRow
+      const saved = await fetchDraft(siteId, today)
       setRow(saved)
       setWeather(saved.weather ?? '')
       setWork(saved.work_completed ?? '')
@@ -118,11 +132,26 @@ export function DailyLogScreen({
       confirmed_by: me.id,
       confirmed_at: new Date().toISOString(),
     }
-    const { error: err } = row
-      ? await supabase().from('daily_logs').update(payload).eq('id', row.id)
-      : await supabase().from('daily_logs').insert(payload)
+    let id: string
+    if (row) {
+      id = row.id
+    } else {
+      // Nothing to update yet — most likely someone typed straight into the
+      // fields without tapping DRAFT TODAY FOR ME. Open the row through
+      // fetchDraft (service role) rather than inserting from here, which is
+      // office and the site captain's grant, not this worker's.
+      try {
+        id = (await fetchDraft(siteId, today)).id
+      } catch (e) {
+        setBusy(false)
+        setError(e instanceof Error ? e.message : String(e))
+        return
+      }
+    }
+
+    const { error: err } = await supabase().from('daily_logs').update(payload).eq('id', id)
     setBusy(false)
-    if (err) setError(err.message)
+    if (err) setError('That didn’t send. Try again, or say so in the job chat.')
     else {
       setSent(true)
       void load()

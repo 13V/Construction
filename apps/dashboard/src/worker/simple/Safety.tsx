@@ -503,8 +503,9 @@ async function addDocument(
 
 /**
  * A shelf's documents, and the two things you do with them: put one up, take
- * one down. The SWMS shelf has a third — issue one for this job — because that
- * is the only one of the four that is written rather than collected.
+ * one down. The SWMS shelf has two more — issue one for this job, and set up
+ * or revise the template it is issued from — because that is the only one of
+ * the four whose content the office writes rather than collects.
  */
 function ShelfSheet({
   kind,
@@ -525,6 +526,7 @@ function ShelfSheet({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [issuing, setIssuing] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState(false)
   const office = me.is_office
 
   async function upload(list: FileList) {
@@ -576,16 +578,30 @@ function ShelfSheet({
             {error && <span style={{ padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 13, color: '#8E2A31' }}>{error}</span>}
 
             {kind === 'swms' && office && (
-              <button onClick={() => setIssuing(true)} style={{ ...primaryBtn }}>
+              <button
+                onClick={() => setIssuing(true)}
+                disabled={!template}
+                style={{ ...primaryBtn, opacity: template ? 1 : 0.5, cursor: template ? 'pointer' : 'default' }}
+              >
                 ISSUE A SWMS FOR THIS JOB
               </button>
             )}
             {kind === 'swms' && office && !template && (
-              <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#B26A00' }}>
-                There is no SWMS template set up yet, so an issued one would have a cover page and
-                no method. Put the generic statement in as the template first — it is written once
-                and every job copies it.
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '11px 13px', background: '#FFF4E5', borderRadius: 10 }}>
+                <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#B26A00' }}>
+                  There is no SWMS template set up yet, so an issued one would have a cover page and
+                  no method. Put the generic statement in as the template first — it is written once
+                  and every job copies it.
+                </span>
+                <button onClick={() => setEditingTemplate(true)} style={ghostBtn}>
+                  Set up the template
+                </button>
               </span>
+            )}
+            {kind === 'swms' && office && template && (
+              <button onClick={() => setEditingTemplate(true)} style={ghostBtn}>
+                Revise the SWMS template
+              </button>
             )}
 
             {docs.length === 0 && (
@@ -637,6 +653,18 @@ function ShelfSheet({
           onClose={() => setIssuing(false)}
           onIssued={async () => {
             setIssuing(false)
+            await safety.reload()
+          }}
+        />
+      )}
+
+      {editingTemplate && (
+        <SwmsTemplateSheet
+          me={me}
+          template={template}
+          onClose={() => setEditingTemplate(false)}
+          onSaved={async () => {
+            setEditingTemplate(false)
             await safety.reload()
           }}
         />
@@ -962,6 +990,117 @@ function IssueSwmsSheet({
                 </button>
               </>
             )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------ the SWMS template
+
+/**
+ * The one thing that makes ISSUE A SWMS FOR THIS JOB more than a cover page:
+ * a title, a version, and a body written in the two marks swmsPdf() reads out
+ * of a text box — "## " for a heading, "- " for a bullet. Saving here writes
+ * straight to the company's master row (site_id null, is_template true);
+ * there is only ever one, so setting it up and revising it are the same form.
+ */
+function SwmsTemplateSheet({
+  me,
+  template,
+  onClose,
+  onSaved,
+}: {
+  me: WorkerRow
+  template: SafetyDoc | null
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
+  const [title, setTitle] = useState(template?.title ?? 'Safe work method statement')
+  const [version, setVersion] = useState(template?.version ?? '1')
+  const [body, setBody] = useState(template?.body ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save() {
+    setBusy(true)
+    setError(null)
+    try {
+      const payload = {
+        company_id: me.company_id,
+        site_id: null,
+        kind: 'swms',
+        is_template: true,
+        title: title.trim() || 'Safe work method statement',
+        version: version.trim() || '1',
+        body,
+        updated_by: me.id,
+      }
+      const { error: err } = template
+        ? await supabase().from('safety_documents').update(payload).eq('id', template.id)
+        : await supabase().from('safety_documents').insert({ ...payload, created_by: me.id })
+      if (err) throw new Error(err.message)
+      await onSaved()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the template.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.5)' }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxHeight: '92%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
+      >
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '15px 15px 12px 17px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>
+            {template ? 'Revise the SWMS template' : 'Set up the SWMS template'}
+          </span>
+          <span onClick={onClose} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}>
+            {closeGlyph}
+          </span>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `15px 16px calc(20px + ${SAFE_BOTTOM})` }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            {error && <span style={{ padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 13, color: '#8E2A31' }}>{error}</span>}
+
+            <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+              This is the one copy every job issues from — the project, the builder and the date are
+              the only things that change on the way out. Revise it here and the next SWMS issued
+              carries it; ones already filed on a job stay exactly as they were handed over.
+            </span>
+
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={fieldLabel}>TITLE</span>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Safe work method statement" style={field} />
+            </span>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={fieldLabel}>VERSION</span>
+              <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1" style={field} />
+            </span>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={fieldLabel}>BODY</span>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={16}
+                placeholder={'## Scope of works\nWhat the job involves and where.\n\n## Hazards and controls\n- Working at height — edge protection and harnesses'}
+                style={{ ...field, height: 'auto', padding: '11px 13px', fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical' as const }}
+              />
+              <span style={{ fontSize: 11.5, lineHeight: 1.5, color: '#9AA1A9' }}>
+                A line starting "## " prints as a heading. A line starting "- " prints as a bullet.
+                A blank line prints as a gap. Anything else prints as a paragraph and wraps on its
+                own — that is the whole of what an issued SWMS understands.
+              </span>
+            </span>
+
+            <button disabled={busy} onClick={() => void save()} style={{ ...primaryBtn, opacity: busy ? 0.5 : 1 }}>
+              {busy ? 'SAVING…' : 'SAVE TEMPLATE'}
+            </button>
           </div>
         </div>
       </div>

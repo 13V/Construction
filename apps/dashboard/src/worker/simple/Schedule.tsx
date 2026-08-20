@@ -13,13 +13,18 @@
  *   Week   — the drawn week strip and day cards, unchanged.
  *   Day    — one day's cards with a previous / next day stepper.
  *
+ * The header's + hand-adds a line to a job's programme — for a job nothing
+ * has been imported for yet, or a date the builder's own programme is
+ * missing. It is gated the same as the table it writes to: the office, or
+ * the captain of that job, and hidden rather than disabled for anyone else.
+ *
  * RLS scopes everything — the owner reads the whole company, a crew member
  * their own bookings.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { supabase, type AssignmentRow, type JobSiteRow } from '../../data/supabase'
-import { avatarGrey, builderOf, railOf, s, SAFE_TOP, streetLine } from './stheme'
+import { supabase, type AssignmentRow, type JobSiteRow, type WorkerRow } from '../../data/supabase'
+import { avatarGrey, builderOf, railOf, s, SAFE_BOTTOM, SAFE_TOP, streetLine } from './stheme'
 import { siteSpan, type SimpleData, type SpanRows } from './data'
 import type { JobTab } from './Job'
 
@@ -71,7 +76,10 @@ const STATUS_ORDER: Record<BarStatus, number> = { progress: 0, upcoming: 1, done
  * SimpleData because finished (archived) jobs belong on a programme and
  * SimpleData deliberately hides them everywhere else.
  */
-function useProgrammeRows(progress: Map<string, number>): { rows: ProgRow[]; loading: boolean } {
+function useProgrammeRows(progress: Map<string, number>): { rows: ProgRow[]; sites: JobSiteRow[]; loading: boolean; refresh: () => void } {
+  // Bumped once the add-to-programme sheet writes a task, so the bar it
+  // belongs on redraws with it rather than waiting for the next mount.
+  const [nonce, setNonce] = useState(0)
   const [sites, setSites] = useState<JobSiteRow[]>([])
   const [spans, setSpans] = useState<Map<string, { s: number; e: number }>>(new Map())
   const [loading, setLoading] = useState(true)
@@ -117,7 +125,7 @@ function useProgrammeRows(progress: Map<string, number>): { rows: ProgRow[]; loa
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [nonce])
 
   const rows = useMemo(() => {
     const today = new Date()
@@ -140,7 +148,7 @@ function useProgrammeRows(progress: Map<string, number>): { rows: ProgRow[]; loa
     return out
   }, [sites, spans, progress])
 
-  return { rows, loading }
+  return { rows, sites, loading, refresh: useCallback(() => setNonce((n) => n + 1), []) }
 }
 
 // ---------------------------------------------------------------- the gantt
@@ -402,17 +410,25 @@ function Gantt({
 
 export function SimpleSchedule({
   data,
+  me,
   onOpenJob,
 }: {
   data: SimpleData
+  /**
+   * Optional only because not every caller passes it yet. Without it the
+   * add-to-programme "+" stays hidden — it would otherwise have no role to
+   * check before showing a control that writes to the company's data.
+   */
+  me?: WorkerRow
   onOpenJob: (site: JobSiteRow, tab?: JobTab) => void
 }) {
   const now = useMemo(() => new Date(), [])
   const [view, setView] = useState<'quarter' | 'month' | 'week' | 'day'>('quarter')
   const [quarter, setQuarter] = useState<[number, number]>([now.getFullYear(), Math.floor(now.getMonth() / 3)])
   const [month, setMonth] = useState<[number, number]>([now.getFullYear(), now.getMonth()])
+  const [addOpen, setAddOpen] = useState(false)
 
-  const { rows: progRows, loading: progLoading } = useProgrammeRows(data.progress)
+  const { rows: progRows, sites: progSites, loading: progLoading, refresh: refreshProgramme } = useProgrammeRows(data.progress)
 
   // Week view state — the drawn strip, unchanged.
   const monday = useMemo(() => mondayOf(now), [now])
@@ -707,17 +723,29 @@ export function SimpleSchedule({
     )
   }
 
+  // Matches the write policy on programme_tasks itself: the office reaches
+  // every job, a captain only the ones they run. Waiting on progLoading
+  // keeps a captain's + from flashing on and then vanishing once their jobs
+  // are actually known.
+  const writableSites = !me ? [] : me.is_office ? progSites : progSites.filter((x) => x.captain_id === me.id)
+  const canAddProgramme = !!me && !progLoading && (me.is_office || writableSites.length > 0)
+
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {/* The dark PROGRAM header with the view switcher, as the client drew it. */}
       <div style={{ flex: 'none', background: 'linear-gradient(#23272C,#15181C)', padding: `${SAFE_TOP} 0 0` }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 52, padding: '0 20px' }}>
           <span style={{ fontSize: 16.5, fontWeight: 700, letterSpacing: '.09em', color: '#fff' }}>PROGRAM</span>
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }}>
-            <svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round">
-              <path d="M10 4.5v11M4.5 10h11" />
-            </svg>
-          </span>
+          {canAddProgramme && (
+            <span
+              onClick={() => setAddOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, cursor: 'pointer' }}
+            >
+              <svg width="21" height="21" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round">
+                <path d="M10 4.5v11M4.5 10h11" />
+              </svg>
+            </span>
+          )}
         </div>
         <div style={{ padding: '0 14px 14px' }}>
           <div style={{ display: 'flex', padding: 3, borderRadius: 12, background: '#FFFFFF' }}>
@@ -739,6 +767,187 @@ export function SimpleSchedule({
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: view === 'quarter' || view === 'month' ? '#fff' : '#F5F6F7' }}>
         {body}
+      </div>
+
+      {addOpen && me && (
+        <AddToProgrammeSheet
+          me={me}
+          sites={writableSites}
+          onClose={() => setAddOpen(false)}
+          onSaved={() => {
+            setAddOpen(false)
+            refreshProgramme()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------ add to programme
+
+const addLabel = { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' } as const
+const addInput = {
+  width: '100%',
+  height: 48,
+  padding: '0 13px',
+  boxSizing: 'border-box' as const,
+  background: '#F5F6F7',
+  border: '1px solid #DCE0E6',
+  borderRadius: 10,
+  font: 'inherit',
+  fontSize: 16,
+  color: s.ink,
+  outline: 'none',
+}
+
+/**
+ * A hand-added line, for a job with nothing imported yet or a date the
+ * builder's own programme is missing. Every task needs a programme to hang
+ * off — the foreign key is not null — and a job can genuinely have none, so
+ * the first task on such a job quietly opens one: a manual, current
+ * programme that a real PDF upload later supersedes the normal way (the
+ * same trigger Programme.tsx relies on). A job that already has a current
+ * programme just gets the new line added to it — not a fresh one, which
+ * would strand the builder's own imported lines as "superseded" under a
+ * revision they were never part of.
+ */
+function AddToProgrammeSheet({
+  me,
+  sites,
+  onClose,
+  onSaved,
+}: {
+  me: WorkerRow
+  sites: JobSiteRow[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [siteId, setSiteId] = useState(sites[0]?.id ?? '')
+  const [name, setName] = useState('')
+  const [startsOn, setStartsOn] = useState('')
+  const [endsOn, setEndsOn] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const site = sites.find((x) => x.id === siteId) ?? null
+  const canSave = site !== null && name.trim().length > 0 && startsOn.length > 0 && !busy
+
+  async function save() {
+    if (!site) return
+    setBusy(true)
+    setError(null)
+    try {
+      const client = supabase()
+      const current = await client.from('programmes').select('id').eq('site_id', site.id).eq('status', 'current').maybeSingle()
+      let programmeId = (current.data as { id: string } | null)?.id ?? null
+      if (!programmeId) {
+        const made = await client
+          .from('programmes')
+          .insert({ company_id: me.company_id, site_id: site.id, source: 'manual', status: 'current', imported_by: me.id })
+          .select('id')
+          .single()
+        if (made.error) throw new Error(made.error.message)
+        programmeId = (made.data as { id: string }).id
+      }
+      // A milestone (same start and end) is a real, drawable thing on this
+      // chart — leaving ends_on empty instead would drop the line out of
+      // every "our next window" query that requires an end date to compare.
+      const { error: err } = await client.from('programme_tasks').insert({
+        company_id: me.company_id,
+        programme_id: programmeId,
+        site_id: site.id,
+        name: name.trim(),
+        starts_on: startsOn,
+        ends_on: endsOn || startsOn,
+        is_ours: true,
+      })
+      if (err) throw new Error(err.message)
+      onSaved()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add that to the programme.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.5)' }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxHeight: '92%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
+      >
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '15px 15px 12px 18px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 17, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>Add to programme</span>
+          <span onClick={onClose} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}>
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="2" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </span>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `15px 16px calc(20px + ${SAFE_BOTTOM})` }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            {error && <span style={{ padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 13, color: '#8E2A31' }}>{error}</span>}
+
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <span style={addLabel}>JOB</span>
+              <div style={{ background: '#fff', border: '1px solid #E4E7EB', borderRadius: 11, maxHeight: 230, overflowY: 'auto' }}>
+                {sites.map((x, i) => {
+                  const on = x.id === siteId
+                  return (
+                    <span
+                      key={x.id}
+                      onClick={() => setSiteId(x.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', borderBottom: i === sites.length - 1 ? 'none' : '1px solid #EDEFF1', background: on ? '#F5F6F7' : '#fff', cursor: 'pointer' }}
+                    >
+                      <span style={{ flex: 'none', width: 4, height: 26, borderRadius: 2, background: railOf(x) }} />
+                      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <span style={{ fontSize: 14, fontWeight: on ? 700 : 500, color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{x.name}</span>
+                        {streetLine(x) && (
+                          <span style={{ fontSize: 11.5, color: '#8B9096', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{streetLine(x)}</span>
+                        )}
+                      </span>
+                      {on && (
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flex: 'none' }}>
+                          <path d="M5 10.4l3.2 3.2L15 6.6" />
+                        </svg>
+                      )}
+                    </span>
+                  )
+                })}
+                {sites.length === 0 && (
+                  <span style={{ display: 'block', padding: '15px', fontSize: 13.5, color: '#7B838B' }}>No jobs to add to yet.</span>
+                )}
+              </div>
+            </span>
+
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <span style={addLabel}>LINE NAME</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Tiling — wet areas" style={addInput} />
+            </span>
+
+            <span style={{ display: 'flex', gap: 9 }}>
+              <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: 11, color: '#9AA1A9' }}>Starts</span>
+                <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} style={addInput} />
+              </span>
+              <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: 11, color: '#9AA1A9' }}>Ends</span>
+                <input type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} style={addInput} />
+              </span>
+            </span>
+            <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>Leave the end date blank for a single day.</span>
+
+            <button
+              disabled={!canSave}
+              onClick={() => void save()}
+              style={{ width: '100%', height: 50, marginTop: 2, border: 0, borderRadius: 10, background: canSave ? '#1A1D21' : '#C3C9D0', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 700, letterSpacing: '.03em', color: '#fff', cursor: canSave ? 'pointer' : 'default' }}
+            >
+              {busy ? 'SAVING…' : 'SAVE'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

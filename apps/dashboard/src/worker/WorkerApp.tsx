@@ -21,7 +21,7 @@ import { backend, backendNote, startWatching, type LocationWatch } from './locat
 import { clockTime, dayDate, shortDate } from '../format'
 import { DailyLogScreen } from './DailyLogScreen'
 import { useSites } from './useSites'
-import { SimpleChat } from './simple/Chat'
+import { SimpleChat, useUnreadCount } from './simple/Chat'
 import { HomeScreen } from './simple/Home'
 import { PhoneFrame } from './simple/PhoneFrame'
 import { SimpleSignIn } from './simple/SignIn'
@@ -180,6 +180,9 @@ function Tracker({ me }: { me: WorkerRow }) {
   const [tick, setTick] = useState(Date.now())
   const [tracking, setTracking] = useState(false)
   const [screen, setScreen] = useState<Screen>('tracker')
+  /** ADD A COST opens the same screen as ADD INVOICE, on the number
+   *  rather than on the camera. */
+  const [receiptManual, setReceiptManual] = useState(false)
   const [tab, setTab] = useState<Tab>('home')
   /** The job open over Home, and whether the full clock surface is up. */
   const [openJobId, setOpenJobId] = useState<string | null>(null)
@@ -354,6 +357,8 @@ function Tracker({ me }: { me: WorkerRow }) {
   // by role. Lives here so switching tabs never refetches.
   const simpleData = useSimpleData(me)
   const openJob = openJobId ? simpleData.sites.find((x) => x.id === openJobId) ?? null : null
+  // The tab bar needs this even while the Chat tab itself is unmounted.
+  const chatUnread = useUnreadCount(me)
 
   // A clock-in mid-scroll must surface: the celebration is the product's
   // best moment and nobody taps into a buried screen to find it.
@@ -389,7 +394,7 @@ function Tracker({ me }: { me: WorkerRow }) {
         <PhotoScreen me={me} currentSiteId={currentSiteId} defaultSiteId={openJobId} sites={sites} fix={fix} onClose={() => setScreen('tracker')} />
       )}
       {screen === 'receipt' && (
-        <ReceiptScreen me={me} currentSiteId={currentSiteId} defaultSiteId={openJobId} sites={sites} onClose={() => setScreen('tracker')} />
+        <ReceiptScreen me={me} currentSiteId={currentSiteId} defaultSiteId={openJobId} sites={sites} manual={receiptManual} onClose={() => setScreen('tracker')} />
       )}
       {screen === 'schedule' && <ScheduleScreen me={me} onClose={() => setScreen('tracker')} />}
       {screen === 'correction' && (
@@ -430,6 +435,7 @@ function Tracker({ me }: { me: WorkerRow }) {
       {screen === 'tracker' && tab === 'schedule' && (
         <SimpleSchedule
           data={simpleData}
+          me={me}
           onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'overview'); setOpenJobId(x.id); setTab('home') }}
         />
       )}
@@ -473,7 +479,10 @@ function Tracker({ me }: { me: WorkerRow }) {
           )}
           onBack={() => setOpenJobId(null)}
           onTakePhoto={() => setScreen('photo')}
-          onAddInvoice={() => setScreen('receipt')}
+          onAddInvoice={(mode) => {
+            setReceiptManual(mode === 'cost')
+            setScreen('receipt')
+          }}
         />
       )}
 
@@ -566,7 +575,7 @@ function Tracker({ me }: { me: WorkerRow }) {
       {screen === 'tracker' && !(tab === 'home' && (openJob || clockOpen)) && (
         <TabBar
           active={tab}
-          unread={0}
+          unread={chatUnread}
           onPick={(k) => {
             setOpenJobId(null)
             setClockOpen(false)
@@ -974,8 +983,23 @@ function ShieldIcon({ color = theme.ink, size = 24 }: { color?: string; size?: n
   )
 }
 
+/**
+ * link_nav is written by the schema_v7 triggers using the office dashboard's
+ * nav names — Dashboard.tsx honours the same column the same way, because
+ * both surfaces are reading the same notifications row. This surface has no
+ * Crew or Timesheets screen of its own, though: a leave decision and a
+ * decided correction live under Time Off and Fix a Punch here. Anything
+ * link_nav names that isn't in this map — including null — falls back to My
+ * Jobs, which is where every notice landed before link_nav was honoured.
+ */
+const NOTICE_SCREEN: Record<string, PanelScreen> = {
+  Schedule: 'schedule',
+  Crew: 'timeoff',
+  Timesheets: 'correction',
+}
+
 /** Unread notices, shown wherever the worker is. */
-function NoticeBanner({ me, onOpen }: { me: WorkerRow; onOpen: () => void }) {
+function NoticeBanner({ me, onOpen }: { me: WorkerRow; onOpen: (screen: PanelScreen) => void }) {
   const [rows, setRows] = useState<NotificationRow[]>([])
 
   useEffect(() => {
@@ -1005,9 +1029,12 @@ function NoticeBanner({ me, onOpen }: { me: WorkerRow; onOpen: () => void }) {
   const dismiss = async () => {
     const stamp = new Date().toISOString()
     const ids = rows.map((r) => r.id)
+    // The newest notice is the one the banner is actually showing, so it's
+    // the one that decides where the tap goes.
+    const target = (rows[0].link_nav && NOTICE_SCREEN[rows[0].link_nav]) || 'schedule'
     setRows([])
     await supabase().from('notifications').update({ read_at: stamp }).in('id', ids)
-    onOpen()
+    onOpen(target)
   }
 
   return (
@@ -1284,7 +1311,7 @@ function GateScreen({
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <TrackerHeader me={me} tone="off" label="Off the clock" onAvatarTap={onShowAccount} />
       <div style={{ paddingTop: 14 }}>
-        <NoticeBanner me={me} onOpen={() => onOpenPanel('schedule')} />
+        <NoticeBanner me={me} onOpen={onOpenPanel} />
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 20px 20px', overflowY: 'auto' }}>
         <Callout>
@@ -2051,12 +2078,21 @@ function ReceiptScreen({
   currentSiteId,
   defaultSiteId,
   sites: fromTracker,
+  manual = false,
   onClose,
 }: {
   me: WorkerRow
   currentSiteId: string | null
   defaultSiteId: string | null
   sites: ServerSite[]
+  /**
+   * Opened from ADD A COST rather than ADD INVOICE. The camera stops being
+   * the first thing you meet: a subcontractor's day rate or a parking fee is
+   * a number somebody already knows, not a docket to photograph, and
+   * demanding the photo first is why the two buttons felt like one button
+   * drawn twice.
+   */
+  manual?: boolean
   onClose: () => void
 }) {
   // Same as PhotoScreen: never depend on the tracker having run for the list.
@@ -2202,11 +2238,38 @@ function ReceiptScreen({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <ScreenHeader title="Upload receipt" onCancel={onClose} />
+      <ScreenHeader title={manual ? 'Add a cost' : 'Upload receipt'} onCancel={onClose} />
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
-        <label style={{ ...ctaYellow(56), opacity: extracting ? 0.6 : 1 }}>
-          <ReceiptIcon color={theme.ink} size={19} />
-          {extracting ? 'READING RECEIPT…' : form.receiptPath ? 'RETAKE PHOTO' : 'OPEN CAMERA'}
+        <label
+          style={
+            manual
+              ? {
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  height: 46,
+                  marginBottom: 14,
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: 10,
+                  background: theme.panel,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: theme.accent,
+                  cursor: 'pointer',
+                  opacity: extracting ? 0.6 : 1,
+                }
+              : { ...ctaYellow(56), opacity: extracting ? 0.6 : 1 }
+          }
+        >
+          <ReceiptIcon color={manual ? theme.accent : theme.ink} size={manual ? 16 : 19} />
+          {extracting
+            ? 'READING RECEIPT…'
+            : form.receiptPath
+              ? 'RETAKE PHOTO'
+              : manual
+                ? 'Attach a photo (optional)'
+                : 'OPEN CAMERA'}
           <input
             type="file"
             accept="image/*"
