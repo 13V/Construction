@@ -707,10 +707,58 @@ try {
       `open shift (${w})`)
   }
 
+  // A one-line PDF: a real object in the bucket, small enough to be honest
+  // about being demo paperwork. Photos come from the photo library above.
+  const TINY_PDF = Buffer.from(
+    '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
+    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj\n' +
+    '4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n' +
+    '5 0 obj<</Length 96>>stream\nBT /F1 14 Tf 60 760 Td (Mapei product warranty - demo document) Tj ET\nendstream endobj\n' +
+    'trailer<</Root 1 0 R>>\n%%EOF\n', 'latin1')
+
+  /** PUT an object into a storage bucket as the signed-in owner. */
+  async function putObject(path, bytes, contentType) {
+    const r = await fetch(`${SB}/storage/v1/object/site-files/${path}`, {
+      method: 'POST',
+      headers: { Authorization: boss.H.Authorization, apikey: ANON, 'Content-Type': contentType, 'x-upsert': 'true' },
+      body: bytes,
+    })
+    if (!r.ok && r.status !== 409) throw new Error(`storage put failed (${path}): HTTP ${r.status} ${await r.text()}`)
+    return path
+  }
+
+  // ------------------------------------------------------- the photo library
+  // Real bytes for every photo record. The rows used to carry demo/... paths
+  // that resolved to nothing — deliberate when the grid was a drawing
+  // transcription, a defect once tapping a tile opened a real viewer on a
+  // file that does not exist. These are generated images (scripts/
+  // demo-photos): tiled walls, membrane coats, a screeded fall — synthetic,
+  // but they read as site photos in a grid, which is their whole job.
+  // Storage reads require the company id as the first path segment
+  // (supabase/storage.sql), so every upload goes under companyId/siteId/.
+  const photoLib = Object.fromEntries(
+    ['subway-white', 'subway-sage', 'floor-grey-600', 'floor-oak-plank', 'floor-terrazzo',
+     'wall-half-done', 'mosaic-blue', 'floor-charcoal', 'membrane-blue', 'membrane-grey',
+     'screed-fall', 'bath-hob', 'ticket-card',
+    ].map((n) => [n, readFileSync(new URL(`./demo-photos/${n}.jpg`, import.meta.url))]),
+  )
+  /** Pick an image that suits the caption, cycling within each family. */
+  const photoFor = (caption, i) => {
+    const c = (caption ?? '').toLowerCase()
+    const pick = (...names) => names[i % names.length]
+    if (/membrane|primer|flood|upstand/.test(c)) return pick('membrane-blue', 'membrane-grey')
+    if (/screed|slab|joint|fall/.test(c)) return pick('screed-fall', 'floor-grey-600')
+    if (/hob|ensuite|bath|drain|laundry/.test(c)) return pick('bath-hob', 'subway-white', 'mosaic-blue')
+    if (/set out|setout/.test(c)) return pick('wall-half-done', 'floor-grey-600')
+    if (/grout|handover|complete/.test(c)) return pick('floor-terrazzo', 'floor-charcoal', 'floor-oak-plank')
+    return pick('subway-white', 'floor-grey-600', 'wall-half-done', 'floor-charcoal', 'subway-sage', 'floor-oak-plank')
+  }
+
+
   // ---------------------------------------------------------------- photos
-  // Captioned rows with demo storage paths. The paths resolve to nothing, so
-  // the grid shows the drawing's placeholder tiles with caption pills — which
-  // is exactly what the drawing draws.
+  // Captioned rows, each backed by a real object from the photo library —
+  // the grid, the tap into the viewer and the share sheet all work on them.
   const PHOTOS = [
     ['lot42', 0, ['Ensuite 2 · falls', 'Ensuite 2', 'Hob detail', '', 'Strip drain', '']],
     ['lot42', -1, ['Bath 1 · membrane', '', 'Flood test', '', '', 'Laundry', '', '', '']],
@@ -728,16 +776,53 @@ try {
   for (const key of photoSites) {
     const have = await boss.get('site_files', `select=id&site_id=eq.${site[key].id}&kind=eq.photo&limit=1`)
     if (Array.isArray(have) && have.length > 0) continue
-    const rows = PHOTOS.filter(([k]) => k === key).flatMap(([, day, captions]) =>
-      captions.map((caption, i) => ({
-        company_id: companyId, site_id: site[key].id, uploaded_by: me.id,
-        kind: 'photo', storage_path: `demo/${key}/${adDay(day)}-${i + 1}.jpg`,
-        name: `photo-${adDay(day)}-${i + 1}.jpg`, mime: 'image/jpeg', category: 'progress',
-        caption: caption || null, taken_at: adAt(day, `${String(7 + (i % 8)).padStart(2, '0')}:${String(10 + i * 5).padStart(2, '0')}`),
-      })),
-    )
+    const rows = []
+    for (const [, day, captions] of PHOTOS.filter(([k]) => k === key)) {
+      for (const [i, caption] of captions.entries()) {
+        const bytes = photoLib[photoFor(caption, i)]
+        const path = `${companyId}/${site[key].id}/demo-photo-${adDay(day)}-${i + 1}.jpg`
+        await putObject(path, bytes, 'image/jpeg')
+        rows.push({
+          company_id: companyId, site_id: site[key].id, uploaded_by: me.id,
+          kind: 'photo', storage_path: path, size_bytes: bytes.length,
+          name: `photo-${adDay(day)}-${i + 1}.jpg`, mime: 'image/jpeg', category: 'progress',
+          caption: caption || null, taken_at: adAt(day, `${String(7 + (i % 8)).padStart(2, '0')}:${String(10 + i * 5).padStart(2, '0')}`),
+        })
+      }
+    }
     const res = await boss.post('site_files', rows)
     if (!res.ok) throw new Error(`photos insert failed (${key}): HTTP ${res.status} ${await res.text()}`)
+  }
+
+  // A demo that already ran carries rows pointing at demo/... paths from
+  // before photos had bytes behind them. Repair them in place — the captions
+  // and timestamps on those rows are load-bearing, so they are patched, not
+  // re-seeded.
+  const orphanPhotos = await boss.get('site_files', `select=id,site_id,caption&storage_path=like.demo/*&kind=eq.photo`)
+  if (Array.isArray(orphanPhotos) && orphanPhotos.length > 0) {
+    for (const [i, row] of orphanPhotos.entries()) {
+      const bytes = photoLib[photoFor(row.caption, i)]
+      const path = `${companyId}/${row.site_id}/demo-photo-repair-${i + 1}.jpg`
+      await putObject(path, bytes, 'image/jpeg')
+      const upd = await boss.patch('site_files', `id=eq.${row.id}`, { storage_path: path, size_bytes: bytes.length })
+      if (!upd.ok) throw new Error(`photo repair failed: HTTP ${upd.status} ${await upd.text()}`)
+    }
+    console.log(`photos: backed ${orphanPhotos.length} placeholder rows with real images`)
+  }
+
+  // Ticket photos — the office account gets a photographed White Card so the
+  // My Documents thumbnail, the viewer and the share path all demonstrate.
+  {
+    const cardPath = `${companyId}/tickets/demo-white-card.jpg`
+    await putObject(cardPath, photoLib['ticket-card'], 'image/jpeg')
+    await ensureRow(boss, 'certifications',
+      `select=id&worker_id=eq.${me.id}&name=eq.${encodeURIComponent('White Card')}`,
+      { company_id: companyId, worker_id: me.id, name: 'White Card', expires_on: null, document_path: cardPath },
+      'ticket (office: White Card)')
+    const bare = await boss.get('certifications', `select=id&or=(document_path.is.null,document_path.like.demo/*)&worker_id=eq.${me.id}`)
+    for (const row of Array.isArray(bare) ? bare : []) {
+      await boss.patch('certifications', `id=eq.${row.id}`, { document_path: cardPath })
+    }
   }
 
   // -------------------------------------------------- waterproofing packages
@@ -780,34 +865,6 @@ try {
     }],
   ]
 
-  // A 1x1 JPEG and a one-line PDF. Enough to be a real object in the bucket,
-  // small enough to be honest about being demo evidence.
-  const TINY_JPEG = Buffer.from(
-    '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a' +
-    'HBwcJC4nICIsIxwcKDcpLDA1NTU1MDVAQEBAQEBAQEBAQEBAQEBAQEBAQP/bAEMBCQkJDAsMGA0N' +
-    'GDIhHCEyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMv/A' +
-    'ABEIAAEAAQMBIgACEQEDEQH/xABTAAEBAQAAAAAAAAAAAAAAAAABAgMBAQEBAAAAAAAAAAAAAAAA' +
-    'AAECAxABAQAAAAAAAAAAAAAAAAAAABEBAAIRAxIhMQARAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQAC' +
-    'EQMRAD8AmgAf/9k=', 'base64')
-  const TINY_PDF = Buffer.from(
-    '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
-    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
-    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj\n' +
-    '4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n' +
-    '5 0 obj<</Length 96>>stream\nBT /F1 14 Tf 60 760 Td (Mapei product warranty - demo document) Tj ET\nendstream endobj\n' +
-    'trailer<</Root 1 0 R>>\n%%EOF\n', 'latin1')
-
-  /** PUT an object into a storage bucket as the signed-in owner. */
-  async function putObject(path, bytes, contentType) {
-    const r = await fetch(`${SB}/storage/v1/object/site-files/${path}`, {
-      method: 'POST',
-      headers: { Authorization: boss.H.Authorization, apikey: ANON, 'Content-Type': contentType, 'x-upsert': 'true' },
-      body: bytes,
-    })
-    if (!r.ok && r.status !== 409) throw new Error(`storage put failed (${path}): HTTP ${r.status} ${await r.text()}`)
-    return path
-  }
-
   const WP_FILES = [
     // key, step, kind, category, filename
     ['glenelg', 'products', 'document', null, 'mapelastic-aquadefense-tds.pdf'],
@@ -837,19 +894,23 @@ try {
     if (!upd.ok) throw new Error(`wp package patch failed (${key}): HTTP ${upd.status} ${await upd.text()}`)
   }
 
-  for (const [key, step, kind, category, filename] of WP_FILES) {
+  for (const [idx, [key, step, kind, category, filename]] of WP_FILES.entries()) {
     const pkgId = wpPkg[key].id
+    const isPhoto = kind === 'photo'
+    const path = `${companyId}/${site[key].id}/demo-wp-${step}-${filename}`
+    // Upsert the bytes even when the row already exists — an earlier seed
+    // wrote 1x1 JPEGs here, which render as broken images, and overwriting
+    // the object fixes every existing row without touching it.
+    const bytes = isPhoto ? photoLib[photoFor(filename, idx)] : TINY_PDF
+    await putObject(path, bytes, isPhoto ? 'image/jpeg' : 'application/pdf')
     const have = await boss.get('site_files',
       `select=id&waterproofing_package_id=eq.${pkgId}&name=eq.${encodeURIComponent(filename)}&limit=1`)
     if (Array.isArray(have) && have.length > 0) continue
-    const isPhoto = kind === 'photo'
-    const path = `${companyId}/${site[key].id}/demo-wp-${step}-${filename}`
-    await putObject(path, isPhoto ? TINY_JPEG : TINY_PDF, isPhoto ? 'image/jpeg' : 'application/pdf')
     const res = await boss.post('site_files', [{
       company_id: companyId, site_id: site[key].id, waterproofing_package_id: pkgId, wp_step: step,
       uploaded_by: me.id, kind, category, storage_path: path, name: filename,
       mime: isPhoto ? 'image/jpeg' : 'application/pdf',
-      size_bytes: (isPhoto ? TINY_JPEG : TINY_PDF).length,
+      size_bytes: bytes.length,
     }])
     if (!res.ok) throw new Error(`wp file insert failed (${key}/${filename}): HTTP ${res.status} ${await res.text()}`)
   }
