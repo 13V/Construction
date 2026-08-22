@@ -23,7 +23,7 @@ import type { ReactNode } from 'react'
 import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
 import { certificateNo, wpCertificatePdf, type CompanyDetails } from '../../data/documents'
-import { downloadPdf } from '../../data/pdf'
+import { viewFile } from './FileViewer'
 import { s, SAFE_BOTTOM } from './stheme'
 
 // ------------------------------------------------------------------- the data
@@ -1258,21 +1258,19 @@ function AttachmentTile({ file, onRemove }: { file: WpFile; onRemove?: () => voi
 
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: '#fff', border: '1px solid #E7EAEE' }}>
-      <a
-        href={url ?? undefined}
-        target="_blank"
-        rel="noreferrer"
-        style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 7, overflow: 'hidden', background: isImage ? '#E4E7EA' : '#EEF1F4', textDecoration: 'none' }}
+      <span
+        onClick={() => viewFile({ url, name: file.name })}
+        style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 7, overflow: 'hidden', background: isImage ? '#E4E7EA' : '#EEF1F4', cursor: 'pointer' }}
       >
         {isImage && url ? (
           <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.03em', color: '#5F666E' }}>{(file.name.split('.').pop() ?? 'FILE').slice(0, 4).toUpperCase()}</span>
         )}
-      </a>
-      <a href={url ?? undefined} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: s.ink, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      </span>
+      <span onClick={() => viewFile({ url, name: file.name })} style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: s.ink, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {file.name}
-      </a>
+      </span>
       {onRemove && (
         <span onClick={onRemove} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, cursor: 'pointer' }}>
           <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#9AA1A9" strokeWidth="2" strokeLinecap="round">
@@ -1298,9 +1296,12 @@ function PhotoTile({ file, onRemove }: { file: WpFile; onRemove?: () => void }) 
   return (
     <span style={{ position: 'relative', display: 'block', aspectRatio: '1', borderRadius: 9, overflow: 'hidden', background: '#E4E7EA' }}>
       {url && (
-        <a href={url} target="_blank" rel="noreferrer">
-          <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        </a>
+        <img
+          src={url}
+          alt=""
+          onClick={() => viewFile({ url, name: file.name })}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+        />
       )}
       {onRemove && (
         <span
@@ -1645,14 +1646,15 @@ function CertificateStep({
           <button
             onClick={() => {
               const blob = build()
-              if (blob) downloadPdf(blob, `${pkg?.certificate_no ?? 'certificate'}.pdf`)
+              if (blob) viewFile({ blob, name: `${pkg?.certificate_no ?? 'certificate'}.pdf` })
             }}
             style={ghostBtn}
           >
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10 3.6v9M6.4 9.2L10 12.8l3.6-3.6M4 15.6h12" />
+              <rect x="3.2" y="2.8" width="13.6" height="14.4" rx="2" />
+              <path d="M6.6 6.8h6.8M6.6 10h6.8M6.6 13.2h4.2" />
             </svg>
-            Download PDF
+            View the certificate
           </button>
           <button onClick={() => void emailToBuilder()} disabled={working !== null} style={ghostBtn}>
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinejoin="round">

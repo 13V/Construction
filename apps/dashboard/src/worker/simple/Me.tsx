@@ -10,6 +10,7 @@ import { supabase, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
 import { HoursTab } from '../HoursTab'
 import { s, SAFE_TOP, ticketTone } from './stheme'
+import { viewFile } from './FileViewer'
 
 interface TrackerSite {
   id: string
@@ -43,7 +44,7 @@ const fullDate = (iso: string) =>
 const COMMON_TICKETS = ['Drivers Licence', 'White Card', 'First Aid', 'Police Clearance']
 
 /** The card itself. Private bucket, so the thumbnail waits on a signed URL. */
-function TicketThumb({ path }: { path: string }) {
+function TicketThumb({ path, name }: { path: string; name: string }) {
   const [url, setUrl] = useState<string | null>(null)
 
   useEffect(() => {
@@ -57,15 +58,15 @@ function TicketThumb({ path }: { path: string }) {
   }, [path])
 
   return (
-    <a
-      href={url ?? undefined}
-      target="_blank"
-      rel="noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      style={{ display: 'block', flex: 'none', width: 44, height: 34, borderRadius: 6, overflow: 'hidden', border: '1px solid #DCE0E6', background: 'repeating-linear-gradient(135deg,#E4E7EA 0 6px,#DADEE2 6px 12px)' }}
+    <span
+      onClick={(e) => {
+        e.stopPropagation()
+        viewFile({ url, name })
+      }}
+      style={{ display: 'block', flex: 'none', width: 44, height: 34, borderRadius: 6, overflow: 'hidden', border: '1px solid #DCE0E6', background: 'repeating-linear-gradient(135deg,#E4E7EA 0 6px,#DADEE2 6px 12px)', cursor: 'pointer' }}
     >
       {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
-    </a>
+    </span>
   )
 }
 
@@ -369,7 +370,7 @@ export function MeScreen({
           return (
             <span key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 62, padding: '11px 15px', borderBottom: i === tickets.length - 1 && !adding && tickets.length > 0 ? 'none' : '1px solid #EDEFF1' }}>
               {/* The card itself, if they have photographed it. */}
-              {t.document_path && <TicketThumb path={t.document_path} />}
+              {t.document_path && <TicketThumb path={t.document_path} name={t.name} />}
               <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <span style={{ fontSize: 15.5, color: s.ink }}>{t.name}</span>
                 <span style={{ fontSize: 12.5, color: '#8B9096' }}>

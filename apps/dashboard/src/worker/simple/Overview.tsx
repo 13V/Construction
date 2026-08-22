@@ -22,6 +22,7 @@ import { DrawingsPanel } from './Drawings'
 import { ProgrammeSheet, programmeLine, useProgrammes } from './Programme'
 import { WaterproofingPanel } from './Waterproofing'
 import { s, SAFE_BOTTOM } from './stheme'
+import { viewFile } from './FileViewer'
 
 type ScopeStatus = 'pending' | 'chosen' | 'not_applicable'
 
@@ -858,11 +859,9 @@ function AttachmentTile({ file, onRemove }: { file: AttachmentRow; onRemove: () 
 
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: '#F8F9FA', border: '1px solid #E7EAEE' }}>
-      <a
-        href={url ?? undefined}
-        target="_blank"
-        rel="noreferrer"
-        style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 7, overflow: 'hidden', background: isImage ? 'repeating-linear-gradient(135deg,#E4E7EA 0 6px,#DADEE2 6px 12px)' : '#EEF1F4', textDecoration: 'none' }}
+      <span
+        onClick={() => viewFile({ url, name: file.name })}
+        style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 7, overflow: 'hidden', background: isImage ? 'repeating-linear-gradient(135deg,#E4E7EA 0 6px,#DADEE2 6px 12px)' : '#EEF1F4', cursor: 'pointer' }}
       >
         {isImage && url ? (
           <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -871,15 +870,13 @@ function AttachmentTile({ file, onRemove }: { file: AttachmentRow; onRemove: () 
             {(file.name.split('.').pop() ?? 'FILE').slice(0, 4).toUpperCase()}
           </span>
         )}
-      </a>
-      <a
-        href={url ?? undefined}
-        target="_blank"
-        rel="noreferrer"
-        style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: s.ink, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      </span>
+      <span
+        onClick={() => viewFile({ url, name: file.name })}
+        style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: s.ink, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
       >
         {file.name}
-      </a>
+      </span>
       <span onClick={onRemove} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, cursor: 'pointer' }}>
         <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#9AA1A9" strokeWidth="2" strokeLinecap="round">
           <path d="M5 5l10 10M15 5L5 15" />

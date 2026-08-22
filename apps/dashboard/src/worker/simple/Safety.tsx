@@ -19,7 +19,7 @@ import type { ReactNode } from 'react'
 import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
 import { swmsPdf, swmsReference, type CompanyDetails } from '../../data/documents'
-import { downloadPdf } from '../../data/pdf'
+import { viewFile } from './FileViewer'
 import { isStructured, type SwmsContent, type SwmsTask } from '../../data/swms'
 import { s, SAFE_BOTTOM } from './stheme'
 
@@ -697,11 +697,9 @@ function DocRow({ doc, me, people, onRemove }: { doc: SafetyDoc; me: WorkerRow; 
 
   return (
     <span style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 12px 12px 13px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 11 }}>
-      <a
-        href={url ?? undefined}
-        target="_blank"
-        rel="noreferrer"
-        style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, height: 42, borderRadius: 8, overflow: 'hidden', background: isImage ? '#E4E7EA' : '#EEF1F4', textDecoration: 'none' }}
+      <span
+        onClick={() => viewFile({ url, name: doc.file_name ?? doc.title })}
+        style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, height: 42, borderRadius: 8, overflow: 'hidden', background: isImage ? '#E4E7EA' : '#EEF1F4', cursor: 'pointer' }}
       >
         {isImage && url ? (
           <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -710,16 +708,14 @@ function DocRow({ doc, me, people, onRemove }: { doc: SafetyDoc; me: WorkerRow; 
             {(doc.file_name?.split('.').pop() ?? 'DOC').slice(0, 4).toUpperCase()}
           </span>
         )}
-      </a>
+      </span>
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <a
-          href={url ?? undefined}
-          target="_blank"
-          rel="noreferrer"
-          style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: '-.005em', color: s.ink, textDecoration: 'none' }}
+        <span
+          onClick={() => viewFile({ url, name: doc.file_name ?? doc.title })}
+          style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: '-.005em', color: s.ink, cursor: 'pointer' }}
         >
           {doc.title}
-        </a>
+        </span>
         {doc.reference && <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.01em', color: '#7B838B' }}>{doc.reference}</span>}
         <span style={{ fontSize: 11.5, lineHeight: 1.35, color: '#9AA1A9' }}>
           Updated {shortDate(doc.updated_at)}
@@ -997,11 +993,12 @@ function IssueSwmsSheet({
                     <span style={{ fontSize: 12.5, color: '#2F6B43' }}>Filed against {site.name}</span>
                   </span>
                 </span>
-                <button onClick={() => downloadPdf(issued.blob, `${issued.doc.reference ?? 'swms'}.pdf`)} style={ghostBtn}>
+                <button onClick={() => viewFile({ blob: issued.blob, name: `${issued.doc.reference ?? 'swms'}.pdf` })} style={ghostBtn}>
                   <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M10 3.6v9M6.4 9.2L10 12.8l3.6-3.6M4 15.6h12" />
+                    <rect x="3.2" y="2.8" width="13.6" height="14.4" rx="2" />
+                    <path d="M6.6 6.8h6.8M6.6 10h6.8M6.6 13.2h4.2" />
                   </svg>
-                  Download PDF
+                  View the PDF
                 </button>
                 <button onClick={() => void email()} disabled={working !== null} style={ghostBtn}>
                   <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke={s.accent} strokeWidth="1.7" strokeLinejoin="round">

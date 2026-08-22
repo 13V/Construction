@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
 import { s, SAFE_BOTTOM } from './stheme'
+import { viewFile } from './FileViewer'
 
 export interface ProgrammeRow {
   id: string
@@ -265,10 +266,8 @@ function ProgrammeCard({ row, current }: { row: ProgrammeRow; current: boolean }
   }, [row.storage_path])
 
   return (
-    <a
-      href={url ?? undefined}
-      target="_blank"
-      rel="noreferrer"
+    <span
+      onClick={() => viewFile({ url, name: `${row.revision?.trim() || row.name}.pdf` })}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -277,7 +276,7 @@ function ProgrammeCard({ row, current }: { row: ProgrammeRow; current: boolean }
         background: current ? '#fff' : '#FAFBFC',
         border: `1px solid ${current ? '#E4E7EB' : '#E9EDF0'}`,
         borderRadius: 11,
-        textDecoration: 'none',
+        cursor: 'pointer',
       }}
     >
       <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 8, background: current ? '#EDEEF1' : '#F1F3F5' }}>
@@ -302,6 +301,6 @@ function ProgrammeCard({ row, current }: { row: ProgrammeRow; current: boolean }
           Superseded
         </span>
       )}
-    </a>
+    </span>
   )
 }

@@ -25,6 +25,7 @@ import { SimpleChat, useUnreadCount } from './simple/Chat'
 import { HomeScreen } from './simple/Home'
 import { PhoneFrame } from './simple/PhoneFrame'
 import { SimpleSignIn } from './simple/SignIn'
+import { FileViewerHost, viewFile } from './simple/FileViewer'
 import { JobScreen } from './simple/Job'
 import { MeScreen } from './simple/Me'
 import { ProjectsScreen } from './simple/Projects'
@@ -120,6 +121,9 @@ export function WorkerApp() {
   return (
     <PhoneFrame>
       <WorkerSurface />
+      {/* Mounted once, above every screen — see FileViewer.tsx for why files
+          cannot simply open in a new tab inside the iOS shell. */}
+      <FileViewerHost />
     </PhoneFrame>
   )
 }
@@ -730,14 +734,12 @@ function AccountSheet({ me, onClose }: { me: WorkerRow; onClose: () => void }) {
           >
             Delete my account
           </button>
-          <a
-            href="/privacy"
-            target="_blank"
-            rel="noreferrer"
-            style={{ fontSize: 12.5, color: design.faint, textAlign: 'center', textDecoration: 'underline' }}
+          <span
+            onClick={() => viewFile({ url: '/privacy', name: 'What Crewline records about you' })}
+            style={{ fontSize: 12.5, color: design.faint, textAlign: 'center', textDecoration: 'underline', cursor: 'pointer' }}
           >
             What Crewline records about you
-          </a>
+          </span>
         </div>
       </div>
     </div>
@@ -2423,30 +2425,26 @@ function ChatAttachment({ path, mine }: { path: string; mine: boolean }) {
 
   if (!CHAT_IMAGE_RE.test(path)) {
     return (
-      <a
-        href={url ?? undefined}
-        target="_blank"
-        rel="noreferrer"
-        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, background: mine ? 'rgba(255,255,255,.10)' : '#F1F3F5', fontSize: 13.5, fontWeight: 600, color: mine ? '#fff' : '#1A1D21', textDecoration: 'none' }}
+      <span
+        onClick={() => viewFile({ url, name: name.replace(/^[0-9a-f-]{36}-/i, '') })}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, background: mine ? 'rgba(255,255,255,.10)' : '#F1F3F5', fontSize: 13.5, fontWeight: 600, color: mine ? '#fff' : '#1A1D21', cursor: 'pointer' }}
       >
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke={mine ? '#fff' : '#4A5057'} strokeWidth="1.6" strokeLinejoin="round">
           <path d="M4.5 2.5h7l4 4v11h-11z" />
           <path d="M11.5 2.5v4h4" />
         </svg>
         {name.replace(/^[0-9a-f-]{36}-/i, '')}
-      </a>
+      </span>
     )
   }
 
   return (
-    <a
-      href={url ?? undefined}
-      target="_blank"
-      rel="noreferrer"
-      style={{ display: 'block', width: 200, height: 150, borderRadius: 10, overflow: 'hidden', background: 'repeating-linear-gradient(135deg,#E4E7EA 0 7px,#DADEE2 7px 14px)' }}
+    <span
+      onClick={() => viewFile({ url, name: name.replace(/^[0-9a-f-]{36}-/i, '') })}
+      style={{ display: 'block', width: 200, height: 150, borderRadius: 10, overflow: 'hidden', background: 'repeating-linear-gradient(135deg,#E4E7EA 0 7px,#DADEE2 7px 14px)', cursor: 'pointer' }}
     >
       {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
-    </a>
+    </span>
   )
 }
 
