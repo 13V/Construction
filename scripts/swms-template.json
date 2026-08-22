@@ -1,0 +1,486 @@
+{
+ "document": {
+  "documentNo": "S812.0267",
+  "activity": "Wall & Floor Tiling \u2013 Preparation and Laying",
+  "companyName": "PROVEN TILING SOLUTIONS",
+  "abn": "72 101512485",
+  "contactName": "Giuseppe Ciccone",
+  "contactPhone": "0412705243",
+  "principal": "Mykra",
+  "project": "HJ Brighton",
+  "jobDescription": "General wall and floor tiling works + waterproofing",
+  "licence": "BLD187384",
+  "approvedByName": "Giuseppe Ciccone",
+  "approvedByRole": "Director/Supervisor",
+  "approvedOn": "19/08/26"
+ },
+ "monitoring": [
+  "Regular inspections and observations will be conducted by Giuseppe Ciccone to ensure SWMS is being complied with.",
+  "Daily Toolbox Talks will be undertaken to identify, control and communicate additional site hazards.",
+  "Work must cease immediately if incident or near miss occurs. SWMS must be amended in consultation with relevant people.",
+  "Amendments must be approved by Giuseppe Ciccone and communicated to all affected workers before work resumes.",
+  "SWMS must be made available for inspection or review as required by WHS legislation.",
+  "Record of SWMS must be kept as required by WHS legislation (until job is complete or for 2 years if involved in a notifiable incident)."
+ ],
+ "ppe": {
+  "general": "Safety footwear, eye protection, gloves & knee protectors. Ensure all PPE meets relevant Australian Standards. Inspect, and replace PPE as needed.",
+  "whereRequired": "Hearing protection, high visibility shirt or vest & breathing protection.",
+  "icons": [
+   "Foot Protection",
+   "Hearing Protection",
+   "High Visibility",
+   "Eye Protection",
+   "Hand Protection",
+   "Breathing Protection"
+  ]
+ },
+ "safetyNotes": [
+  {
+   "substance": "Cement",
+   "text": "Cement is classified as a hazardous chemical according to the Australian Safety and Compensation Council (ASCC) formerly (NOHSC) and is not classified as a dangerous good according to Australian Code for the Transport of Dangerous Goods by Road or Rail. Efforts should be made to avoid inhalation of cement dust and avoid direct skin contact. Minimise generation of cement dust \u2013 Mix outside and/or wear a P1 respirator. Cement has a very powerful caustic effect on skin due to its alkaline content and has the potential to cause burns and dermatitis. Rubber or PVC gloves should be worn when working with cement and cement-based products (concrete, mortar, mud)"
+  },
+  {
+   "substance": "Sand",
+   "text": "Sand is classified as a hazardous chemical according to the ASCC and is not classified as a dangerous good according to Australian Code for the Transport of Dangerous Goods by Road or Rail. Sand (crystalline silica) has the potential to cause damage to the lungs (scarring). Efforts should be made to keep sand wet to avoid dust generation and inhalation of particles. Safety goggles & dust mask should be worn when generating dust through machining (grinding)."
+  },
+  {
+   "substance": "Adhesives (Floor & Wall) & Levelling Compounds",
+   "text": "The majority of cement-based adhesives (all powders) are classified as hazardous chemical according to the ASCC and are not classified as dangerous goods according to Australian Code for the Transport of Dangerous Goods by Road or Rail. Generation of dust should be avoided. Mixing powders should be performed outside and respiratory protection is advised. Eye protection should be worn when mixing / stirring. Gloves (rubber / PVA / neoprene) should be worn when mixing. Seek further clarification from specific product SDS where required."
+  },
+  {
+   "substance": "Grouts",
+   "text": "The majority of grouting compounds (all powders) are classified as a hazardous chemical according to the ASCC and are not classified as dangerous goods according to Australian Code for the Transport of Dangerous Goods by Road or Rail. Continued handling of grouting compounds is known to cause dermatitis. To reduce risk PVC gloves should be worn when handling. Safety glasses are advised when mixing grouts. Seek further clarification from specific product SDS where required."
+  }
+ ],
+ "tasks": [
+  {
+   "task": "Personnel Requirements \u2013 Before commencing any work on site",
+   "hazards": [
+    "Injury may occur to personnel not trained in the correct use of equipment and are unaware of Site-Specific Conditions that may affect working procedures."
+   ],
+   "riskBefore": "2M",
+   "controls": [
+    {
+     "heading": "Training: Should include:",
+     "items": [
+      "Safe work procedures",
+      "Fitting of personal protective equipment",
+      "Manual handling, plant safety (grinders)"
+     ]
+    },
+    {
+     "heading": "Induction: Where required, all people carrying out tiling activities should participate in relevant training including:",
+     "items": [
+      "Construction Induction",
+      "Site Specific Induction",
+      "Safe Work Procedures;",
+      "Hazard identification processes;",
+      "Control measures including PPE;",
+      "Manual handling, machinery & height safety."
+     ]
+    }
+   ],
+   "riskAfter": "1L",
+   "responsible": [
+    "All Workers"
+   ]
+  },
+  {
+   "task": "Preparation \u2013 Identify work area, preparation & setup",
+   "hazards": [
+    "Personal injury",
+    "slips, trips and falls",
+    "Electrocution",
+    "Damage to equipment",
+    "Out of Date Test Tags",
+    "Manual handling",
+    "Exposure to dust",
+    "Exposure to noise"
+   ],
+   "riskBefore": "2M",
+   "controls": [
+    {
+     "heading": "Ensure:",
+     "items": [
+      "The floor or working area is free from rubbish and debris, and clear access is available for all workers.",
+      "Erect any barriers & signage",
+      "Keep power leads up off the ground and out of the way and all power tools and leads are Tested and Tagged and are current.",
+      "Use correct manual handling techniques when handling adhesives, tiles, cement",
+      "Work area is set up to avoid manual handling risks, trips and falls and that an adequate area is available (external) for mixing & cutting activities"
+     ]
+    }
+   ],
+   "riskAfter": "1L",
+   "responsible": [
+    "All Workers"
+   ]
+  },
+  {
+   "task": "Operation \u2013 Mixing & spreading Sand / Cement & Adhesives",
+   "hazards": [
+    "Personal injury",
+    "sprains and strains",
+    "skin rash/dermatitis",
+    "concrete burns",
+    "Fatigue",
+    "Electric shock",
+    "Struck by objects",
+    "Entanglement",
+    "Noise exposure",
+    "Dusts exposure"
+   ],
+   "riskBefore": "3H",
+   "controls": [
+    {
+     "heading": "Manual handling:",
+     "items": [
+      "Where possible have builder position tiles into accessible location using crane / forklift",
+      "Use trolleys to transfer boxes of tiles, cements, adhesives, grout to the work area",
+      "Instruct relevant workers to only handle loads within limitations or ask for assistance."
+     ]
+    },
+    {
+     "heading": "Mixing and applying:",
+     "items": [
+      "When mixing powders, ensure that relevant PPE is worn (respiratory protection, gloves, eye protection)",
+      "When using cement mixer for mortar, ensure mixer is positioned on level stable ground, leads positioned clear of water and cement / sand positioned in close proximity",
+      "Conduct mixing tasks outside to enable air movement to disperse dusts \u2013 Add powder to water to reduce dust generation",
+      "When using electric drill to mix powders tuck in loose clothing and tie back hair.",
+      "Ensure that the tool and leads are tested and tagged with correct date and that all leads are protected from water immersion and other damage.",
+      "Keep all non-essential personnel clear of mixing activities",
+      "Use appropriate Tool (Trowel / shovel) to evenly spread product - avoiding unnecessary splattering",
+      "Wash up all tools / skin with water whilst still wet to aid in removal of product"
+     ]
+    }
+   ],
+   "riskAfter": "1L",
+   "responsible": [
+    "All Workers"
+   ]
+  },
+  {
+   "task": "Laying and Cutting of Tiles",
+   "hazards": [
+    "Personal injury",
+    "cuts and scratches",
+    "eye injury",
+    "hearing damage",
+    "Silica Dust"
+   ],
+   "riskBefore": "2M",
+   "controls": [
+    {
+     "heading": "Cutting & Laying Tiles:",
+     "items": [
+      "Prior to laying tiles ensure that knee pads are fitted",
+      "When cutting tiles with 4\u201d grinder (fitted with diamond blade) only does so outside clear of other personnel \u2013 Place barriers / signage to keep nonessential personnel clear of the work area",
+      "Check condition of tool, integrity of blade & placement of lead",
+      "Wear safety glasses, hearing protection and respiratory protection when using grinder",
+      "Place all offcuts in a safe position to avoid cluttering and creating untidy work areas",
+      "When using Tile Cutter ensure that the tool is placed on a stable / level surface take caution when handling cut tiles as sharp edges may be present \u2013 wear gloves when handling",
+      "Position tiles to reduce manual handling risks / reduce distances travelled and double handling"
+     ]
+    },
+    {
+     "heading": "Tiling at Height:",
+     "items": [
+      "Where tiles (wall) are required to be positioned at height, ensure that suitable platform ladders or trestle (No >2.0m) are used.",
+      "Ensure ladders are suitable to task, industrial rated and adequately restrained from falling",
+      "When tiling at height \u2013 a second person should be present to provide assistance and expedite task."
+     ]
+    },
+    {
+     "heading": "Silica dust management",
+     "items": [
+      "Dust Suppression \u2013 cut tiles with a wet tile saw",
+      "Dust Extraction \u2013 cut tiles with an angle grinder with a shroud attached to a HEPA vacuum cleaner",
+      "At all times you are not exposing your workers or other workers to airborne silica dust"
+     ]
+    }
+   ],
+   "riskAfter": "1L",
+   "responsible": [
+    "All Workers"
+   ]
+  },
+  {
+   "task": "Grouting",
+   "hazards": [
+    "Personal injury",
+    "sprains and strains",
+    "skin rash / dermatitis",
+    "concrete burns",
+    "Fatigue",
+    "Electric shock",
+    "Struck by objects",
+    "Entanglement",
+    "Noise exposure",
+    "Dusts exposure"
+   ],
+   "riskBefore": "3H",
+   "controls": [
+    {
+     "heading": "Manual handling:",
+     "items": [
+      "Use trolleys to transfer boxes / containers of grout to the work area",
+      "Instruct relevant workers to only handle loads within limitations or ask for assistance"
+     ]
+    },
+    {
+     "heading": "Mixing and applying:",
+     "items": [
+      "When mixing powders, ensure that relevant PPE is worn (respiratory protection, gloves, eye protection)",
+      "Conduct mixing tasks outside to enable air movement to disperse dusts \u2013 Add grout to water to reduce generation of dust",
+      "When using electric drill to mix grout (if in powder form) tuck in loose clothing and tie back hair.",
+      "Ensure that the tool and leads are tested and tagged with correct date and that all leads are protected from water immersion and other damage.",
+      "Keep all nonessential personnel clear of mixing activities",
+      "Use appropriate tool / applicator to evenly spread product - avoiding unnecessary splattering",
+      "Wear gloves and eye protection to avoid contact with wet products",
+      "Wash up all tools / skin with water whilst still wet to aid in removal of product",
+      "Remove excess grout with wet sponge \u2013 Wear gloves"
+     ]
+    }
+   ],
+   "riskAfter": "1L",
+   "responsible": [
+    "All Workers"
+   ]
+  },
+  {
+   "task": "On Completion Clean up",
+   "hazards": [
+    "Personal injury",
+    "contact with grout / cement-based products",
+    "cuts and scratches",
+    "eye injury",
+    "Manual Handling"
+   ],
+   "riskBefore": "2M",
+   "controls": [
+    {
+     "heading": "Personal Hygiene:",
+     "items": [
+      "Wash all exposed skin with water. The use of soap will also assist with the removal of cement-based products"
+     ]
+    },
+    {
+     "heading": "Tools:",
+     "items": [
+      "Wash all tools with water"
+     ]
+    },
+    {
+     "heading": "Excess cement / sand / mortar / adhesive /grout:",
+     "items": [
+      "Must not be allowed to enter any drain or storm water system.",
+      "Place in small stacks (about a full shovel) and allow drying for safe removal.",
+      "Place in bin provided by Builder"
+     ]
+    },
+    {
+     "heading": "Other:",
+     "items": [
+      "Remove any barricades if no longer required.",
+      "Place all rubbish in the appropriate bins.",
+      "Site to be left in clean and tidy condition ready for handover to Builder / Contract Manager who is to be advised upon completion of works"
+     ]
+    }
+   ],
+   "riskAfter": "1L",
+   "responsible": [
+    "All Workers"
+   ]
+  },
+  {
+   "task": "Working at Heights (\u22652m)",
+   "hazards": [
+    "Fall from height",
+    "Fall from edges/openings",
+    "Fall due to misuse",
+    "Falling objects",
+    "Slips / loss of control",
+    "Fall if not secured",
+    "Injury from fall"
+   ],
+   "riskBefore": "2M",
+   "controls": [
+    {
+     "heading": "Set up access (ladder/scaffold)",
+     "items": [
+      "Use secured ladder or scaffold, check before use"
+     ]
+    },
+    {
+     "heading": "Work at height",
+     "items": [
+      "Install edge protection or covers, no overreaching"
+     ]
+    },
+    {
+     "heading": "Use of ladder",
+     "items": [
+      "3 points of contact, short duration only, secure ladder"
+     ]
+    },
+    {
+     "heading": "Tools/materials at height",
+     "items": [
+      "Keep area tidy, set exclusion zone"
+     ]
+    },
+    {
+     "heading": "Weather (external)",
+     "items": [
+      "Stop working in unsafe weather"
+     ]
+    },
+    {
+     "heading": "Harness (if needed)",
+     "items": [
+      "Use harness & approved anchor point"
+     ]
+    },
+    {
+     "heading": "Emergency",
+     "items": [
+      "Rescue plan, first aid available"
+     ]
+    }
+   ],
+   "riskAfter": "1L",
+   "responsible": [
+    "Supervisor",
+    "Supervisor/ Workers",
+    "Workers",
+    "Supervisor",
+    "Supervisor",
+    "Workers",
+    "Supervisor"
+   ]
+  }
+ ],
+ "part2": {
+  "trainingRequired": "Appropriate license and certificate and Relevant training.",
+  "duties": [
+   "Preparation \u2013 Identify work area, preparation & setup",
+   "Operation \u2013 Mixing & spreading Sand / Cement & Adhesives",
+   "Laying and Cutting Grouting of Tiles",
+   "Clean up"
+  ],
+  "trainingModules": [
+   "Site specific inductions.",
+   "Training in this SWMS"
+  ],
+  "supervision": [
+   "Suitably qualified supervisors for job",
+   "Direct on-site supervision",
+   "Spot Checks"
+  ],
+  "permits": "PPE to comply with relevant Australian Standards",
+  "legislation": [
+   "Work Health and Safety Act 2011 and Work Health and Safety Regulations 2011",
+   "Safe Work Australia - Hazardous Manual Tasks Code of Practice",
+   "Safe Work Australia - Labelling of Workplace Hazardous Chemicals"
+  ],
+  "plant": [
+   "Electric grinder",
+   "Electric Cement Mixer",
+   "Electric Mixing Drill"
+  ],
+  "maintenance": "As per manufacturer's recommendations. Electrical tested/tagged every 3 months."
+ },
+ "riskAssessment": {
+  "likelihood": [
+   {
+    "criteria": "Almost certain",
+    "description": "Expected in most circumstances. Effect is a common result"
+   },
+   {
+    "criteria": "Likely",
+    "description": "Will probably occurs in most circumstances. Effect is known to have occurred at this site, or it has happened"
+   },
+   {
+    "criteria": "Possible",
+    "description": "Might occur at some time. Effect could occur at the site, or I've heard of it happening"
+   },
+   {
+    "criteria": "Unlikely",
+    "description": "Could occur at some time. Effect is not likely to occur at the site, or I have not heard of it happening"
+   },
+   {
+    "criteria": "Rare",
+    "description": "May occur only in exceptional circumstances. Effect is practically impossible."
+   }
+  ],
+  "consequence": [
+   {
+    "level": "Insignificant/Acceptable",
+    "example": "No effect \u2013 or so minor that effect is acceptable"
+   },
+   {
+    "level": "Minor",
+    "example": "First aid treatment only; spillage contained at site."
+   },
+   {
+    "level": "Moderate",
+    "example": "Medical treatment; spillage contained but with outside help."
+   },
+   {
+    "level": "Major",
+    "example": "Extensive injuries; loss of production"
+   },
+   {
+    "level": "Catastrophic",
+    "example": "Death; toxic release of chemicals"
+   }
+  ],
+  "matrixNote": "Risk Management Code of Practice 2007, AS/NZS 31000-2009 Risk Management Principles and guidelines. Step 1 Determine Likelihood \u2013 What is the possibility that the effect will occur? Step 2 Determine Consequence - What will be the expected effect? Step 3 Determine the risk score. Step 4 Record risk score on worksheet (Note \u2013 Risk scores have no absolute value and should only be used for comparison and to engender discussion.)"
+ },
+ "riskLegend": [
+  {
+   "code": "4",
+   "label": "A: Acute \u2013 ACT NOW \u2013 Urgent - do something about the risks immediately. Requires immediate attention."
+  },
+  {
+   "code": "3",
+   "label": "H: High \u2013 Highest management decision is required urgently."
+  },
+  {
+   "code": "2",
+   "label": "M: Moderate \u2013 Follow management instructions."
+  },
+  {
+   "code": "1",
+   "label": "L: Low \u2013 OK for now. Record and review regularly, and if any equipment/ people/ materials/ work processes or procedures change."
+  }
+ ],
+ "signOff": {
+  "preamble": "Only people who have completed the sign-off are authorized to work on the relevant tasks covered by this document.",
+  "preparedByName": "Giuseppe Ciccone",
+  "preparedByPosition": "Director",
+  "preparedOn": "19/08/26",
+  "registerColumns": [
+   "#",
+   "SURNAME",
+   "GIVEN NAME",
+   "ROLE",
+   "SIGNATURE",
+   "DATE"
+  ],
+  "acknowledgement": [
+   "The relevant HRA and above SWMS have been reviewed and explained to me,",
+   "The contents and requirements have been explained and are clearly understood by me,",
+   "I shall only carry out work for which I am equipped and competent",
+   "I have been consulted regarding the content of SWMS,",
+   "I have advised my supervisor of any individual needs in relation to carrying out the work safely",
+   "I will comply with the SWMS, otherwise work must stop immediately,",
+   "I will be vigilant regarding hazards and suitability of the SWMS for the task at hand and implement further control measures where required",
+   "I understand that I am authorized and expected to safely stop work and immediately notify my supervisor if a task carries an unacceptable level of risk"
+  ]
+ },
+ "jurisdiction": [
+  "WHS Act 2012 (SA)",
+  "WHS Regulations 2012 (SA)",
+  "Environment Protection Act 1993 (SA)"
+ ]
+}

@@ -56,6 +56,7 @@ const MIGRATIONS = [
   { file: 'schema_v32.sql', proves: ['builder_contacts_role_check_v32'] },
   { file: 'schema_v33.sql', proves: ['job_sites.starts_on', 'job_sites.ends_on'] },
   { file: 'schema_v34.sql', proves: ['shifts_read_v34', 'channels_dm_create', 'channel_members_dm_join'] },
+  { file: 'schema_v35.sql', proves: ['safety_documents.content'] },
 ]
 
 // ------------------------------------------------------------- credentials
