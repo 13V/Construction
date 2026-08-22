@@ -70,6 +70,8 @@ export function ProjectsScreen({
   const [open, setOpen] = useState('')
   const [nonce, setNonce] = useState(0)
   const [newOpen, setNewOpen] = useState(false)
+  const [assignFor, setAssignFor] = useState<JobSiteRow | null>(null)
+  const [assignError, setAssignError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -206,12 +208,27 @@ export function ProjectsScreen({
   const removePerson = async (siteId: string, workerId: string) => {
     // Unassigning takes their future published bookings off the job — the
     // honest meaning of "remove from this project". Past shifts stay.
-    await supabase()
+    //
+    // The rows come back because a DELETE the office is not allowed to make
+    // matches nothing rather than failing, and PostgREST reports that as a
+    // success. Without reading them back, a refusal looks exactly like a
+    // person who had no bookings left.
+    const { data, error: err } = await supabase()
       .from('assignments')
       .delete()
       .eq('site_id', siteId)
       .eq('worker_id', workerId)
       .gte('starts_at', new Date().toISOString())
+      .select('id')
+    if (err) {
+      setAssignError(err.message)
+      return
+    }
+    if (!data || data.length === 0) {
+      setAssignError('Nothing changed — they have no bookings ahead on this job, or that is not yours to change.')
+      return
+    }
+    setAssignError(null)
     setNonce((n) => n + 1)
   }
 
@@ -421,8 +438,16 @@ export function ProjectsScreen({
                     {people.length === 0 && (
                       <span style={{ padding: '14px 19px', fontSize: 13.5, color: '#8B9096' }}>Nobody assigned to this project yet.</span>
                     )}
+                    {assignError && (
+                      <span style={{ margin: '10px 14px 0 19px', padding: '9px 11px', background: '#FDECEE', borderRadius: 9, fontSize: 12.5, lineHeight: 1.45, color: '#8E2A31' }}>
+                        {assignError}
+                      </span>
+                    )}
                     <span
-                      onClick={() => onOpenJob(site, 'crew')}
+                      onClick={() => {
+                        setAssignError(null)
+                        setAssignFor(site)
+                      }}
                       style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 52, padding: '9px 14px 9px 19px', cursor: 'pointer' }}
                     >
                       <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: '#14171A' }}>
@@ -489,6 +514,19 @@ export function ProjectsScreen({
             setNewOpen(false)
             setTab('future')
             data.refresh()
+          }}
+        />
+      )}
+
+      {assignFor && (
+        <AssignSheet
+          me={me}
+          office={office}
+          site={assignFor}
+          onClose={() => setAssignFor(null)}
+          onAssigned={() => {
+            setAssignFor(null)
+            setNonce((n) => n + 1)
           }}
         />
       )}
@@ -685,6 +723,331 @@ function NewProjectSheet({
               The office sets up new projects, including the geofence a job needs before anyone
               can clock in. If one's missing, say so in the job chat.
             </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// -------------------------------------------------------- assign personnel
+
+/** Mon-Fri between two local dates, inclusive. Bookings are a working day. */
+function weekdaysBetween(fromISO: string, toISO: string): Date[] {
+  const out: Date[] = []
+  const d = new Date(`${fromISO}T00:00:00`)
+  const end = new Date(`${toISO}T00:00:00`)
+  while (d <= end && out.length < ASSIGN_MAX_DAYS) {
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) out.push(new Date(d))
+    d.setDate(d.getDate() + 1)
+  }
+  return out
+}
+
+/**
+ * A twelve-week ceiling. A booking is a row per person per day, so a job with
+ * a two-year programme would write thousands of them from one tap — and
+ * nobody rosters that far out honestly anyway. The sheet says when it stops.
+ */
+const ASSIGN_MAX_DAYS = 84
+
+/** Local 07:00-15:00, the same working day the office scheduler books. */
+function bookingTimes(day: Date): { starts_at: string; ends_at: string } {
+  const from = new Date(day)
+  from.setHours(7, 0, 0, 0)
+  const to = new Date(day)
+  to.setHours(15, 0, 0, 0)
+  return { starts_at: from.toISOString(), ends_at: to.toISOString() }
+}
+
+const localISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+interface Assignable {
+  id: string
+  name: string
+  initials: string
+  trade: string | null
+}
+
+/**
+ * Putting people on a job.
+ *
+ * "Assign personnel" used to land on a read-only Crew tab, which is the same
+ * as not having the button. What it has to do is what the office means by it:
+ * pick the people, pick the run of days, and book them.
+ *
+ * A booking in this app is one row per person per working day — that is what
+ * the schedule reads and what a timesheet is checked against — so this writes
+ * that, and skips any day a person is already booked on anything. It says how
+ * many it skipped rather than silently double-booking somebody or silently
+ * doing less than it was asked.
+ */
+function AssignSheet({
+  me,
+  office,
+  site,
+  onClose,
+  onAssigned,
+}: {
+  me: WorkerRow
+  office: boolean
+  site: JobSiteRow
+  onClose: () => void
+  onAssigned: () => void
+}) {
+  const [crew, setCrew] = useState<Assignable[]>([])
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+
+  // The job's own dates lead, because somebody typed those in for this job.
+  // The start is never in the past: you cannot roster a day that has gone.
+  const [from, setFrom] = useState(() => {
+    const today = localISO(new Date())
+    return site.starts_on && site.starts_on > today ? site.starts_on : today
+  })
+  const [to, setTo] = useState(() => {
+    if (site.ends_on) return site.ends_on
+    const d = new Date()
+    d.setDate(d.getDate() + 13)
+    return localISO(d)
+  })
+
+  useEffect(() => {
+    let cancelled = false
+    void supabase()
+      .from('crew_v')
+      .select('id, name, initials, trade, active, is_office')
+      .eq('active', true)
+      .order('name')
+      .then(({ data, error: err }) => {
+        if (cancelled) return
+        if (err) setError(err.message)
+        setCrew(
+          ((data as Array<Assignable & { is_office: boolean }>) ?? [])
+            .filter((w) => !w.is_office)
+            .map((w) => ({ id: w.id, name: w.name, initials: w.initials, trade: w.trade })),
+        )
+        setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const days = useMemo(() => (from && to && from <= to ? weekdaysBetween(from, to) : []), [from, to])
+
+  async function assign() {
+    if (picked.size === 0) {
+      setError('Nobody is picked yet.')
+      return
+    }
+    if (days.length === 0) {
+      setError('That range has no working days in it.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    setNote(null)
+    const client = supabase()
+    const ids = [...picked]
+
+    // What they already have on, anywhere — a person booked on another job
+    // that day is not free for this one, and quietly writing a second row
+    // would put them in two places on the schedule.
+    const first = new Date(days[0]!)
+    first.setHours(0, 0, 0, 0)
+    const last = new Date(days[days.length - 1]!)
+    last.setHours(23, 59, 59, 999)
+    const { data: existing, error: readErr } = await client
+      .from('assignments')
+      .select('worker_id, starts_at')
+      .in('worker_id', ids)
+      .gte('starts_at', first.toISOString())
+      .lte('starts_at', last.toISOString())
+    if (readErr) {
+      setBusy(false)
+      setError(readErr.message)
+      return
+    }
+    const taken = new Set(
+      ((existing as Array<{ worker_id: string; starts_at: string }>) ?? []).map(
+        (a) => `${a.worker_id}|${localISO(new Date(a.starts_at))}`,
+      ),
+    )
+
+    const rows: Array<Record<string, unknown>> = []
+    let skipped = 0
+    for (const id of ids) {
+      for (const day of days) {
+        if (taken.has(`${id}|${localISO(day)}`)) {
+          skipped++
+          continue
+        }
+        rows.push({
+          company_id: me.company_id,
+          worker_id: id,
+          site_id: site.id,
+          ...bookingTimes(day),
+          published: true,
+        })
+      }
+    }
+
+    if (rows.length === 0) {
+      setBusy(false)
+      setError('Everyone picked is already booked for every day in that range.')
+      return
+    }
+
+    // Read the rows back. An insert the office is not allowed to make is
+    // refused outright, but one filtered out by a row-level policy comes back
+    // as a success with nothing in it — and the two have to read differently.
+    const { data: made, error: err } = await client.from('assignments').insert(rows).select('id')
+    setBusy(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    if (!made || made.length === 0) {
+      setError('That was refused — assigning people to a job is the office’s to do.')
+      return
+    }
+    if (skipped > 0) {
+      setNote(`Booked ${made.length} day${made.length === 1 ? '' : 's'}. ${skipped} skipped — already booked.`)
+      return
+    }
+    onAssigned()
+  }
+
+  const label = { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' } as const
+  const input = {
+    width: '100%',
+    height: 48,
+    padding: '0 13px',
+    boxSizing: 'border-box' as const,
+    background: '#F5F6F7',
+    border: '1px solid #DCE0E6',
+    borderRadius: 10,
+    font: 'inherit',
+    fontSize: 16,
+    color: s.ink,
+    outline: 'none',
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.5)' }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxHeight: '92%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
+      >
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '15px 15px 12px 18px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
+          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>Assign personnel</span>
+            <span style={{ fontSize: 12.5, color: '#8B9096', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {addressLine(site) || site.name}
+            </span>
+          </span>
+          <span onClick={onClose} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}>
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="2" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </span>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `15px 16px calc(20px + ${SAFE_BOTTOM})` }}>
+          {!office ? (
+            <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+              The office rosters people onto jobs. If you need somebody here, say so in the job chat
+              — it is the same request, and it leaves a record.
+            </span>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+              {error && <span style={{ padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 13, lineHeight: 1.45, color: '#8E2A31' }}>{error}</span>}
+              {note && <span style={{ padding: '10px 12px', background: '#EAF7EC', borderRadius: 9, fontSize: 13, lineHeight: 1.45, color: '#14532B' }}>{note}</span>}
+
+              <span style={{ display: 'flex', gap: 10 }}>
+                <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={label}>FROM</span>
+                  <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={input} />
+                </span>
+                <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={label}>TO</span>
+                  <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={input} />
+                </span>
+              </span>
+
+              <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+                {days.length === 0
+                  ? 'No working days in that range.'
+                  : `${days.length} working day${days.length === 1 ? '' : 's'}, 7am to 3pm, weekends left out.` +
+                    (days.length >= ASSIGN_MAX_DAYS ? ' That is as far ahead as this books in one go.' : '')}
+              </span>
+
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={label}>WHO</span>
+                <span style={{ display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, overflow: 'hidden' }}>
+                  {loading && <span style={{ padding: '14px 14px', fontSize: 13.5, color: '#8B9096' }}>Loading the crew…</span>}
+                  {!loading && crew.length === 0 && (
+                    <span style={{ padding: '14px 14px', fontSize: 13.5, lineHeight: 1.5, color: '#8B9096' }}>
+                      Nobody on the books yet. People are added on the Crew screen.
+                    </span>
+                  )}
+                  {crew.map((w, i) => {
+                    const on = picked.has(w.id)
+                    return (
+                      <span
+                        key={w.id}
+                        onClick={() =>
+                          setPicked((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(w.id)) next.delete(w.id)
+                            else next.add(w.id)
+                            return next
+                          })
+                        }
+                        style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 56, padding: '9px 13px', borderTop: `1px solid ${i === 0 ? 'transparent' : '#EDEFF1'}`, background: on ? '#F4F6F8' : '#fff', cursor: 'pointer' }}
+                      >
+                        <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: avatarGrey(i), color: '#fff', fontSize: 11, fontWeight: 700 }}>
+                          {w.initials}
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <span style={{ fontSize: 14.5, fontWeight: 600, color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
+                          {w.trade && <span style={{ fontSize: 12.5, color: '#8B9096' }}>{w.trade}</span>}
+                        </span>
+                        <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 6, border: `1.5px solid ${on ? s.accent : '#CFD4DA'}`, background: on ? s.accent : '#fff' }}>
+                          {on && (
+                            <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4.5 10.5l3.5 3.5 7.5-7.5" />
+                            </svg>
+                          )}
+                        </span>
+                      </span>
+                    )
+                  })}
+                </span>
+              </span>
+
+              <button
+                disabled={busy}
+                onClick={() => void assign()}
+                style={{ width: '100%', height: 48, border: 0, borderRadius: 10, background: '#1A1D21', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 700, letterSpacing: '.03em', color: '#fff', opacity: busy ? 0.6 : 1, cursor: 'pointer' }}
+              >
+                {busy
+                  ? 'BOOKING…'
+                  : `ASSIGN${picked.size ? ` ${picked.size}` : ''}${picked.size && days.length ? ` · ${picked.size * days.length} DAY${picked.size * days.length === 1 ? '' : 'S'}` : ''}`}
+              </button>
+
+              <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+                This writes real bookings — they show on the schedule straight away and anyone
+                booked can clock on inside the fence. A day somebody is already booked on is left
+                alone rather than double-booked.
+              </span>
+            </div>
           )}
         </div>
       </div>
