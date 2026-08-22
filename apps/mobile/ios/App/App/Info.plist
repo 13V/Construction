@@ -56,18 +56,20 @@
 	     Store static analysis flags. Omitting the key is correct: the App Store
 	     already enforces device compatibility from the build's own architecture
 	     and Deployment Info, so nothing here needs to assert it by hand. -->
+	<!--
+	  Portrait only, which is a bug fix wearing a preference's clothes: the web
+	  app shows itself inside a decorative phone bezel on anything wider than
+	  700px (PhoneFrame.tsx) — right for a laptop demo, absurd on a phone. A
+	  Pro Max in landscape is 932pt wide, so rotating the phone mid-shift
+	  collapsed the app into a toy phone floating on a grey canvas. The design
+	  is 390x844 portrait; the binary now says so. The ~ipad variant went with
+	  it — the build targets iPhone only (TARGETED_DEVICE_FAMILY = 1), and on
+	  an iPad it runs in Apple's own scaled iPhone compatibility mode, which
+	  reads these same portrait settings.
+	-->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
