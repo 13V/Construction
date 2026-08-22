@@ -6,7 +6,23 @@ import type {
   InvoiceRow,
   WaterproofingRow,
 } from './supabase'
-import { LEFT, Page, RIGHT, WIDTH, buildPdf, details, footer, formatAbn, header, textWidth, wrap } from './pdf'
+import {
+  LEFT,
+  Page,
+  RIGHT,
+  WIDTH,
+  buildPdf,
+  details,
+  footer,
+  formatAbn,
+  header,
+  ratingFill,
+  table,
+  textWidth,
+  wrap,
+  type Cell,
+} from './pdf'
+import { isStructured, type SwmsContent, type SwmsTask } from './swms'
 
 /**
  * The three documents this business hands to somebody else.
@@ -627,27 +643,70 @@ function dateOf(d: Date): string {
  * A SWMS, issued for one job.
  *
  * "Each SWMS will require the project, the builder, the date. The rest stays
- * the same." So this renders exactly that: a cover block with those three
- * facts, then the body verbatim from the company's template. The body is data
- * — the office edits it — which is why this function knows nothing about
- * tiling, waterproofing or high risk construction work. It knows how to set a
- * heading and how to set a paragraph.
+ * the same." Those three plus the job description are the per-job facts and
+ * come in on `opts`, from whoever is issuing the copy — never from the
+ * template, because the template is shared across every job this trade takes.
  *
- * Headings are lines beginning `## `, which is the least a person editing a
- * text box has to learn and the most this needs to know.
+ * The template itself comes in two shapes. Most of this company's history it
+ * has been a text box a person edits by hand — a heading is a line starting
+ * `## `, a bullet starts `- ` — and that path (legacySwmsPdf, below) still
+ * renders exactly as it always has for a template with no structure to it.
+ * But the client's own document is not prose, it is a five-column risk
+ * register, and a register does not survive being typed into a text box and
+ * printed back out as headings and bullets — the two ratings that are the
+ * whole argument of the page would end up looking like just more text. So a
+ * template can now also be `SwmsContent` (see ./swms), and when it is,
+ * structuredSwmsPdf renders his actual document: the register as a table, the
+ * PPE icons as chips, the substance notes run to whatever length they need.
+ *
+ * `content` is the explicit way in — pass the parsed template. `body` stays
+ * the fallback: a hand-typed template is never valid JSON, so parsing it
+ * throws and this falls straight through to the old path, which is the point.
  */
-export function swmsPdf(opts: {
+interface SwmsPdfOpts {
   company: CompanyDetails
   title: string
   body: string
+  /** The template, already parsed, when the caller has it that way. */
+  content?: unknown
   reference: string | null
   siteName: string
   siteAddress: string | null
   builderName: string | null
+  /**
+   * What the builder engaged this trade to do — a per-job fact, not part of
+   * the template, and printed as a dash for a caller that does not collect it
+   * yet rather than being left off the page.
+   */
+  jobDescription?: string | null
   documentDate: string | null
   version: string
   preparedBy: string
-}): Blob {
+}
+
+export function swmsPdf(opts: SwmsPdfOpts): Blob {
+  let content: SwmsContent | null = null
+  if (isStructured(opts.content)) {
+    content = opts.content
+  } else {
+    try {
+      const parsed = JSON.parse(opts.body)
+      if (isStructured(parsed)) content = parsed
+    } catch {
+      // Not JSON — a hand-typed template, which is what legacySwmsPdf is for.
+    }
+  }
+  return content ? structuredSwmsPdf(opts, content) : legacySwmsPdf(opts)
+}
+
+/**
+ * The old path. A cover block with the three per-job facts, then the body
+ * verbatim from the company's template, rendered from two marks a person
+ * editing a text box has to learn: `## ` for a heading, `- ` for a bullet.
+ * Kept byte-for-byte so a template nobody has converted to structured content
+ * yet keeps printing exactly as it always has.
+ */
+function legacySwmsPdf(opts: SwmsPdfOpts): Blob {
   const { company, title, body, reference, siteName, siteAddress, builderName, documentDate, version, preparedBy } = opts
   const pages: Page[] = []
   let page = new Page()
@@ -752,6 +811,398 @@ export function swmsPdf(opts: {
   ])
 
   return buildPdf(pages, `${reference ?? 'SWMS'} ${siteName}`)
+}
+
+/**
+ * WinAnsi has no code point for ≥ (or ≤), and winAnsi() in pdf.ts has nothing
+ * to map either onto, so it drops them rather than mangling them — turning
+ * "Working at Heights (≥2m)" into "(2m)" and losing the "at least" the clause
+ * exists to say. Guarded here, on every content string before it reaches a
+ * page or a table cell, because pdf.ts is not this file to fix it in.
+ */
+function guardUnicode(s: string): string {
+  return s.replace(/≥/g, '>=').replace(/≤/g, '<=')
+}
+
+/**
+ * His document. Company block, project block, approval, the risk legend and
+ * the page-1 undertakings; PPE as chips; the substance notes run long; the
+ * five-column register, which is the substance of the page; training and
+ * duties; his jurisdiction's statutes; the likelihood/consequence criteria
+ * behind the ratings; and the sign-on register a crew actually signs.
+ */
+function structuredSwmsPdf(opts: SwmsPdfOpts, content: SwmsContent): Blob {
+  const { company, siteName, siteAddress, builderName, jobDescription, reference, documentDate, version, preparedBy } = opts
+  const documentNo = content.documentNo ?? reference ?? 'DRAFT'
+  const activity = content.activity || opts.title
+  const t = guardUnicode
+
+  const pages: Page[] = []
+  let page = new Page()
+  pages.push(page)
+
+  /** Every page after the first carries his running header: company, document number, activity. */
+  const continueOnNewPage = (): Page => {
+    page = new Page()
+    pages.push(page)
+    page.text(company.name, LEFT, { size: 8, font: 'HB', grey: 0.4 })
+    page.textRight(`DOC ${documentNo}`, RIGHT, { size: 8, grey: 0.45 })
+    page.down(11)
+    page.text(t(activity), LEFT, { size: 8, grey: 0.45 })
+    page.down(12)
+    page.rule(LEFT, RIGHT, { grey: 0.85 })
+    page.down(16)
+    return page
+  }
+  /**
+   * The footer is drawn from the bottom of the last page after everything
+   * else is laid out, so every reservation of room has to stop short of it.
+   */
+  const FOOTER_RESERVE = 44
+  const room = (need: number) => {
+    if (page.full(need + FOOTER_RESERVE)) continueOnNewPage()
+  }
+
+  const sectionHeading = (label: string) => {
+    room(32)
+    page.down(8)
+    page.rule(LEFT, RIGHT, { grey: 0.75, width: 1 })
+    page.down(11)
+    page.text(label, LEFT, { size: 11, font: 'HB' })
+    page.down(16)
+  }
+  const subHeading = (label: string) => {
+    room(17)
+    page.text(label, LEFT, { size: 9.5, font: 'HB' })
+    page.down(13)
+  }
+  const paragraph = (text: string, size = 9.5, grey = 0) => {
+    for (const l of wrap(t(text), WIDTH, size)) {
+      room(size + 4)
+      page.text(l, LEFT, { size, grey })
+      page.down(size + 3.5)
+    }
+  }
+  const bullets = (items: string[], size = 9.5) => {
+    for (const raw of items) {
+      const wrapped = wrap(t(raw), RIGHT - (LEFT + 12), size)
+      wrapped.forEach((l, i) => {
+        room(size + 4)
+        if (i === 0) page.text('•', LEFT, { size, grey: 0.4 })
+        page.text(l, LEFT + 12, { size })
+        page.down(size + 3.5)
+      })
+    }
+  }
+  /** A label with a rule above and below — the caption a legend, not a bullet. */
+  const numberedLine = (lead: string, body_: string, size = 9) => {
+    room(size + 6)
+    const prefix = `${lead}  `
+    page.text(prefix, LEFT, { size, font: 'HB' })
+    const cx = LEFT + textWidth(prefix, size, 'HB')
+    const wrapped = wrap(t(body_), RIGHT - cx, size)
+    wrapped.forEach((l, i) => {
+      if (i > 0) room(size + 4)
+      page.text(l, i === 0 ? cx : LEFT + 18, { size })
+      page.down(size + 4)
+    })
+  }
+  /**
+   * PPE captions as chips. Page.rule() only ever draws one y — a horizontal
+   * line, never a vertical one — so there is no primitive for a boxed
+   * rectangle's sides. A chip here is a rule above and a rule below padded
+   * text instead: still a labelled tag, not a bare bullet list, which is what
+   * the icon captions are meant to read as.
+   */
+  const chipRow = (items: string[]) => {
+    const SIZE = 8.5
+    const H = 20
+    const PAD = 9
+    const GAP = 10
+    room(H + 10)
+    let x = LEFT
+    let y0 = page.y
+    for (const raw of items) {
+      const label = t(raw).toUpperCase()
+      const w = textWidth(label, SIZE, 'H') + PAD * 2
+      if (x + w > RIGHT) {
+        page.down(H + 10)
+        room(H + 10)
+        x = LEFT
+        y0 = page.y
+      }
+      page.rule(x, x + w, { y: y0, grey: 0.55 })
+      page.rule(x, x + w, { y: y0 + H, grey: 0.55 })
+      page.text(label, x + PAD, { size: SIZE, grey: 0.25, y: y0 + H / 2 + 3 })
+      x += w + GAP
+    }
+    page.down(H + 14)
+  }
+
+  // ---------------------------------------------------------------- part 1
+  header(page, { company, title: 'Safe work method statement', reference: documentNo })
+
+  details(page, [
+    ['Project', siteName],
+    ['Principal', builderName ?? '-'],
+    ['Site address', siteAddress ?? '-'],
+    ['Date', date(documentDate)],
+    ['Prepared by', preparedBy],
+    ['Version', version],
+  ])
+  page.down(10)
+
+  const jdLabel = 'Job description: '
+  page.text(jdLabel, LEFT, { size: 9.5, font: 'HB' })
+  const jdX = LEFT + textWidth(jdLabel, 9.5, 'HB')
+  const jdLines = wrap(t(jobDescription || '-'), RIGHT - jdX, 9.5)
+  jdLines.forEach((l, i) => page.text(l, i === 0 ? jdX : LEFT, { size: 9.5, y: page.y + i * 13 }))
+  page.down(jdLines.length * 13 + 8)
+
+  page.text(t(activity), LEFT, { size: 12, font: 'HB' })
+  page.down(20)
+
+  if (content.approvedByName) {
+    paragraph(
+      `Approved by ${content.approvedByName}` +
+        `${content.approvedByRole ? `, ${content.approvedByRole}` : ''}` +
+        `${content.approvedOn ? ` - ${content.approvedOn}` : ''}`,
+      9.5,
+      0.25,
+    )
+    page.down(6)
+  }
+
+  sectionHeading('Risk rating')
+  for (const item of content.riskLegend) numberedLine(item.code, item.label)
+
+  sectionHeading('Monitoring and review')
+  bullets(content.monitoring)
+
+  // ------------------------------------------------------------------- ppe
+  sectionHeading('Personal protective equipment')
+  paragraph(content.ppe.general)
+  if (content.ppe.whereRequired) {
+    page.down(4)
+    subHeading('Additional PPE where required')
+    paragraph(content.ppe.whereRequired)
+  }
+  if (content.ppe.icons.length) {
+    page.down(6)
+    chipRow(content.ppe.icons)
+  }
+
+  // ----------------------------------------------------------------- notes
+  sectionHeading('Hazardous substances')
+  for (const note of content.safetyNotes) {
+    subHeading(note.substance)
+    paragraph(note.text)
+    page.down(6)
+  }
+
+  // -------------------------------------------------------------- register
+  // The five-column register: task, hazards, the rating before controls, the
+  // controls themselves, the rating after, and who is accountable. The pair
+  // of ratings either side of the controls is the whole argument of the page,
+  // which is why it is a table and not more paragraphs — a reader has to be
+  // able to find "3H before, 1L after" for a task without hunting for it.
+  sectionHeading('Risk assessment and controls')
+  // RB and RA are the widest headings a 26pt column will take, and an
+  // inspector reading this is owed the expansion rather than a guess.
+  // "4" and "A: Acute - ACT NOW - ..." become "4 Acute": the band's own word,
+  // taken from between the colon and whatever dash follows it, so the legend
+  // stays the client's wording rather than a second list to keep in step.
+  const band = (label: string) => (label.split(':')[1] ?? label).split(/[\u2013\u2014-]/)[0]!.trim()
+  paragraph(
+    'RB is the risk rating before the controls are applied, RA the rating after. ' +
+      content.riskLegend.map((r) => `${r.code} ${band(r.label)}`).join(', ') +
+      '.',
+    8.5,
+    0.4,
+  )
+  page.down(4)
+  page = table(
+    page,
+    [
+      { header: 'Task', width: 95 },
+      { header: 'Hazards', width: 88 },
+      { header: 'RB', width: 26 },
+      { header: 'Controls', width: 165 },
+      { header: 'RA', width: 26 },
+      { header: 'Responsible', width: 65 },
+    ],
+    content.tasks.map(
+      (task): Cell[] => [
+        { content: t(task.task) },
+        { content: task.hazards.map(t) },
+        { content: task.riskBefore, align: 'center', fill: ratingFill(task.riskBefore) },
+        { content: controlsContent(task) },
+        { content: task.riskAfter, align: 'center', fill: ratingFill(task.riskAfter) },
+        { content: responsibleContent(task) },
+      ],
+    ),
+    { newPage: continueOnNewPage },
+  )
+
+  // ---------------------------------------------------------------- part 2
+  if (content.part2) {
+    const p2 = content.part2
+    sectionHeading('Training, duties and supervision')
+    if (p2.trainingRequired) {
+      subHeading('Training required')
+      paragraph(p2.trainingRequired)
+      page.down(4)
+    }
+    if (p2.duties?.length) {
+      subHeading('Duties')
+      bullets(p2.duties)
+      page.down(4)
+    }
+    if (p2.trainingModules?.length) {
+      subHeading('Training modules')
+      bullets(p2.trainingModules)
+      page.down(4)
+    }
+    if (p2.supervision?.length) {
+      subHeading('Supervision')
+      bullets(p2.supervision)
+      page.down(4)
+    }
+    if (p2.permits) {
+      subHeading('Permits and PPE standards')
+      paragraph(p2.permits)
+      page.down(4)
+    }
+    if (p2.legislation?.length) {
+      subHeading('Legislation')
+      bullets(p2.legislation)
+      page.down(4)
+    }
+    if (p2.plant?.length) {
+      subHeading('Plant and equipment')
+      bullets(p2.plant)
+      page.down(4)
+    }
+    if (p2.maintenance) {
+      subHeading('Maintenance')
+      paragraph(p2.maintenance)
+    }
+  }
+
+  // His jurisdiction's own statutes — a distinct short block from Part 2's
+  // model WHS Act, because for a tiler in Adelaide the South Australian Act is
+  // the one that binds.
+  if (content.jurisdiction?.length) {
+    sectionHeading('Applicable legislation (jurisdiction)')
+    bullets(content.jurisdiction)
+  }
+
+  // ------------------------------------------------------------ risk method
+  if (content.riskAssessment) {
+    sectionHeading('Part 4 - risk assessment')
+    subHeading('Likelihood')
+    for (const l of content.riskAssessment.likelihood) numberedLine(l.criteria, l.description)
+    page.down(6)
+    subHeading('Consequence')
+    for (const c of content.riskAssessment.consequence) numberedLine(c.level, c.example)
+    if (content.riskAssessment.matrixNote) {
+      page.down(6)
+      paragraph(content.riskAssessment.matrixNote, 8.5, 0.35)
+    }
+  }
+
+  // -------------------------------------------------------------- sign-on
+  // A SWMS nobody signed is a document, not a control. The header repeats if
+  // the crew is long enough to push the register onto a second page, because
+  // a signature column with no heading over it is not a register any more.
+  sectionHeading('Worker sign-on')
+  if (content.signOff.preparedByName) {
+    paragraph(
+      `Prepared by ${content.signOff.preparedByName}` +
+        `${content.signOff.preparedByPosition ? `, ${content.signOff.preparedByPosition}` : ''}`,
+      9,
+      0.3,
+    )
+    page.down(6)
+  }
+  if (content.signOff.preamble) {
+    paragraph(content.signOff.preamble, 9.5, 0.15)
+    page.down(8)
+  }
+  content.signOff.acknowledgement.forEach((point, i) => numberedLine(`${i + 1}.`, point))
+  page.down(12)
+
+  const cols = content.signOff.registerColumns?.length
+    ? content.signOff.registerColumns
+    : ['#', 'SURNAME', 'GIVEN NAME', 'ROLE', 'SIGNATURE', 'DATE']
+  const widths = signOnColumnWidths(cols.length)
+  const drawRegisterHeader = () => {
+    room(30)
+    page.rule(LEFT, RIGHT, { grey: 0.75, width: 1 })
+    page.down(14)
+    let x = LEFT
+    cols.forEach((c, i) => {
+      page.text(c, x, { size: 7.5, font: 'HB', grey: 0.5 })
+      x += widths[i] ?? 0
+    })
+    page.down(12)
+  }
+  drawRegisterHeader()
+  const SIGN_ROWS = 15
+  for (let i = 0; i < SIGN_ROWS; i++) {
+    if (page.full(22 + FOOTER_RESERVE)) {
+      continueOnNewPage()
+      drawRegisterHeader()
+    }
+    page.rule(LEFT, RIGHT, { grey: 0.8 })
+    page.down(22)
+  }
+  page.rule(LEFT, RIGHT, { grey: 0.8 })
+
+  footer(pages[pages.length - 1]!, [
+    `${t(activity)} - ${documentNo} - version ${version}${documentDate ? ` - ${date(documentDate)}` : ''}`,
+    'This statement must be kept on site and reviewed if the work, the plant or the site conditions change.',
+  ])
+
+  return buildPdf(pages, `${documentNo} ${siteName}`)
+}
+
+/**
+ * The controls cell: the client's own `{ heading?, items }` groups, guarded
+ * against WinAnsi's blind spots and passed straight through — a table cell's
+ * content accepts exactly this shape, because it is the same shape as
+ * SwmsControlGroup by design (see pdf.ts's own note on why).
+ */
+function controlsContent(task: SwmsTask): Array<{ heading?: string; items: string[] }> {
+  return task.controls.map((g) => ({
+    heading: g.heading ? guardUnicode(g.heading) : undefined,
+    items: g.items.map(guardUnicode),
+  }))
+}
+
+/**
+ * Most tasks give one responsible party for the whole row ("All Workers"), a
+ * flat bullet list. "Working at Heights" instead gives one per control group —
+ * Supervisor for the access set-up, Workers for the ladder — and the two
+ * arrays line up by index. When they do, that pairing is worth keeping: each
+ * name prints under its group's own heading rather than collapsing into a
+ * list that reads as if everyone answers for everything.
+ */
+function responsibleContent(task: SwmsTask): Array<{ heading?: string; items: string[] }> | string[] {
+  if (task.controls.length > 1 && task.responsible.length === task.controls.length) {
+    return task.controls.map((g, i) => ({
+      heading: g.heading ? guardUnicode(g.heading) : undefined,
+      items: [guardUnicode(task.responsible[i]!)],
+    }))
+  }
+  return task.responsible.map(guardUnicode)
+}
+
+/** Column widths for the sign-on register. His own six sum to the page width. */
+function signOnColumnWidths(n: number): number[] {
+  if (n === 6) return [30, 108, 108, 88, 100, 65]
+  const w = Math.floor(WIDTH / n)
+  return Array.from({ length: n }, () => w)
 }
 
 /** PTS-SWMS-260818-001 — the same shape as a certificate number. */

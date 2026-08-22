@@ -214,9 +214,25 @@ describe('text measuring', () => {
     for (const l of lines) expect(textWidth(l, 10, 'H')).toBeLessThanOrEqual(100)
   })
 
-  it('never loses a word it cannot fit', () => {
+  it('breaks a word it cannot fit rather than letting it overflow', () => {
+    // A word with no space to break on used to be returned whole and left to
+    // run past its width. That is untidy in a paragraph and a defect in a
+    // table, where the overflow lands on the next cell's text. It is now cut
+    // at the last character that fits — and the word still has to survive,
+    // which is what joining the pieces back up checks.
     const long = 'Supercalifragilisticexpialidocious'
-    expect(wrap(long, 20, 10)).toEqual([long])
+    const lines = wrap(long, 20, 10)
+    expect(lines.length).toBeGreaterThan(1)
+    expect(lines.join('')).toBe(long)
+    for (const l of lines) expect(textWidth(l, 10, 'H')).toBeLessThanOrEqual(20)
+  })
+
+  it('keeps a long word out of the column beside it', () => {
+    // The case that found this: a register column 60pt wide, and a responsible
+    // officer cell reading "(ladder/scaffold)".
+    for (const l of wrap('Tools/materials (ladder/scaffold)', 60, 7.5)) {
+      expect(textWidth(l, 7.5, 'H')).toBeLessThanOrEqual(60)
+    }
   })
 })
 

@@ -929,65 +929,135 @@ try {
   // Two of them are only ever uploads; the SWMS shelf also holds the company
   // template that every issued statement is copied from.
   //
-  // The generic statement below is a placeholder with real bones — it is
-  // shaped the way a SWMS has to be shaped, and it is meant to be replaced by
-  // the company's own. It lives in the database precisely so replacing it is
-  // an edit and not a release.
-  const SWMS_BODY = [
-    '## Scope of work',
-    'Wall and floor tiling, waterproofing of internal wet areas and external balconies, screeding,',
-    'grouting and silicone sealing, including preparation and clean-up.',
-    '',
-    '## High risk construction work',
-    '- Work on or near a surface a person could fall more than 2 metres from.',
-    '- Work involving a risk of a person being exposed to hazardous chemicals (membranes, primers,',
-    '  epoxy grouts, cleaning acids).',
-    '- Use of powered plant that generates respirable crystalline silica dust.',
-    '',
-    '## Hazards and controls',
-    '- Silica dust from cutting tiles. Cut wet, or on-tool extraction with an H-class vacuum. P2',
-    '  respirator fitted and fit-tested. Nobody else within the cutting area.',
-    '- Chemical exposure from membranes, primers and epoxies. Read the SDS before opening the pail.',
-    '  Nitrile gloves, eye protection, ventilation. Eyewash on site.',
-    '- Falls from balconies and stairwells. Do not work outside the edge protection. Report removed',
-    '  or damaged handrail to the site supervisor and stop until it is back.',
-    '- Manual handling of tile boxes and pails. Two people over 20 kg, or use the trolley. Break',
-    '  pallets down where they land rather than carrying full boxes up.',
-    '- Slips on wet membrane and screed. Barricade and sign wet areas. Nobody walks a membrane',
-    '  before it has cured.',
-    '- Kneeling injuries. Knee pads worn for all floor work.',
-    '- Electrical. Test and tag current on every tool. RCD at the board before anything is plugged in.',
-    '',
-    '## Personal protective equipment',
-    'Safety boots, hi-vis, safety glasses, gloves suited to the product, P2 respirator for cutting and',
-    'for mixing powders, knee pads, hearing protection when cutting.',
-    '',
-    '## Plant and equipment',
-    'Wet tile saw, angle grinder with on-tool extraction, mixing drill and paddle, laser level,',
-    'trestles and planks within their rated height, extension leads on RCD.',
-    '',
-    '## Before work starts',
-    '- Site induction complete for everyone on the crew.',
-    '- This statement read and signed by everyone carrying out the work.',
-    '- SDS on site for every product being used that day.',
-    '- Edge protection, lighting and access checked and acceptable.',
-    '',
-    '## If something changes',
-    'Stop. A change to the work, the plant, the products or the site conditions means this statement',
-    'is reviewed and re-signed before work continues. Report incidents and near misses to the site',
-    'supervisor and to the office the same day.',
-  ].join('\n')
+  // The template is the client's own S812.0267, read off disk rather than
+  // pasted into this script so the JSON and the seed cannot drift apart. Its
+  // `document` block mixes two different kinds of fact: the activity and
+  // approval line, which belong to the template every job inherits, and the
+  // project/principal facts it was issued with (HJ Brighton, Mykra), which
+  // don't — those get stamped fresh on whatever job the template is next
+  // issued to. buildTemplateContent keeps only the fields SwmsContent
+  // (apps/dashboard/src/data/swms.ts) actually declares, so the per-job
+  // facts have nowhere to land rather than needing to be remembered and
+  // stripped by hand.
+  const swmsSource = JSON.parse(readFileSync(new URL('./swms-template.json', import.meta.url), 'utf8'))
+
+  function buildTemplateContent(src) {
+    const doc = src.document ?? {}
+    return {
+      activity: doc.activity,
+      documentNo: doc.documentNo,
+      approvedByName: doc.approvedByName,
+      approvedByRole: doc.approvedByRole,
+      approvedOn: doc.approvedOn,
+      monitoring: src.monitoring,
+      riskLegend: src.riskLegend,
+      ppe: src.ppe,
+      safetyNotes: src.safetyNotes,
+      tasks: src.tasks,
+      part2: src.part2,
+      jurisdiction: src.jurisdiction,
+      riskAssessment: src.riskAssessment,
+      signOff: {
+        preparedByName: src.signOff?.preparedByName,
+        preparedByPosition: src.signOff?.preparedByPosition,
+        preamble: src.signOff?.preamble,
+        acknowledgement: src.signOff?.acknowledgement,
+        registerColumns: src.signOff?.registerColumns,
+      },
+    }
+  }
+
+  // The plain-text fallback every hand-typed statement still renders from —
+  // SafetyScreen falls back to `body` whenever `content` is absent, and a
+  // client without structured rendering still needs something readable.
+  // Generated from the structured object rather than typed separately, so
+  // the two tellings of the same document cannot say different things —
+  // in particular, the five-column register's before/after risk pair, the
+  // whole argument an inspector reads, comes out the same on both.
+  function renderSwmsBody(c) {
+    const lines = [`## ${c.activity}`]
+    if (c.documentNo) lines.push(`Document ${c.documentNo}`)
+    lines.push('')
+
+    lines.push('## Monitoring and review')
+    for (const m of c.monitoring) lines.push(`- ${m}`)
+    lines.push('')
+
+    lines.push('## Personal protective equipment')
+    lines.push(c.ppe.general)
+    if (c.ppe.whereRequired) lines.push(`Where required: ${c.ppe.whereRequired}`)
+    lines.push('')
+
+    lines.push('## Hazardous substances')
+    for (const note of c.safetyNotes) {
+      lines.push(`${note.substance}: ${note.text}`)
+      lines.push('')
+    }
+
+    lines.push('## Risk rating legend')
+    for (const r of c.riskLegend) lines.push(`${r.code} — ${r.label}`)
+    lines.push('')
+
+    lines.push('## Tasks')
+    for (const t of c.tasks) {
+      lines.push(`### ${t.task}`)
+      lines.push(`Risk before controls: ${t.riskBefore}  |  after controls: ${t.riskAfter}`)
+      lines.push('Hazards:')
+      for (const h of t.hazards) lines.push(`- ${h}`)
+      lines.push('Controls:')
+      for (const group of t.controls) {
+        if (group.heading) lines.push(group.heading)
+        for (const item of group.items) lines.push(`- ${item}`)
+      }
+      lines.push(`Responsible: ${t.responsible.join(', ')}`)
+      lines.push('')
+    }
+
+    if (c.part2) {
+      lines.push('## Part 2 — training, supervision, plant')
+      if (c.part2.trainingRequired) lines.push(`Training required: ${c.part2.trainingRequired}`)
+      if (c.part2.duties?.length) { lines.push('Duties:'); for (const d of c.part2.duties) lines.push(`- ${d}`) }
+      if (c.part2.trainingModules?.length) { lines.push('Training modules:'); for (const m of c.part2.trainingModules) lines.push(`- ${m}`) }
+      if (c.part2.supervision?.length) { lines.push('Supervision:'); for (const s of c.part2.supervision) lines.push(`- ${s}`) }
+      if (c.part2.permits) lines.push(`Permits: ${c.part2.permits}`)
+      if (c.part2.legislation?.length) { lines.push('Legislation:'); for (const l of c.part2.legislation) lines.push(`- ${l}`) }
+      if (c.part2.plant?.length) { lines.push('Plant:'); for (const p of c.part2.plant) lines.push(`- ${p}`) }
+      if (c.part2.maintenance) lines.push(`Maintenance: ${c.part2.maintenance}`)
+      lines.push('')
+    }
+
+    if (c.jurisdiction?.length) {
+      lines.push('## Jurisdiction')
+      for (const j of c.jurisdiction) lines.push(`- ${j}`)
+      lines.push('')
+    }
+
+    lines.push('## Sign-off')
+    if (c.signOff.preamble) lines.push(c.signOff.preamble)
+    for (const a of c.signOff.acknowledgement) lines.push(`- ${a}`)
+
+    return lines.join('\n')
+  }
+
+  const SWMS_CONTENT = buildTemplateContent(swmsSource)
+  const SWMS_BODY = renderSwmsBody(SWMS_CONTENT)
+  // Title and version come off the document itself — its activity line and
+  // its own document number — rather than anything invented for the demo.
+  const SWMS_TITLE = SWMS_CONTENT.activity
+  const SWMS_VERSION = SWMS_CONTENT.documentNo ?? '1'
 
   const swmsTemplate = await ensureRow(boss, 'safety_documents',
     `select=id&company_id=eq.${companyId}&is_template=is.true&kind=eq.swms`,
     {
       company_id: companyId, site_id: null, kind: 'swms', is_template: true,
-      title: 'Tiling and waterproofing', body: SWMS_BODY, version: '3',
+      title: SWMS_TITLE, body: SWMS_BODY, content: SWMS_CONTENT, version: SWMS_VERSION,
       created_by: me.id, updated_by: me.id,
     },
     'SWMS template')
-  // Keep the body current on a re-run without minting a second template.
-  await boss.patch('safety_documents', `id=eq.${swmsTemplate.id}`, { body: SWMS_BODY, version: '3' })
+  // Keep body/content/title current on a re-run without minting a second template.
+  const swmsUpd = await boss.patch('safety_documents', `id=eq.${swmsTemplate.id}`,
+    { title: SWMS_TITLE, body: SWMS_BODY, content: SWMS_CONTENT, version: SWMS_VERSION })
+  if (!swmsUpd.ok) throw new Error(`SWMS template patch failed: HTTP ${swmsUpd.status} ${await swmsUpd.text()}`)
 
   // key: null means the document is the company's and shows on every job.
   const SAFETY_DOCS = [

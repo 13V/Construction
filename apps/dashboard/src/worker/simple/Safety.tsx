@@ -20,6 +20,7 @@ import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
 import { swmsPdf, swmsReference, type CompanyDetails } from '../../data/documents'
 import { downloadPdf } from '../../data/pdf'
+import { isStructured, type SwmsContent, type SwmsTask } from '../../data/swms'
 import { s, SAFE_BOTTOM } from './stheme'
 
 // ------------------------------------------------------------------- the data
@@ -32,6 +33,8 @@ export interface SafetyDoc {
   site_id: string | null
   title: string
   body: string | null
+  /** Structured SWMS content (schema_v35) — the five-column register a real statement holds. Null means there's only `body` to render from. */
+  content: unknown
   version: string
   expires_on: string | null
   updated_at: string
@@ -51,7 +54,7 @@ export interface SafetyDoc {
 }
 
 const DOC_COLS =
-  'id, kind, site_id, title, body, version, expires_on, updated_at, updated_by, storage_path, ' +
+  'id, kind, site_id, title, body, content, version, expires_on, updated_at, updated_by, storage_path, ' +
   'file_name, mime, size_bytes, is_template, builder_name, document_date, reference, issued_at, ' +
   'sent_at, sent_to, active'
 
@@ -808,6 +811,7 @@ function IssueSwmsSheet({
       company,
       title,
       body,
+      content: template?.content ?? undefined,
       reference,
       siteName: site.name,
       siteAddress: site.address,
@@ -848,6 +852,11 @@ function IssueSwmsSheet({
           kind: 'swms',
           title: `${title} — ${site.name}`,
           body,
+          // An issued copy is a PDF plus the three job facts stamped on it, and
+          // its content is whatever the template held at the moment it went
+          // out — copied forward rather than left to follow the template, so a
+          // later revision never rewrites what a builder was already handed.
+          content: template?.content ?? null,
           version: template?.version ?? '1',
           template_id: template?.id ?? null,
           builder_name: builder.trim() || null,
@@ -1000,13 +1009,46 @@ function IssueSwmsSheet({
 // ------------------------------------------------------ the SWMS template
 
 /**
- * The one thing that makes ISSUE A SWMS FOR THIS JOB more than a cover page:
- * a title, a version, and a body written in the two marks swmsPdf() reads out
- * of a text box — "## " for a heading, "- " for a bullet. Saving here writes
- * straight to the company's master row (site_id null, is_template true);
- * there is only ever one, so setting it up and revising it are the same form.
+ * Which sheet a template opens to. Most of this company's history a template
+ * has been a title, a version and a body typed by hand, and for a company
+ * with nothing more than that, typing is still the only way in — so
+ * PlainTemplateSheet, below, is unchanged. But once the safety consultant's
+ * actual statement has been loaded into `content` (schema_v35), that body box
+ * is the wrong tool for it: a five-column risk register across seven task
+ * groups does not survive being retyped as headings and bullets, and nobody
+ * is retyping seven task rows on a phone regardless. A structured template
+ * gets StructuredTemplateSheet instead — the register laid out to read, with
+ * editing limited to the handful of fields worth touching from a phone.
  */
 function SwmsTemplateSheet({
+  me,
+  template,
+  onClose,
+  onSaved,
+}: {
+  me: WorkerRow
+  template: SafetyDoc | null
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
+  const raw = template?.content
+  const content = isStructured(raw) ? raw : null
+  return content ? (
+    <StructuredTemplateSheet me={me} template={template!} content={content} onClose={onClose} onSaved={onSaved} />
+  ) : (
+    <PlainTemplateSheet me={me} template={template} onClose={onClose} onSaved={onSaved} />
+  )
+}
+
+/**
+ * The original path: a title, a version, and a body written in the two marks
+ * swmsPdf() reads out of a text box — "## " for a heading, "- " for a
+ * bullet. Saving here writes straight to the company's master row (site_id
+ * null, is_template true); there is only ever one, so setting it up and
+ * revising it are the same form. `content` is left untouched either way — a
+ * company typing its statement in by hand has none to disturb.
+ */
+function PlainTemplateSheet({
   me,
   template,
   onClose,
@@ -1105,5 +1147,258 @@ function SwmsTemplateSheet({
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * A structured template. The register is the safety consultant's document,
+ * not this company's to rewrite from a phone, so it renders read-only — but
+ * an office user still has to be able to tell, at a glance, that it is the
+ * right register for the job in front of them. What genuinely changes call
+ * to call is smaller: the activity name, who approved it, the version. Those
+ * are real fields, editable here; everything else in `content` is carried
+ * forward untouched on save.
+ */
+function StructuredTemplateSheet({
+  me,
+  template,
+  content,
+  onClose,
+  onSaved,
+}: {
+  me: WorkerRow
+  template: SafetyDoc
+  content: SwmsContent
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
+  const [activity, setActivity] = useState(content.activity)
+  const [version, setVersion] = useState(template.version)
+  const [approvedByName, setApprovedByName] = useState(content.approvedByName ?? '')
+  const [approvedByRole, setApprovedByRole] = useState(content.approvedByRole ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const coverage = [
+    `${content.tasks.length} task${content.tasks.length === 1 ? '' : 's'}`,
+    content.ppe.icons.length ? `${content.ppe.icons.length} PPE items` : null,
+    content.safetyNotes.length
+      ? `${content.safetyNotes.length} substance note${content.safetyNotes.length === 1 ? '' : 's'}`
+      : null,
+    content.jurisdiction?.length
+      ? `${content.jurisdiction.length} jurisdiction act${content.jurisdiction.length === 1 ? '' : 's'}`
+      : null,
+    content.part2 ? 'training & duties' : null,
+    content.riskAssessment ? 'risk matrix' : null,
+  ].filter((x): x is string => Boolean(x))
+
+  async function save() {
+    setBusy(true)
+    setError(null)
+    try {
+      const nextActivity = activity.trim() || content.activity
+      const nextContent: SwmsContent = {
+        ...content,
+        activity: nextActivity,
+        approvedByName: approvedByName.trim() || undefined,
+        approvedByRole: approvedByRole.trim() || undefined,
+      }
+      const { error: err } = await supabase()
+        .from('safety_documents')
+        .update({
+          // The activity is what's stamped on every page of the printed
+          // copy, so the title on the shelf follows it rather than drifting
+          // from what the document itself now says.
+          title: nextActivity,
+          version: version.trim() || '1',
+          content: nextContent,
+          updated_by: me.id,
+        })
+        .eq('id', template.id)
+      if (err) throw new Error(err.message)
+      await onSaved()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the template.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.5)' }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxHeight: '92%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
+      >
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '15px 15px 12px 17px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
+          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>Revise the SWMS template</span>
+            {content.documentNo && <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.01em', color: '#7B838B' }}>{content.documentNo}</span>}
+          </span>
+          <span onClick={onClose} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}>
+            {closeGlyph}
+          </span>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `15px 16px calc(20px + ${SAFE_BOTTOM})` }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            {error && <span style={{ padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 13, color: '#8E2A31' }}>{error}</span>}
+
+            <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+              This is your safety consultant's own statement, loaded in full. The task register
+              below is theirs — read it here to check it still matches the job, but change it in
+              the document itself, not on a phone. What's worth updating from here is the name,
+              the approver and the version.
+            </span>
+
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={fieldLabel}>ACTIVITY</span>
+              <input value={activity} onChange={(e) => setActivity(e.target.value)} placeholder="What the statement covers" style={field} />
+            </span>
+            <span style={{ display: 'flex', gap: 11 }}>
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={fieldLabel}>APPROVED BY</span>
+                <input value={approvedByName} onChange={(e) => setApprovedByName(e.target.value)} placeholder="Name" style={field} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={fieldLabel}>ROLE</span>
+                <input value={approvedByRole} onChange={(e) => setApprovedByRole(e.target.value)} placeholder="Director" style={field} />
+              </span>
+            </span>
+            {content.approvedOn && (
+              <span style={{ fontSize: 11.5, color: '#9AA1A9', marginTop: -6 }}>Approved {content.approvedOn} — that date doesn't change here.</span>
+            )}
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={fieldLabel}>VERSION</span>
+              <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1" style={field} />
+            </span>
+
+            <button disabled={busy} onClick={() => void save()} style={{ ...primaryBtn, opacity: busy ? 0.5 : 1 }}>
+              {busy ? 'SAVING…' : 'SAVE'}
+            </button>
+
+            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+              {coverage.map((c) => (
+                <span key={c} style={{ fontSize: 11, fontWeight: 700, color: '#5F666E', background: '#EEF1F4', borderRadius: 8, padding: '4px 9px' }}>
+                  {c}
+                </span>
+              ))}
+            </span>
+
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 6 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.1em', color: '#7B838B' }}>TASK REGISTER — READ ONLY</span>
+              <span style={{ fontSize: 11.5, lineHeight: 1.45, color: '#9AA1A9' }}>
+                Written by the safety consultant. Adding or rewriting a task row is a desk job, done
+                in the document, not here.
+              </span>
+            </span>
+
+            {content.tasks.map((task, i) => (
+              <TaskRegisterCard key={i} task={task} index={i} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** L reads as safe, M as caution, H and A both as urgent — the same bands the rest of the tab uses for expiry. */
+function ratingColors(code: string): { bg: string; fg: string } {
+  const band = code.trim().slice(-1).toUpperCase()
+  if (band === 'L') return { bg: '#EAF7EC', fg: '#1B7A2C' }
+  if (band === 'M') return { bg: '#FFF4E5', fg: '#B26A00' }
+  return { bg: '#FDECEE', fg: '#A3282E' }
+}
+
+/** One risk score, coloured by its band — "3H", "1L" — the way the register itself marks them. */
+function RatingChip({ code }: { code: string }) {
+  const c = ratingColors(code)
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', height: 22, padding: '0 8px', borderRadius: 6, background: c.bg, color: c.fg, fontSize: 11.5, fontWeight: 800 }}>
+      {code}
+    </span>
+  )
+}
+
+/** One line of a hazard or control list — a dot and wrapping text, nothing that clips. */
+function BulletLine({ text }: { text: string }) {
+  return (
+    <span style={{ display: 'flex', gap: 6, fontSize: 12.5, lineHeight: 1.45, color: '#4A5057' }}>
+      <span style={{ flex: 'none', color: '#B7BCC2' }}>•</span>
+      <span style={{ flex: 1, minWidth: 0 }}>{text}</span>
+    </span>
+  )
+}
+
+/**
+ * One row of the five-column register, laid out as a card rather than a
+ * table — a phone screen is narrower than any of his six columns need to be,
+ * and a cell that wraps inside its own card is legible where the same text
+ * crammed into a fixed-width column would overflow into the next one. The
+ * before/after ratings sit right under the task name because that pair is
+ * the argument of the row: what dropped, and why the controls were worth
+ * doing.
+ */
+function TaskRegisterCard({ task, index }: { task: SwmsTask; index: number }) {
+  return (
+    <span style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '13px 14px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 11 }}>
+      <span style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <span
+          style={{
+            flex: 'none',
+            width: 21,
+            height: 21,
+            borderRadius: '50%',
+            background: '#EEF1F4',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 10.5,
+            fontWeight: 800,
+            color: '#7B838B',
+          }}
+        >
+          {index + 1}
+        </span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, letterSpacing: '-.005em', color: s.ink, lineHeight: 1.35 }}>{task.task}</span>
+      </span>
+
+      <span style={{ display: 'flex', alignItems: 'center', gap: 7, paddingLeft: 30 }}>
+        <RatingChip code={task.riskBefore} />
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#B7BCC2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 10h11M11 6l4 4-4 4" />
+        </svg>
+        <RatingChip code={task.riskAfter} />
+        <span style={{ fontSize: 10.5, color: '#9AA1A9' }}>before → after controls</span>
+      </span>
+
+      <span style={{ paddingLeft: 30, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>HAZARDS</span>
+        {task.hazards.map((h, i) => (
+          <BulletLine key={i} text={h} />
+        ))}
+      </span>
+
+      <span style={{ paddingLeft: 30, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>CONTROLS</span>
+        {task.controls.map((g, i) => (
+          <span key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {g.heading && <span style={{ fontSize: 12, fontWeight: 700, color: '#4A5057' }}>{g.heading}</span>}
+            {g.items.map((it, j) => (
+              <BulletLine key={j} text={it} />
+            ))}
+          </span>
+        ))}
+      </span>
+
+      <span style={{ paddingLeft: 30, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {task.responsible.map((r, i) => (
+          <span key={i} style={{ fontSize: 10.5, fontWeight: 700, color: '#5F666E', background: '#F1F3F5', borderRadius: 8, padding: '3px 8px' }}>
+            {r}
+          </span>
+        ))}
+      </span>
+    </span>
   )
 }
