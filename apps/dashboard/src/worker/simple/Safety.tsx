@@ -775,6 +775,12 @@ function IssueSwmsSheet({
   onIssued: () => Promise<void>
 }) {
   const [builder, setBuilder] = useState(site.client_name ?? '')
+  // His statement's header carries a job description alongside the project and
+  // the principal — "General wall and floor tiling works + waterproofing" on
+  // the one he sent. job_type is where this app already keeps that sentence,
+  // so it leads, and it stays editable because the SWMS may cover less of the
+  // job than the job does.
+  const [jobDesc, setJobDesc] = useState(site.job_type ?? '')
   const [docDate, setDocDate] = useState(todayISO())
   const [review, setReview] = useState('')
   const [company, setCompany] = useState<CompanyDetails | null>(null)
@@ -815,6 +821,7 @@ function IssueSwmsSheet({
       reference,
       siteName: site.name,
       siteAddress: site.address,
+      jobDescription: jobDesc.trim() || null,
       builderName: builder.trim() || null,
       documentDate: docDate || null,
       version: template?.version ?? '1',
@@ -941,6 +948,15 @@ function IssueSwmsSheet({
                 <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <span style={fieldLabel}>BUILDER</span>
                   <input value={builder} onChange={(e) => setBuilder(e.target.value)} placeholder="Who the job is for" style={field} />
+                </span>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={fieldLabel}>JOB DESCRIPTION</span>
+                  <input
+                    value={jobDesc}
+                    onChange={(e) => setJobDesc(e.target.value)}
+                    placeholder="What this statement covers on this job"
+                    style={field}
+                  />
                 </span>
                 <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <span style={fieldLabel}>DATE</span>

@@ -77,6 +77,9 @@ function winAnsi(s: string): string {
     .replace(/\u2026/g, '...')
     .replace(/\u00A0/g, ' ')
     .replace(/\u00B2/g, '2')
+    // "Bathroom refit x 6" is how a job describes itself in this app, and the
+    // multiplication sign it is typed with has no WinAnsi code point.
+    .replace(/\u00D7/g, 'x')
     // A bullet typed into a note or a method statement would otherwise be
     // dropped, leaving the indent with nothing in front of it.
     .replace(/[\u2022\u00B7\u25CF\u25AA]/g, '-')
