@@ -12,6 +12,7 @@ import { supabase, type AssignmentRow, type JobSiteRow, type WorkerRow } from '.
 import { addressLine, avatarGrey, builderOf, railOf, s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
 import type { SimpleData } from './data'
 import type { JobTab } from './Job'
+import { FencePicker, type FenceValue } from './FencePicker'
 
 const money0 = (v: number) =>
   new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(v)
@@ -562,39 +563,15 @@ function NewProjectSheet({
   const [name, setName] = useState('')
   const [builder, setBuilder] = useState('')
   const [address, setAddress] = useState('')
-  const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null)
-  // 150 is job_sites' own default (schema.sql) and what most seeded sites
-  // carry. The slider tops out at 600, same as the office dashboard's own
-  // new-site form — the schema allows up to 2000, but nothing this size
-  // needs a fence wider than that ever has.
-  const [radius, setRadius] = useState(150)
-  const [locating, setLocating] = useState(false)
+  // Where the fence is, as the picker last left it. Null until the map has
+  // reported a centre, which it does on its first frame.
+  const [fence, setFence] = useState<FenceValue | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function locateMe() {
-    if (!('geolocation' in navigator)) {
-      setError('This device has no location service — set the fence from the office dashboard instead.')
-      return
-    }
-    setLocating(true)
-    setError(null)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-        setLocating(false)
-      },
-      (err) => {
-        setError(err.message || 'Could not get your location.')
-        setLocating(false)
-      },
-      { enableHighAccuracy: true, timeout: 15_000 },
-    )
-  }
-
   async function save() {
-    if (!name.trim() || !center) {
-      setError('A name and a location for the fence are both required.')
+    if (!name.trim() || !fence) {
+      setError('A name and a place on the map for the fence are both required.')
       return
     }
     setBusy(true)
@@ -607,9 +584,9 @@ function NewProjectSheet({
         address: address.trim(),
         client_name: builder.trim() || null,
         status: 'starting_soon',
-        lat: center.lat,
-        lng: center.lng,
-        radius_m: radius,
+        lat: fence.lat,
+        lng: fence.lng,
+        radius_m: fence.radiusM,
       })
     setBusy(false)
     if (err) {
@@ -677,37 +654,7 @@ function NewProjectSheet({
 
               <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 <span style={label}>GEOFENCE</span>
-                {center ? (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 13px', background: '#EAF7EC', border: '1px solid #C8E6D5', borderRadius: 10 }}>
-                    <span style={{ flex: 'none', width: 8, height: 8, borderRadius: '50%', background: '#1F7A4D' }} />
-                    <span style={{ flex: 1, fontSize: 13, color: '#14532B' }}>
-                      Centred where you are now ({center.lat.toFixed(5)}, {center.lng.toFixed(5)})
-                    </span>
-                    <span
-                      onClick={locating ? undefined : locateMe}
-                      style={{ flex: 'none', fontSize: 12.5, fontWeight: 700, color: locating ? '#8B9096' : s.accent, cursor: locating ? 'default' : 'pointer' }}
-                    >
-                      {locating ? 'Finding…' : 'Update'}
-                    </span>
-                  </span>
-                ) : (
-                  <button
-                    onClick={locateMe}
-                    disabled={locating}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 48, border: '1px solid #DCE0E6', borderRadius: 10, background: '#fff', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600, color: '#1A1D21', cursor: locating ? 'default' : 'pointer' }}
-                  >
-                    {locating ? 'Finding you…' : 'Use my current location'}
-                  </button>
-                )}
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={{ fontSize: 12.5, color: '#4A5057' }}>Fence radius — {radius} m</span>
-                  <input type="range" min={25} max={600} step={5} value={radius} onChange={(e) => setRadius(Number(e.target.value))} style={{ width: '100%' }} />
-                </span>
-                <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
-                  Crew can only clock on inside this circle, so a job needs one before anyone can
-                  start it. It's centred on you for now — move it from the office dashboard once
-                  the real boundary is known.
-                </span>
+                <FencePicker value={fence} address={address} onChange={setFence} />
               </span>
 
               <button

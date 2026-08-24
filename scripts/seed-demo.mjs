@@ -190,7 +190,11 @@ try {
   // certificate would be a false record, whoever is reading it.
   const identity = {
     legal_name: 'Semaphore Trades Pty. Ltd.',
-    abn: '54002000004',
+    // 51 824 753 556 passes the ATO's checksum, which the Business details
+    // screen now checks — the old placeholder did not, so the demo showed
+    // itself an invalid-ABN warning. This is the ATO's own documentation
+    // example, not a real business.
+    abn: '51824753556',
     licence_no: 'BLD 214477',
     certifier_name: OWNER_NAME,
   }

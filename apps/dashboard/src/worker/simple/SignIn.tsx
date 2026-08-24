@@ -77,10 +77,37 @@ export function SimpleSignIn() {
         if (err) throw err
         return
       }
-      const { data, error: err } = await client.auth.signUp({ email, password })
+      /*
+       * The company name rides on the account itself, not just in the
+       * bootstrap call below.
+       *
+       * Email confirmation is on, so signUp() returns no session and the
+       * bootstrap request a few lines down cannot be made — it needs a bearer
+       * token. That used to end the story: the typed company name lived only
+       * in this component's state, the page was closed while the person went
+       * to their inbox, and when they came back and signed in they had a
+       * login attached to no company at all. The app then told them to "ask
+       * your office to add you to the crew list", which for the person
+       * founding the company is nobody. The whole "set up a new company" path
+       * dead-ended, and only for real accounts — the demo tenant is seeded
+       * straight into the database and never walks it.
+       *
+       * Supabase stores this metadata on the user, so it survives the inbox
+       * round trip and a different device, and useSession finishes the job on
+       * first sign-in.
+       */
+      const { data, error: err } = await client.auth.signUp({
+        email,
+        password,
+        options: { data: joining ? {} : { company_name: company.trim(), full_name: name.trim() } },
+      })
       if (err) throw err
       if (!data.session) {
-        setMessage('Check your email to confirm the account, then sign in.')
+        setMessage(
+          joining
+            ? 'Check your email to confirm the account, then sign in — your crew record is waiting.'
+            : 'Check your email to confirm the account, then sign in. Your company is set up the moment you do.',
+        )
         return
       }
       const res = await fetch(api('/api/bootstrap'), {

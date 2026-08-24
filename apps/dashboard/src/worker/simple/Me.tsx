@@ -10,6 +10,8 @@ import { supabase, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
 import { HoursTab } from '../HoursTab'
 import { s, SAFE_TOP, ticketTone } from './stheme'
+import { BusinessSheet, complianceGaps } from './Business'
+import { TeamSheet } from './Team'
 import { viewFile } from './FileViewer'
 
 interface TrackerSite {
@@ -86,6 +88,11 @@ export function MeScreen({
   const [showHours, setShowHours] = useState(false)
   const [email, setEmail] = useState('')
   const [company, setCompany] = useState('')
+  const [showBusiness, setShowBusiness] = useState(false)
+  const [showTeam, setShowTeam] = useState(false)
+  // How many compliance fields are still blank, so the settings row can say so
+  // without being opened. Null until the company row has loaded.
+  const [gapCount, setGapCount] = useState<number | null>(null)
   const [tickets, setTickets] = useState<MyTicket[]>([])
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
@@ -230,11 +237,15 @@ export function MeScreen({
     const client = supabase()
     void Promise.all([
       client.auth.getUser(),
-      client.from('companies').select('name').maybeSingle(),
+      client.from('companies').select('name, abn, licence_no, address, certifier_name').maybeSingle(),
     ]).then(([u, c]) => {
       if (cancelled) return
       setEmail(u.data.user?.email ?? '')
-      setCompany((c.data as { name: string } | null)?.name ?? '')
+      const row = c.data as
+        | { name: string; abn: string | null; licence_no: string | null; address: string | null; certifier_name: string | null }
+        | null
+      setCompany(row?.name ?? '')
+      setGapCount(row ? complianceGaps(row).length : null)
     })
     return () => {
       cancelled = true
@@ -258,14 +269,16 @@ export function MeScreen({
     )
   }
 
-  const settingsRow = (k: string, v: string, opts: { red?: boolean; onTap?: () => void; last?: boolean } = {}) => (
+  const settingsRow = (k: string, v: string, opts: { red?: boolean; warn?: boolean; onTap?: () => void; last?: boolean } = {}) => (
     <span
       key={k}
       onClick={opts.onTap}
       style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, padding: '11px 15px', borderBottom: opts.last ? 'none' : '1px solid #EDEFF1', cursor: opts.onTap ? 'pointer' : 'default' }}
     >
       <span style={{ flex: 1, fontSize: 15.5, color: opts.red ? '#A3282E' : s.ink, fontWeight: opts.red ? 600 : 500 }}>{k}</span>
-      <span style={{ fontSize: 14, color: '#8B9096' }}>{v}</span>
+      {/* An amber value is the only nudge the app gives about unfilled
+          business details — the documents themselves just omit the field. */}
+      <span style={{ fontSize: 14, fontWeight: opts.warn ? 700 : 400, color: opts.warn ? '#8A6100' : '#8B9096' }}>{v}</span>
     </span>
   )
 
@@ -480,10 +493,38 @@ export function MeScreen({
       {/* Settings — the drawn rows, plus the personal surfaces they open. */}
       <div style={{ display: 'flex', flexDirection: 'column', margin: 18, background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, overflow: 'hidden' }}>
         {settingsRow('My hours', 'Every shift', { onTap: () => setShowHours(true) })}
+        {me.is_office &&
+          settingsRow('Business details', gapCount === null ? '' : gapCount > 0 ? `${gapCount} missing` : 'Complete', {
+            onTap: () => setShowBusiness(true),
+            warn: gapCount !== null && gapCount > 0,
+          })}
+        {me.is_office && settingsRow('Your crew', '', { onTap: () => setShowTeam(true) })}
         {settingsRow('Location while working', trackingOn ? 'On' : 'Off', { onTap: onOpenClock })}
         {settingsRow('Account & privacy', '', { onTap: onShowAccount })}
         {settingsRow('Sign out', '', { red: true, last: true, onTap: () => void supabase().auth.signOut() })}
       </div>
+
+      {showTeam && <TeamSheet me={me} onClose={() => setShowTeam(false)} />}
+
+      {showBusiness && (
+        <BusinessSheet
+          me={me}
+          onClose={() => {
+            setShowBusiness(false)
+            // Re-read the count so the row stops saying "3 missing" the moment
+            // they are no longer missing.
+            void supabase()
+              .from('companies')
+              .select('name, abn, licence_no, address, certifier_name')
+              .eq('id', me.company_id)
+              .maybeSingle()
+              .then(({ data }) => {
+                const row = data as Parameters<typeof complianceGaps>[0] | null
+                if (row) setGapCount(complianceGaps(row).length)
+              })
+          }}
+        />
+      )}
     </div>
   )
 }

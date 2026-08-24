@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, supabaseConfigured, type WorkerRow } from '../data/supabase'
 import { DEMO_EMAIL, DEMO_PASSWORD, demoMode } from '../data/demo'
+import { api } from '../data/api'
 
 export interface SessionState {
   loading: boolean
@@ -73,17 +74,54 @@ export function useSession(): SessionState {
     let cancelled = false
     setLoading(true)
 
-    void supabase()
-      .from('workers')
-      .select('*')
-      .eq('auth_user_id', session.user.id)
-      .maybeSingle()
-      .then(({ data, error: err }) => {
-        if (cancelled) return
-        if (err) setError(err.message)
-        setMe((data as WorkerRow) ?? null)
-        setLoading(false)
-      })
+    void (async () => {
+      const found = async () =>
+        supabase().from('workers').select('*').eq('auth_user_id', session.user.id).maybeSingle()
+
+      let { data, error: err } = await found()
+      if (cancelled) return
+
+      /*
+       * Signed in, confirmed, and attached to nothing — finish what signing up
+       * started.
+       *
+       * With email confirmation on, signUp() hands back no session, so the app
+       * cannot create the company at that moment; what the person typed is
+       * parked on the account instead (see SignIn.tsx). This is where it gets
+       * spent. It also covers the second case bootstrap handles: somebody the
+       * office added by email, whose worker row is sitting there waiting to be
+       * claimed by the first confirmed login that matches it.
+       *
+       * A 404 means neither applies — they signed up expecting an invitation
+       * that has not been made yet — and the screen that says so is right.
+       */
+      if (!data && !err && session.user.email_confirmed_at) {
+        try {
+          const res = await fetch(api('/api/bootstrap'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            body: '{}',
+          })
+          if (res.ok) {
+            const again = await found()
+            if (cancelled) return
+            data = again.data
+            err = again.error
+          } else if (res.status !== 404) {
+            const body = (await res.json().catch(() => ({}))) as { error?: string }
+            setError(body.error ?? 'Could not finish setting up your account.')
+          }
+        } catch {
+          // Offline on the very first sign-in. The not-linked screen is
+          // honest about the state; a retry is one reload away.
+        }
+      }
+
+      if (cancelled) return
+      if (err) setError(err.message)
+      setMe((data as WorkerRow) ?? null)
+      setLoading(false)
+    })()
 
     return () => {
       cancelled = true

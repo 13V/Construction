@@ -296,7 +296,12 @@ export function HomeScreen({
             })}
             {todayList.length === 0 && !data.loading && (
               <span style={{ padding: '22px 19px', fontSize: 13, lineHeight: 1.5, color: '#7B838B' }}>
-                No active jobs yet — jobs the office adds show up here.
+                {/* On a phone that belongs to the office, "the office adds
+                    them" points at nobody — the person reading this is the
+                    one who adds them, from the + on Projects. */}
+                {me.is_office
+                  ? 'No jobs yet. Add the first one with the + on Projects, and it shows up here the day it starts.'
+                  : 'No active jobs yet — jobs the office adds show up here.'}
               </span>
             )}
           </div>
@@ -387,6 +392,13 @@ export function HomeScreen({
                 <span style={{ flex: 'none', width: 7, height: 7, borderRadius: '50%', background: '#E5484D' }} />
                 <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.13em', color: '#fff' }}>NEEDS YOU</span>
               </span>
+              {needs.length === 0 && (
+                <span style={{ padding: '20px', background: '#fff', fontSize: 13, lineHeight: 1.5, color: '#7B838B' }}>
+                  {data.sites.length === 0
+                    ? 'Nothing to watch yet — this fills up once there are jobs running.'
+                    : 'Nothing needs you right now. Defects, held flood tests and waiting variations land here.'}
+                </span>
+              )}
               {needs.map(({ site, chip, tone, tab }) => (
                 <span
                   key={site.id}

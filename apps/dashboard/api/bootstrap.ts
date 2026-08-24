@@ -100,10 +100,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const companyName = String(req.body?.companyName ?? '').trim()
-  const name = String(req.body?.name ?? '').trim()
+  /*
+   * The request body is the first-run path, where the browser still has both
+   * strings in hand. User metadata is the second: with email confirmation on,
+   * signUp() returns no session, so the app cannot call this endpoint at that
+   * moment and instead stores what was typed on the account itself. When the
+   * person comes back from their inbox and signs in, that is all there is
+   * left of what they told us — so read it here rather than refusing them.
+   */
+  const meta = (user.user_metadata ?? {}) as { company_name?: unknown; full_name?: unknown }
+  const companyName = String(req.body?.companyName ?? meta.company_name ?? '').trim()
+  const name = String(req.body?.name ?? meta.full_name ?? '').trim()
   if (!companyName || !name) {
-    return res.status(400).json({ error: 'companyName and name are required' })
+    // Not an error worth a stack trace: somebody signed up expecting to be
+    // invited and nobody has added them yet.
+    return res.status(404).json({ error: 'no_pending_company' })
   }
 
   const { data: company, error: companyError } = await db
@@ -126,6 +137,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       trade: 'Office',
       rate: 0,
       is_office: true,
+      // The person who creates a company owns it. `role` defaults to
+      // 'employee', and leaving it there made the founder a non-owner of
+      // their own business: delete_worker_account()'s sole-owner guard
+      // (schema_v23) only fires for role = 'owner', so the one administrator
+      // of a brand-new company could delete their account and orphan every
+      // job, invoice and certificate in it with nothing asking them twice.
+      // The demo seed sets this explicitly, which is why the demo tenant
+      // never showed it.
+      role: 'owner',
     })
     .select('id')
     .single()
