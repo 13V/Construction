@@ -135,16 +135,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       name,
       initials: initialsFor(name),
       trade: 'Office',
-      rate: 0,
       is_office: true,
-      // The person who creates a company owns it. `role` defaults to
-      // 'employee', and leaving it there made the founder a non-owner of
-      // their own business: delete_worker_account()'s sole-owner guard
-      // (schema_v23) only fires for role = 'owner', so the one administrator
-      // of a brand-new company could delete their account and orphan every
-      // job, invoice and certificate in it with nothing asking them twice.
-      // The demo seed sets this explicitly, which is why the demo tenant
-      // never showed it.
+      /*
+       * No `rate`. schema_v24 dropped that column — a worker holding their own
+       * token could read everyone's pay off the crew list — and moved wages to
+       * worker_pay, which a trigger now populates on insert. This endpoint was
+       * never updated, so every attempt to create a company since that
+       * migration failed on an unknown column and returned a 500. Signing up
+       * as a new business has been broken outright, and it went unnoticed
+       * because the only tenant anybody exercised was the demo, which is
+       * seeded straight into the database and never calls this.
+       *
+       * The role is written explicitly rather than left to workers_sync_role
+       * to infer from is_office. The trigger does infer it correctly today,
+       * but the founder of a company being its owner is not a detail to leave
+       * as a side effect of a boolean — delete_worker_account()'s guard on the
+       * last remaining owner is what stands between one wrong tap and an
+       * orphaned company.
+       */
       role: 'owner',
     })
     .select('id')
