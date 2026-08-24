@@ -563,6 +563,10 @@ function NewProjectSheet({
   const [name, setName] = useState('')
   const [builder, setBuilder] = useState('')
   const [address, setAddress] = useState('')
+  // What the work is, in the client's own words. It heads the schedule tile,
+  // and it is the "Job description" line on every SWMS issued against this
+  // job — which printed as a dash while nothing collected it.
+  const [work, setWork] = useState('')
   // Where the fence is, as the picker last left it. Null until the map has
   // reported a centre, which it does on its first frame.
   const [fence, setFence] = useState<FenceValue | null>(null)
@@ -583,6 +587,7 @@ function NewProjectSheet({
         name: name.trim(),
         address: address.trim(),
         client_name: builder.trim() || null,
+        job_type: work.trim(),
         status: 'starting_soon',
         lat: fence.lat,
         lng: fence.lng,
@@ -639,6 +644,16 @@ function NewProjectSheet({
               <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span style={label}>BUILDER</span>
                 <input value={builder} onChange={(e) => setBuilder(e.target.value)} placeholder="Who the job is for" style={input} />
+              </span>
+
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={label}>WHAT THE WORK IS</span>
+                <input
+                  value={work}
+                  onChange={(e) => setWork(e.target.value)}
+                  placeholder="e.g. Bathrooms and ensuites, tiling + waterproofing"
+                  style={input}
+                />
               </span>
 
               <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
