@@ -79,13 +79,26 @@ export function FencePicker({
   const [searching, setSearching] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [located, setLocated] = useState(false)
+  /**
+   * Whether the pin is anywhere on purpose.
+   *
+   * The map has to open somewhere, and its somewhere is Adelaide's CBD. That
+   * default is the most dangerous value in this component: it looks exactly
+   * like a real placement — a pin, a circle, streets underneath — so a job
+   * saved without touching the map gets a fence thirteen kilometres from the
+   * site, and the failure surfaces a week later as a crew who cannot clock on
+   * and a job with no hours against it. Until somebody has actually put the
+   * pin somewhere, this reports nothing at all and the form refuses to save.
+   */
+  const [placed, setPlaced] = useState(value != null)
 
-  // The parent only ever hears about a finished value, never a frame of the
-  // pan — this is the one place the two are stitched together.
+  // The parent only ever hears about a finished, deliberate value — never a
+  // frame of a pan, and never the opening default.
   useEffect(() => {
+    if (!placed) return
     onChange({ lat: centre.lat, lng: centre.lng, radiusM: radius })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [centre.lat, centre.lng, radius])
+  }, [placed, centre.lat, centre.lng, radius])
 
   useEffect(() => {
     if (!host.current || map.current) return
@@ -104,9 +117,13 @@ export function FencePicker({
     })
     // `moveend`, not `move`: redrawing the circle on every animation frame of
     // a pan is what makes a map feel like it is fighting you.
-    m.on('moveend', () => {
+    m.on('moveend', (e) => {
       const c = m.getCenter()
       setCentre({ lat: c.lat, lng: c.lng })
+      // A pan the person did with their thumb counts as placing the pin. A
+      // programmatic jumpTo (search result, geolocation) carries no
+      // originalEvent and marks itself placed at its own call site.
+      if ((e as { originalEvent?: unknown }).originalEvent) setPlaced(true)
     })
     return () => {
       m.remove()
@@ -131,6 +148,9 @@ export function FencePicker({
       (pos) => {
         map.current?.jumpTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16 })
         setCentre({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        // Standing at the site when you write the job up is a real placement
+        // — it is the one case the old "use my current location" got right.
+        setPlaced(true)
       },
       () => {
         // Declined or unavailable. The map stays on Adelaide and the address
@@ -172,7 +192,9 @@ export function FencePicker({
   function goTo(hit: Hit) {
     map.current?.jumpTo({ center: [hit.lng, hit.lat], zoom: 17 })
     setCentre({ lat: hit.lat, lng: hit.lng })
+    setPlaced(true)
     setHits(null)
+    setNote(null)
   }
 
   return (
@@ -220,6 +242,13 @@ export function FencePicker({
         <span style={{ fontSize: 12.5, color: '#4A5057' }}>Fence radius — {radius} m</span>
         <input type="range" min={25} max={600} step={5} value={radius} onChange={(e) => setRadius(Number(e.target.value))} style={{ width: '100%' }} />
       </span>
+
+      {!placed && (
+        <span style={{ padding: '10px 12px', background: '#FFF6E3', border: '1px solid #F0DFB8', borderRadius: 9, fontSize: 12.5, lineHeight: 1.5, color: '#7A5700' }}>
+          The pin is not on the site yet — search the address above, or drag the map until the pin
+          is over the job. The map opens on the middle of Adelaide, which is nobody’s job site.
+        </span>
+      )}
 
       <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
         Crew can only clock on inside this circle. Cover the building and its parking, not the
