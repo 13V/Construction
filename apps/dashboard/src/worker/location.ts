@@ -31,6 +31,12 @@ export type Backend = 'native' | 'web' | 'none'
 
 interface CapacitorGlobal {
   isNativePlatform?: () => boolean
+  /**
+   * Every plugin the native shell registered, injected by the Capacitor
+   * bridge. This — not an import — is how the web layer reaches a plugin
+   * whose JavaScript package it does not have.
+   */
+  Plugins?: Record<string, unknown>
 }
 
 function capacitor(): CapacitorGlobal | undefined {
@@ -84,18 +90,52 @@ interface NativeWatcherModule {
   }
 }
 
-async function startNative(
-  onFix: (f: Fix) => void,
-  onError: (message: string) => void,
-): Promise<LocationWatch> {
-  // The specifier is assembled at runtime so neither TypeScript nor Vite
-  // resolves it: the browser build has no Capacitor packages installed, and a
-  // static import would fail both typecheck and bundling.
+type WatcherApi = NativeWatcherModule['BackgroundGeolocation']
+
+/**
+ * Get at the background-geolocation plugin from a bundle that does not contain
+ * it.
+ *
+ * This used to be a runtime-assembled dynamic import, on the reasoning that
+ * the browser build has no Capacitor packages installed so nothing must be
+ * bundled. The reasoning was right and the mechanism was wrong: what shipped
+ * was a literal `import("@capacitor-community/background-geolocation")` — a
+ * bare specifier — and a bare specifier cannot be resolved by any browser
+ * engine, WKWebView included. It threw on every phone, every time.
+ *
+ * Nothing looked broken, which is why it survived: startWatching() catches the
+ * failure and falls back to navigator.geolocation, which reports happily while
+ * the app is open. So tracking appeared to work in the hand and stopped the
+ * moment the phone went into a pocket — the exact failure the native app was
+ * built to fix, and the one nobody sees until a day's hours are missing.
+ *
+ * The bridge is the right door. Capacitor injects every natively-registered
+ * plugin at window.Capacitor.Plugins, so the JavaScript package never has to
+ * be resolved at all; the plugin's own iOS registration
+ * (CAP_PLUGIN(BackgroundGeolocation, "BackgroundGeolocation", …)) is what puts
+ * it there. The dynamic import is kept as a second chance for a future build
+ * that does bundle the package, but it is no longer the only path.
+ */
+async function watcherApi(): Promise<WatcherApi> {
+  const bridged = capacitor()?.Plugins?.BackgroundGeolocation as WatcherApi | undefined
+  if (bridged && typeof bridged.addWatcher === 'function') return bridged
+
   const specifier = ['@capacitor-community', 'background-geolocation'].join('/')
   const mod = (await import(/* @vite-ignore */ specifier)) as
     | NativeWatcherModule
     | { default: NativeWatcherModule }
   const api = 'BackgroundGeolocation' in mod ? mod.BackgroundGeolocation : mod.default.BackgroundGeolocation
+  if (!api || typeof api.addWatcher !== 'function') {
+    throw new Error('the background location plugin is not registered in this build')
+  }
+  return api
+}
+
+async function startNative(
+  onFix: (f: Fix) => void,
+  onError: (message: string) => void,
+): Promise<LocationWatch> {
+  const api = await watcherApi()
 
   const id = await api.addWatcher(
     {
