@@ -16,6 +16,24 @@
     - User ID. The Supabase auth user id every write is attributed to — RLS is
       keyed off it, so it is collected on every request, not stored
       separately for any secondary purpose.
+    - Email address. How an account is created and how a worker is invited to
+      one (workers.invite_email), and the only channel that gets a password
+      reset out to somebody who has locked themselves out on site.
+    - Name. Every screen in the app names people: a shift belongs to a worker,
+      a daily log lists who was on the tools, a SWMS is signed on by name. The
+      app is a record of who did what, so it cannot be anonymous.
+    - Other user content. Chat messages, daily logs, site notes, photo
+      captions, defects and the documents a worker uploads. Free text a person
+      types is content, and it is stored against their account.
+    - Phone number. The business phone on the company profile, which for a
+      sole trader is the owner's own mobile. Declared for that reason rather
+      than because the app asks any worker for a number — it does not.
+
+  Three of those were missing from this file until they were checked against
+  the schema rather than against memory. The list here and the answers in App
+  Store Connect are the same declaration in two places, and Apple compares
+  them — a data type the app plainly collects being absent from one of them is
+  a discrepancy waiting to be found.
 
   None of it feeds tracking as Apple defines the term: nothing here is used to
   link the worker's activity to advertising, sold or shared with a data
@@ -60,6 +78,54 @@
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeEmailAddress</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeName</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhoneNumber</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
