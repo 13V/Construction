@@ -1,0 +1,56 @@
+name: Refresh the demo tenant
+
+# The demo world is anchored to Adelaide's today: shifts that are open right
+# now, this week's schedule, a daily log from yesterday. Left alone for a few
+# days it becomes an app with nothing happening in it, which is exactly what an
+# App Review reviewer would open.
+#
+# So it is reseeded nightly. This runs at 16:00 UTC — 01:30 in Adelaide, just
+# after the new day starts there, so the day a reviewer sees is always the one
+# the seed built.
+#
+# The seed is idempotent by design: it looks for each row before inserting,
+# patches the ones that exist, and re-PUTs file bytes over the same object
+# every run. Running it twice changes nothing; missing a night is the failure
+# mode, not running again.
+on:
+  schedule:
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: demo-refresh
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The script imports nothing but node:fs and uses global fetch, so there
+      # is no install step. Its inputs are three secrets.
+      - name: Check the secrets are there
+        run: |
+          missing=
+          [ -n "${{ secrets.SUPABASE_PAT }}" ] || missing="$missing SUPABASE_PAT"
+          [ -n "${{ secrets.SUPABASE_ANON_KEY }}" ] || missing="$missing SUPABASE_ANON_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing"
+            echo "Add them under Settings → Secrets and variables → Actions."
+            echo "SUPABASE_PAT is a Supabase personal access token (the seed reads"
+            echo "the service_role key with it). SUPABASE_ANON_KEY is the project's"
+            echo "anon key — the same one the web build already uses."
+            exit 1
+          fi
+
+      - name: Reseed
+        env:
+          SUPABASE_PAT: ${{ secrets.SUPABASE_PAT }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: node scripts/seed-demo.mjs

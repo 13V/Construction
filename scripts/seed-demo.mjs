@@ -50,10 +50,19 @@ function fromEnvFile(key) {
   }
 }
 
-const SB = process.env.SUPABASE_URL ?? fromEnvFile('VITE_SUPABASE_URL') ?? 'https://vkpdlsxiporsmqlfjvjw.supabase.co'
-const ANON = process.env.SUPABASE_ANON_KEY ?? fromEnvFile('VITE_SUPABASE_ANON_KEY') ?? ''
-const APP = process.env.APP_URL ?? 'https://construction-opal-three.vercel.app'
-const PAT = process.env.SUPABASE_PAT ?? fromEnvFile('SUPABASE_PAT') ?? ''
+/**
+ * An unset secret in GitHub Actions arrives as an empty string, not as an
+ * absent variable — and `??` passes an empty string straight through. Falling
+ * back on falsy rather than nullish is what makes `env: SUPABASE_URL:
+ * ${{ secrets.SUPABASE_URL }}` with no such secret harmless instead of
+ * silently pointing the whole run at "".
+ */
+const pick = (...vals) => vals.find((v) => typeof v === 'string' && v.trim() !== '')?.trim() ?? ''
+
+const SB = pick(process.env.SUPABASE_URL, fromEnvFile('VITE_SUPABASE_URL'), 'https://vkpdlsxiporsmqlfjvjw.supabase.co')
+const ANON = pick(process.env.SUPABASE_ANON_KEY, fromEnvFile('VITE_SUPABASE_ANON_KEY'))
+const APP = pick(process.env.APP_URL, 'https://construction-opal-three.vercel.app')
+const PAT = pick(process.env.SUPABASE_PAT, fromEnvFile('SUPABASE_PAT'))
 const PROJECT = SB.replace(/^https:\/\//, '').split('.')[0]
 
 if (!ANON || !PAT) {
