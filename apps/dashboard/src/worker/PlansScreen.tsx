@@ -490,7 +490,16 @@ function SheetViewer({
            */
           <iframe
             title={sheet.name}
-            src={url}
+            /*
+             * #view=Fit is a PDF open parameter, not part of the URL the
+             * server sees — it asks the viewer to open with the whole page in
+             * frame. A sheet is A3 landscape and a phone is not, so a sheet
+             * opening with its title block off the right edge is the thing to
+             * avoid. Whether a given engine honours it is up to the engine;
+             * this is a hint, it costs nothing, and the sheet stays scrollable
+             * and pinch-zoomable either way.
+             */
+            src={`${url}#view=Fit`}
             style={{ display: 'block', width: '100%', height: '100%', border: 0, background: '#fff' }}
           />
         ) : url ? (
