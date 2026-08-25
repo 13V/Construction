@@ -7,12 +7,24 @@
  * test, a variation sitting with the builder. Each one is the same fact the
  * counters on Home count — this screen is where they get words and a time.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { addressLine, avatarGrey, builderOf, railOf, s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
 import type { SimpleData } from './data'
 import type { JobTab } from './Job'
-import { FencePicker, type FenceValue } from './FencePicker'
+import type { FenceValue } from './FencePicker'
+
+/**
+ * The map is loaded only when somebody actually opens the new-project sheet.
+ *
+ * maplibre-gl is 900 kB of the bundle, and it landed in a chunk the app pulls
+ * in at startup — so every cold start, including a tiler opening the app in a
+ * ute to clock on, was parsing a mapping engine for a screen used once a
+ * fortnight. The assets are bundled into the binary so there is nothing to
+ * download either way; this is parse time, which on an older iPhone is the
+ * difference you feel between tapping the icon and seeing the day.
+ */
+const FencePicker = lazy(() => import('./FencePicker').then((m) => ({ default: m.FencePicker })))
 
 const money0 = (v: number) =>
   new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(v)
@@ -669,7 +681,15 @@ function NewProjectSheet({
 
               <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 <span style={label}>GEOFENCE</span>
-                <FencePicker value={fence} address={address} onChange={setFence} />
+                <Suspense
+                  fallback={
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 240, borderRadius: 12, border: '1px solid #DCE0E6', background: '#fff', fontSize: 13.5, color: '#8B9096' }}>
+                      Loading the map…
+                    </span>
+                  }
+                >
+                  <FencePicker value={fence} address={address} onChange={setFence} />
+                </Suspense>
               </span>
 
               <button

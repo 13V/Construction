@@ -16,7 +16,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 // render tiles. Pin it to the asset Vite actually produces.
 setWorkerUrl(maplibreWorkerUrl)
 import type { JobSite, LatLng, WorkerState } from '../types'
-import { DEFAULT_CENTER, MAP_STYLE_URL } from '../data/seed'
+import { DEFAULT_CENTER, MAP_STYLE_URL } from '../data/mapconfig'
 import { statusColor, theme } from '../theme'
 import { offset } from '../geofence/geo'
 

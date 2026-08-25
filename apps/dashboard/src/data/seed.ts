@@ -30,15 +30,8 @@ export const costCodes: CostCode[] = [
   { code: '16-100', name: 'Electrical' },
 ]
 
-/** Where the map opens before any job site exists. */
-export const DEFAULT_CENTER = { lat: -34.9282, lng: 138.5999 } // Adelaide CBD
-
-/**
- * OpenFreeMap tiles: no API key, no request cap, commercial use allowed.
- * "positron" is the light desaturated style, closest to the app palette.
- * Self-hostable if the public instance ever becomes a reliability concern —
- * see MAPS.md.
- */
-export const MAP_STYLE_URL =
-  (import.meta.env.VITE_MAP_STYLE_URL as string) ||
-  'https://tiles.openfreemap.org/styles/positron'
+// DEFAULT_CENTER and MAP_STYLE_URL used to live here. They are in
+// data/mapconfig.ts now, imported directly by the two screens that draw a map.
+// Deliberately NOT re-exported from this file: this module is on the startup
+// path, and one re-export was enough of an edge for the bundler to load 900 kB
+// of maplibre-gl before the app could show anybody their day.
