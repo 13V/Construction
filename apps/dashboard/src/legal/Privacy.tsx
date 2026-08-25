@@ -396,6 +396,33 @@ export function Privacy() {
             ever written for the account making the request — a worker&rsquo;s phone can insert its
             own position and nothing else.
           </P>
+
+          <H3>7.1 The two outside services the app talks to</H3>
+          <P>
+            Crewline uses two free, open mapping services, and it is worth being precise about what
+            reaches them, because neither receives anything that identifies you.
+          </P>
+          <Ul>
+            <Li>
+              <strong>Map images</strong> come from OpenFreeMap. When you open the map to place a
+              job site&rsquo;s boundary, your phone asks that service for the map tiles covering
+              that area. The request says which part of the world is on screen. It carries no
+              account, no name, and none of your recorded location history — the map you are
+              looking at is not the same thing as where you are.
+            </Li>
+            <Li>
+              <strong>Address lookup</strong> uses OpenStreetMap&rsquo;s geocoder. When you tap to
+              find a job&rsquo;s address on the map, the address you typed is sent to it to be
+              turned into coordinates. It is sent by Crewline&rsquo;s own server rather than by
+              your phone, so your device and your session are never exposed to it, and nothing
+              travels with the address but the address.
+            </Li>
+          </Ul>
+          <P>
+            Neither service is sent your location trail, your shifts, your photos or your messages.
+            Neither is used for advertising, and neither is given anything that could be linked
+            back to you or to your employer.
+          </P>
         </Section>
 
         <Section id="appl" title="8. Australian Privacy Principles">
