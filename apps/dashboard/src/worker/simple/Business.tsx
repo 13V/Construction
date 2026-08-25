@@ -164,10 +164,31 @@ export function BusinessSheet({ me, onClose }: { me: WorkerRow; onClose: () => v
     color: s.ink,
     outline: 'none',
   }
-  const Row = ({ k, v, on, placeholder, mode }: { k: string; v: string | null; on: (x: string) => void; placeholder?: string; mode?: string }) => (
+  /**
+   * A labelled field. Called as a function, never written as <Row/>.
+   *
+   * As a component declared in here it was a NEW component type on every
+   * render, so React threw away the whole subtree and built a fresh <input>
+   * for each keystroke. On a phone that destroys the focused element, and iOS
+   * closes the keyboard with it — eight of these fields accepted exactly one
+   * character per tap. Called as a plain function the elements are reconciled
+   * by position, the input keeps its identity, and the keyboard stays up.
+   */
+  const textRow = (
+    k: string,
+    v: string | null,
+    on: (x: string) => void,
+    opts: { placeholder?: string; mode?: string } = {},
+  ) => (
     <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={label}>{k}</span>
-      <input value={v ?? ''} onChange={(e) => on(e.target.value)} placeholder={placeholder} inputMode={mode as never} style={field} />
+      <input
+        value={v ?? ''}
+        onChange={(e) => on(e.target.value)}
+        placeholder={opts.placeholder}
+        inputMode={opts.mode as never}
+        style={field}
+      />
     </span>
   )
 
@@ -222,8 +243,8 @@ export function BusinessSheet({ me, onClose }: { me: WorkerRow; onClose: () => v
                 </span>
               )}
 
-              <Row k="TRADING NAME" v={row.name} on={(x) => set('name', x)} placeholder="What the business is called" />
-              <Row k="LEGAL NAME (IF DIFFERENT)" v={row.legal_name} on={(x) => set('legal_name', x)} placeholder="e.g. the Pty Ltd behind it" />
+              {textRow('TRADING NAME', row.name, (x) => set('name', x), { placeholder: 'What the business is called' })}
+              {textRow('LEGAL NAME (IF DIFFERENT)', row.legal_name, (x) => set('legal_name', x), { placeholder: 'e.g. the Pty Ltd behind it' })}
 
               <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span style={label}>ABN</span>
@@ -243,9 +264,9 @@ export function BusinessSheet({ me, onClose }: { me: WorkerRow; onClose: () => v
                 ) : null}
               </span>
 
-              <Row k="ACN (IF A COMPANY)" v={row.acn} on={(x) => set('acn', x)} mode="numeric" />
-              <Row k="BUILDERS LICENCE" v={row.licence_no} on={(x) => set('licence_no', x)} placeholder="e.g. BLD 187384" />
-              <Row k="WHO SIGNS CERTIFICATES" v={row.certifier_name} on={(x) => set('certifier_name', x)} placeholder="The licensed contractor's name" />
+              {textRow('ACN (IF A COMPANY)', row.acn, (x) => set('acn', x), { mode: 'numeric' })}
+              {textRow('BUILDERS LICENCE', row.licence_no, (x) => set('licence_no', x), { placeholder: 'e.g. BLD 187384' })}
+              {textRow('WHO SIGNS CERTIFICATES', row.certifier_name, (x) => set('certifier_name', x), { placeholder: "The licensed contractor's name" })}
 
               <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span style={label}>BUSINESS ADDRESS</span>
@@ -258,8 +279,8 @@ export function BusinessSheet({ me, onClose }: { me: WorkerRow; onClose: () => v
                 />
               </span>
 
-              <Row k="PHONE" v={row.phone} on={(x) => set('phone', x)} mode="tel" />
-              <Row k="EMAIL" v={row.email} on={(x) => set('email', x)} mode="email" />
+              {textRow('PHONE', row.phone, (x) => set('phone', x), { mode: 'tel' })}
+              {textRow('EMAIL', row.email, (x) => set('email', x), { mode: 'email' })}
 
               <span style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 13px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10 }}>
                 <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -277,7 +298,7 @@ export function BusinessSheet({ me, onClose }: { me: WorkerRow; onClose: () => v
               </span>
 
               <span style={{ marginTop: 4, fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' }}>WHERE THE BUILDER PAYS</span>
-              <Row k="ACCOUNT NAME" v={row.bank_account_name} on={(x) => set('bank_account_name', x)} />
+              {textRow('ACCOUNT NAME', row.bank_account_name, (x) => set('bank_account_name', x))}
               <span style={{ display: 'flex', gap: 10 }}>
                 <span style={{ flex: '0 0 40%', display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <span style={label}>BSB</span>

@@ -128,7 +128,12 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
     await load()
   }
 
-  async function remove(id: string) {
+  async function remove(id: string, name: string) {
+    // Destructive, instant, and one tap from a list — the combination that
+    // makes a reviewer poking around wipe somebody by accident. Their shifts
+    // and signatures survive either way, but a roster that quietly loses a
+    // person is not something anybody notices until they go looking.
+    if (!window.confirm(`Take ${name} off the crew? Their timesheets and signatures are kept.`)) return
     // Deactivated, never deleted: their shifts, timesheets and signatures are
     // the company's records and have to survive the person leaving.
     const { data, error: err } = await supabase().from('workers').update({ active: false }).eq('id', id).select('id')
@@ -212,7 +217,7 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
                     </span>
                     {office && w.id !== me.id && (
                       <span
-                        onClick={() => void remove(w.id)}
+                        onClick={() => void remove(w.id, w.name)}
                         style={{ flex: 'none', display: 'flex', alignItems: 'center', height: 30, padding: '0 11px', border: '1px solid #E7CBCD', borderRadius: 15, fontSize: 12.5, fontWeight: 700, color: '#A3282E', cursor: 'pointer' }}
                       >
                         Remove

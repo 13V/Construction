@@ -123,6 +123,11 @@ export function FencePicker({
    */
   const [mapBroken, setMapBroken] = useState(false)
   const [locating, setLocating] = useState(false)
+  // Read inside the geolocation callback, which closes over the render that
+  // started it and would otherwise be asking whether the pin was placed ten
+  // seconds ago.
+  const placedRef = useRef(placed)
+  placedRef.current = placed
 
   // The parent only ever hears about a finished, deliberate value — never a
   // frame of a pan, and never the opening default.
@@ -209,6 +214,23 @@ export function FencePicker({
   }, [centre.lat, centre.lng, radius])
 
   /** Put the pin where the phone is. Offered on tap, and tried once on open. */
+  /**
+   * Put the pin where the phone is.
+   *
+   * `explicit` is the whole distinction. Tapping the target button is somebody
+   * saying "the site is here, I am standing on it" — a placement. The sweep
+   * this does on open is only a courtesy, so the map starts somewhere near
+   * where you are instead of on the middle of Adelaide, and it must NOT count
+   * as placing anything: a fence on the office, or on the ute, looks exactly
+   * as convincing as a fence on the site and is just as useless to a crew
+   * trying to clock on.
+   *
+   * The reply can also be slow — up to ten seconds. Long enough for somebody
+   * to have searched the address and tapped the right result in the meantime,
+   * and the answer would then land on top of their choice and move the fence
+   * silently. So a courtesy sweep that comes back late finds the pin already
+   * placed and leaves it alone.
+   */
   function useMyPosition(explicit: boolean) {
     if (!('geolocation' in navigator)) {
       if (explicit) setNote('This device will not give the app a location.')
@@ -218,12 +240,13 @@ export function FencePicker({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating(false)
+        if (!explicit && placedRef.current) return
         map.current?.jumpTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16 })
         setCentre({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-        // Standing at the site when you write the job up is a real placement
-        // — it is the one case the old "use my current location" got right.
-        setPlaced(true)
-        if (explicit) setNote(null)
+        if (explicit) {
+          setPlaced(true)
+          setNote(null)
+        }
       },
       (err) => {
         setLocating(false)

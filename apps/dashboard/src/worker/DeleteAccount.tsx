@@ -123,6 +123,37 @@ export function DeleteAccount({ me, onClose }: { me: WorkerRow; onClose: () => v
   const [soleOwner, setSoleOwner] = useState<'checking' | 'yes' | 'no'>(
     me.role === 'owner' ? 'checking' : 'no',
   )
+  /**
+   * The company's name, and the caller typing it back.
+   *
+   * A sole owner used to be refused outright, which fails Guideline 5.1.1(v) —
+   * and the account most likely to hit it is the demo one App Review signs
+   * into, a company of exactly one owner. They can now take the company with
+   * them, which for a one-person business is the honest reading of "delete my
+   * account".
+   *
+   * Typing the name is what keeps that safe. It removes every job, invoice,
+   * certificate and photo for everybody in the company with no undo, so it
+   * should not be reachable by a reviewer tapping through — and it is not,
+   * while it still plainly works when somebody means it.
+   */
+  const [companyName, setCompanyName] = useState('')
+  const [typedName, setTypedName] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    void supabase()
+      .from('companies')
+      .select('name')
+      .eq('id', me.company_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setCompanyName((data as { name: string } | null)?.name ?? '')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [me.company_id])
 
   useEffect(() => {
     if (me.role !== 'owner') return
@@ -182,7 +213,8 @@ export function DeleteAccount({ me, onClose }: { me: WorkerRow; onClose: () => v
     try {
       const res = await fetch(api('/api/delete-account'), {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deleteCompany: blocked }),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -245,11 +277,30 @@ export function DeleteAccount({ me, onClose }: { me: WorkerRow; onClose: () => v
               <div style={noteBox('warn')}>Checking whether another owner can take over…</div>
             )}
             {blocked && (
-              <div style={noteBox('alert')}>
-                You're the only owner of this company. Deleting your account would leave nobody able to see
-                pay rates, invoices or contracts. Make another crew member the owner from Crew settings
-                first, then come back here.
-              </div>
+              <>
+                <div style={noteBox('alert')}>
+                  You're the only owner of {companyName || 'this company'}, so there is nobody to hand it
+                  to. Deleting your account therefore deletes the company as well — every job, invoice,
+                  certificate, photo and message in it, for everyone. That cannot be undone.
+                </div>
+                <div style={noteBox('warn')}>
+                  If you would rather keep the company running, close this, go to Me → Your crew, add
+                  somebody as Office, and come back — your account will then delete on its own.
+                </div>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 14 }}>
+                  <span style={{ fontSize: 12.5, color: '#4A5057' }}>
+                    Type <strong>{companyName}</strong> to confirm you want the company deleted too.
+                  </span>
+                  <input
+                    value={typedName}
+                    onChange={(e) => setTypedName(e.target.value)}
+                    placeholder={companyName}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    style={{ width: '100%', height: 48, padding: '0 13px', boxSizing: 'border-box', background: '#fff', border: '1px solid #DCE0E6', borderRadius: 10, font: 'inherit', fontSize: 16, outline: 'none' }}
+                  />
+                </label>
+              </>
             )}
             {me.role === 'owner' && soleOwner === 'no' && (
               <div style={noteBox('warn')}>
@@ -258,13 +309,19 @@ export function DeleteAccount({ me, onClose }: { me: WorkerRow; onClose: () => v
               </div>
             )}
 
-            <button
-              style={blocked ? dangerDisabledStyle : { ...dangerStyle, marginTop: 20 }}
-              disabled={blocked || soleOwner === 'checking'}
-              onClick={() => setStep('confirm')}
-            >
-              Continue
-            </button>
+            {(() => {
+              const nameMatches = typedName.trim().toLowerCase() === companyName.trim().toLowerCase() && companyName !== ''
+              const stop = soleOwner === 'checking' || (blocked && !nameMatches)
+              return (
+                <button
+                  style={stop ? dangerDisabledStyle : { ...dangerStyle, marginTop: 20 }}
+                  disabled={stop}
+                  onClick={() => setStep('confirm')}
+                >
+                  {blocked ? 'Delete my account and the company' : 'Continue'}
+                </button>
+              )
+            })()}
             <button style={ghostFull} onClick={onClose}>
               Cancel
             </button>

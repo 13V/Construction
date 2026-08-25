@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { data: worker, error: workerError } = await db
     .from('workers')
-    .select('id, role')
+    .select('id, role, company_id')
     .eq('auth_user_id', user.id)
     .maybeSingle()
 
@@ -79,17 +79,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // but the login itself still needs to go, or the account "delete" did
   // nothing at all from the one perspective that matters to the person who
   // asked for it.
+  /*
+   * The sole owner of a company is the one person the guard below refuses, and
+   * they are also the person most likely to be testing that account deletion
+   * works at all — App Review included, since the demo account is a company of
+   * one owner. "You cannot delete this account" is not an answer Guideline
+   * 5.1.1(v) accepts.
+   *
+   * So they get the honest option instead of a wall: for a one-owner business
+   * the account and the company are the same thing, and deleting one deletes
+   * the other. The client asks for it explicitly (it makes the caller type the
+   * company's name first), because this removes every job, invoice,
+   * certificate and photo the company has, for everybody in it, with no undo.
+   */
+  const alsoDeleteCompany = req.body?.deleteCompany === true
+
   if (worker) {
     const { error: rpcError } = await db.rpc('delete_worker_account', { p_worker_id: worker.id })
     if (rpcError) {
-      if (rpcError.message === 'sole_owner') {
+      if (rpcError.message === 'sole_owner' && alsoDeleteCompany) {
+        // Every table hangs off company_id with a cascading delete, so this is
+        // the whole tenant. Done before the login is removed, so a failure
+        // here leaves a caller who can still sign in and try again.
+        const { error: companyError } = await db.from('companies').delete().eq('id', worker.company_id)
+        if (companyError) {
+          console.error('[delete-account] company delete failed', companyError)
+          return res.status(500).json({ error: 'Could not delete the company. Try again, or contact support.' })
+        }
+      } else if (rpcError.message === 'sole_owner') {
         return res.status(409).json({
           error:
-            "You're the only owner of this company, so deleting your account would leave nobody able to see pay rates, invoices or contracts. Make another crew member the owner from Crew settings, then come back and delete your account.",
+            "You're the only owner of this company, so deleting your account on its own would leave nobody able to see pay rates, invoices or contracts. Either make somebody else an owner first — Me, then Your crew — or delete the company along with your account.",
+          soleOwner: true,
         })
+      } else {
+        console.error('[delete-account] worker cleanup failed', rpcError)
+        return res.status(500).json({ error: 'Could not delete your account. Try again, or contact support.' })
       }
-      console.error('[delete-account] worker cleanup failed', rpcError)
-      return res.status(500).json({ error: 'Could not delete your account. Try again, or contact support.' })
     }
   }
 
