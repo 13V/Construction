@@ -397,10 +397,10 @@ export function Privacy() {
             own position and nothing else.
           </P>
 
-          <H3>7.1 The two outside services the app talks to</H3>
+          <H3>7.1 The outside services the app talks to</H3>
           <P>
-            Crewline uses two free, open mapping services, and it is worth being precise about what
-            reaches them, because neither receives anything that identifies you.
+            Three services outside Crewline receive something, and it is worth being precise about
+            what reaches each one.
           </P>
           <Ul>
             <Li>
@@ -417,11 +417,21 @@ export function Privacy() {
               your phone, so your device and your session are never exposed to it, and nothing
               travels with the address but the address.
             </Li>
+            <Li>
+              <strong>Reading a receipt or a programme</strong> uses Anthropic&rsquo;s Claude API.
+              When you photograph a receipt so the app can fill in the supplier and the amount,
+              that image is sent there to be read. The same applies to a builder&rsquo;s programme
+              you upload, and — when the app drafts a daily log for you — to the crew names, hours
+              and photo captions for that day. It is used to read the document and nothing else:
+              not to train a model, and not kept afterwards. If you would rather it never left,
+              every one of those forms can be filled in by hand instead.
+            </Li>
           </Ul>
           <P>
-            Neither service is sent your location trail, your shifts, your photos or your messages.
-            Neither is used for advertising, and neither is given anything that could be linked
-            back to you or to your employer.
+            None of the three is sent your location trail, your shifts or your chat messages. None
+            is used for advertising, and none is given anything to build a profile from. The
+            mapping services are told an area and an address; Anthropic is shown the document you
+            asked it to read.
           </P>
         </Section>
 

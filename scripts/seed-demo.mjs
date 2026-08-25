@@ -251,6 +251,25 @@ try {
   }
   console.log(`crew: ${OWNER_NAME} (office) + ${CREW.length} on the tools`)
 
+  // A second owner, so the demo cannot delete itself out of existence.
+  //
+  // App Review checks Guideline 5.1.1(v) by deleting the account they were
+  // given, and a sole owner now takes the whole company with them — correct
+  // behaviour for a one-person business, and a live self-destruct on the one
+  // tenant every reviewer signs into. With somebody else holding the company,
+  // the reviewer's deletion does exactly what it says on the tin and removes
+  // their account alone; the jobs, certificates and crew survive for whoever
+  // looks next, and the seed puts the login back.
+  //
+  // A bookkeeper is who a tiling business actually gives the second set of
+  // office keys to, so that is who this is.
+  const secondOwner = await ensureRow(boss, 'workers',
+    `select=id&company_id=eq.${companyId}&name=eq.${encodeURIComponent('Deb Ashworth')}`,
+    { company_id: companyId, name: 'Deb Ashworth', initials: 'DA', trade: 'Bookkeeper', role: 'owner', active: true },
+    'second owner (Deb Ashworth)')
+  const ownerFixed = await boss.patch('workers', `id=eq.${secondOwner.id}`, { role: 'owner', active: true })
+  if (!ownerFixed.ok) throw new Error(`second owner: HTTP ${ownerFixed.status} ${await ownerFixed.text()}`)
+
   // ------------------------------------------------------------- tickets
   // What each of them is licensed to do, shown on a job's Crew tab. Dates
   // are anchored to today so the demo always carries the same shape: mostly
@@ -720,15 +739,100 @@ try {
       `open shift (${w})`)
   }
 
-  // A one-line PDF: a real object in the bucket, small enough to be honest
-  // about being demo paperwork. Photos come from the photo library above.
-  const TINY_PDF = Buffer.from(
-    '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
-    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
-    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj\n' +
-    '4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n' +
-    '5 0 obj<</Length 96>>stream\nBT /F1 14 Tf 60 760 Td (Mapei product warranty - demo document) Tj ET\nendstream endobj\n' +
-    'trailer<</Root 1 0 R>>\n%%EOF\n', 'latin1')
+  /**
+   * A blank PDF page and the handful of operators worth having on it.
+   *
+   * A PDF is a few objects and a byte-offset table, so the seed writes its own
+   * rather than take a dependency for demo paperwork — the same reasoning as
+   * apps/dashboard/src/data/pdf.ts, which does this for documents that go to
+   * a builder.
+   */
+  function pdfPage(W, H) {
+    // WinAnsi carries the punctuation a keyboard produces, but not at the
+    // Unicode code points — and a latin1 Buffer truncates the difference to a
+    // control character, which is how an em dash became a blank space.
+    const WINANSI = {
+      '—': '\x97', '–': '\x96', '‘': '\x91', '’': '\x92',
+      '“': '\x93', '”': '\x94', '…': '\x85', '•': '\x95',
+    }
+    const esc = (t) => String(t)
+      .replace(/[–—‘’“”…•]/g, (c) => WINANSI[c])
+      .replace(/[\\()]/g, (c) => `\\${c}`)
+    const put = []
+    const api = {
+      line: (x1, y1, x2, y2, w = 1, g = 0) => put.push(`q ${g} G ${w} w ${x1} ${y1} m ${x2} ${y2} l S Q`),
+      rect: (x, y, w, h, lw = 1, g = 0) => put.push(`q ${g} G ${lw} w ${x} ${y} ${w} ${h} re S Q`),
+      text: (t, x, y, size = 10, bold = false, g = 0) =>
+        put.push(`BT /${bold ? 'HB' : 'H'} ${size} Tf ${g} g ${x} ${y} Td (${esc(t)}) Tj ET`),
+      raw: (op) => put.push(op),
+      // Helvetica has no width table here, and none is needed: centring a
+      // stamp and a label is all the estimate is used for.
+      wide: (t, size, bold) => t.length * size * (bold ? 0.58 : 0.52),
+      mid: (t, cx, y, size, bold = false, g = 0) =>
+        api.text(t, cx - api.wide(t, size, bold) / 2, y, size, bold, g),
+      bytes: () => {
+        const stream = put.join('\n')
+        const objs = [
+          '<< /Type /Catalog /Pages 2 0 R >>',
+          '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+          `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /H 5 0 R /HB 6 0 R >> >> /Contents 4 0 R >>`,
+          `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+          '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+          '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
+        ]
+        let out = '%PDF-1.4\n'
+        const offsets = []
+        objs.forEach((o, i) => {
+          offsets.push(out.length)
+          out += `${i + 1} 0 obj\n${o}\nendobj\n`
+        })
+        const xref = out.length
+        out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`
+        for (const off of offsets) out += `${String(off).padStart(10, '0')} 00000 n \n`
+        out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`
+        return Buffer.from(out, 'latin1')
+      },
+    }
+    return api
+  }
+
+  /**
+   * A stand-in document that says what it is.
+   *
+   * Everything the seed uploads that is not a photo or a drawing — a data
+   * sheet, a warranty, a builder's programme — is demo paperwork. Every one of
+   * them used to be the same six-line stub carrying one warranty's text, so a
+   * programme opened and said "Mapei product warranty". A page that carries
+   * its own title is barely more code and stops the demo contradicting itself.
+   */
+  function stubPdf(title, lines = []) {
+    const p = pdfPage(595, 842)
+    p.rect(40, 40, 515, 762, 0.6, 0.7)
+    p.text(COMPANY_NAME.toUpperCase(), 64, 748, 12, true)
+    p.text('Wall & floor tiling · waterproofing · Adelaide SA', 64, 732, 8.5, false, 0.45)
+    p.line(64, 720, 531, 720, 0.8, 0.5)
+
+    // Titles run long — a document name is a sentence, not a label.
+    let y = 676
+    const words = String(title).split(/\s+/)
+    let row = ''
+    for (const w of words) {
+      if (row && p.wide(`${row} ${w}`, 17, true) > 452) { p.text(row, 64, y, 17, true); y -= 24; row = w }
+      else row = row ? `${row} ${w}` : w
+    }
+    if (row) { p.text(row, 64, y, 17, true); y -= 24 }
+
+    y -= 14
+    for (const l of lines) {
+      if (l) p.text(l, 64, y, 10, false, 0.2)
+      y -= 16
+    }
+
+    p.line(64, 96, 531, 96, 0.8, 0.5)
+    p.text('DEMONSTRATION DOCUMENT — not a real certificate, data sheet or programme.', 64, 78, 8.5, false, 0.5)
+    p.text('Crewline demo account · the file itself is a placeholder; everything around it is not.', 64, 64, 8.5, false, 0.5)
+    return p.bytes()
+  }
 
   /** PUT an object into a storage bucket as the signed-in owner. */
   async function putObject(path, bytes, contentType) {
@@ -878,6 +982,43 @@ try {
     }],
   ]
 
+  // The paperwork side of a waterproofing package is a data sheet and a
+  // warranty, and a demo that shows the same warranty text under both names
+  // undoes the point of showing them at all.
+  const WP_DOC_TITLES = {
+    'mapelastic-aquadefense-tds.pdf': 'Mapelastic AquaDefense — technical data sheet',
+    'mapelastic-smart-tds.pdf': 'Mapelastic Smart — technical data sheet',
+    'mapei-product-warranty.pdf': 'Mapei product warranty',
+  }
+  const WP_DOC_LINES = {
+    'mapelastic-aquadefense-tds.pdf': [
+      'Ready-to-use liquid membrane for waterproofing under tiles,',
+      'internal and external, to AS 4654.2.',
+      '',
+      'Coverage       0.7 – 0.8 kg/m² per coat, two coats',
+      'Drying         30 – 60 minutes between coats at 23 °C',
+      'Tile after     4 hours',
+      'Batch          AQ-2417-B',
+    ],
+    'mapelastic-smart-tds.pdf': [
+      'Two-component flexible cementitious membrane for balconies,',
+      'terraces and areas subject to movement.',
+      '',
+      'Mix ratio      Component A 20 kg : Component B 10 kg',
+      'Coverage       1.6 kg/m² per mm of thickness',
+      'Crack bridging 2 mm at 23 °C',
+      'Batch          MS-1180-A',
+    ],
+    'mapei-product-warranty.pdf': [
+      'Product warranty for the membrane system installed at',
+      'Lot 42, Kentish Avenue — ensuite 1, ensuite 2, bath 1, laundry.',
+      '',
+      'Term           10 years from the date of installation',
+      'Conditions     installed by a Mapei-registered applicator to the',
+      '               published data sheet, flood tested and documented.',
+    ],
+  }
+
   const WP_FILES = [
     // key, step, kind, category, filename
     ['glenelg', 'products', 'document', null, 'mapelastic-aquadefense-tds.pdf'],
@@ -914,11 +1055,16 @@ try {
     // Upsert the bytes even when the row already exists — an earlier seed
     // wrote 1x1 JPEGs here, which render as broken images, and overwriting
     // the object fixes every existing row without touching it.
-    const bytes = isPhoto ? photoLib[photoFor(filename, idx)] : TINY_PDF
+    const bytes = isPhoto ? photoLib[photoFor(filename, idx)] : stubPdf(WP_DOC_TITLES[filename] ?? filename, WP_DOC_LINES[filename] ?? [])
     await putObject(path, bytes, isPhoto ? 'image/jpeg' : 'application/pdf')
     const have = await boss.get('site_files',
       `select=id&waterproofing_package_id=eq.${pkgId}&name=eq.${encodeURIComponent(filename)}&limit=1`)
-    if (Array.isArray(have) && have.length > 0) continue
+    if (Array.isArray(have) && have.length > 0) {
+      // The bytes behind an existing row just changed size.
+      const upd = await boss.patch('site_files', `id=eq.${have[0].id}`, { size_bytes: bytes.length })
+      if (!upd.ok) throw new Error(`wp file patch failed (${key}/${filename}): HTTP ${upd.status} ${await upd.text()}`)
+      continue
+    }
     const res = await boss.post('site_files', [{
       company_id: companyId, site_id: site[key].id, waterproofing_package_id: pkgId, wp_step: step,
       uploaded_by: me.id, kind, category, storage_path: path, name: filename,
@@ -926,6 +1072,168 @@ try {
       size_bytes: bytes.length,
     }])
     if (!res.ok) throw new Error(`wp file insert failed (${key}/${filename}): HTTP ${res.status} ${await res.text()}`)
+  }
+
+  const SHEET_NOTES = {
+    'Tile layout': [
+      'Tile setout from the centreline of each room unless',
+      'noted otherwise. Cuts to be equal at opposing walls',
+      'and no cut less than one third of a tile.',
+      '',
+      'Movement joints at 4.5 m centres, at all internal',
+      'corners and over structural joints — AS 3958.1.',
+      '',
+      'Adhesive: C2S1 to AS ISO 13007 over primed and',
+      'levelled substrate. Grout to schedule.',
+    ],
+    'Bathroom setout': [
+      'Set out from the finished face of the wall lining.',
+      'Confirm fixture positions against the hydraulic',
+      'drawings before any waterproofing is applied.',
+      '',
+      'Floor waste centred in the shower area, falls to be',
+      '1:80 minimum over the whole graded area.',
+      '',
+      'Hob height 100 mm above the finished floor level;',
+      'membrane to turn up 150 mm minimum at all walls.',
+    ],
+    'Balcony waterproofing': [
+      'Membrane to AS 4654.2 over the full slab, turned up',
+      '150 mm at walls and dressed into the drainage outlet.',
+      '',
+      'Falls 1:80 minimum to the outlet, verified with a',
+      'level before the screed is closed in.',
+      '',
+      'Perimeter angle and bond breaker at all junctions.',
+      'Flood test 24 hours and photograph before tiling.',
+    ],
+  }
+
+  /**
+   * A drawing sheet that looks like a drawing sheet.
+   *
+   * Every seeded document used to be the same six-line stub, which was
+   * invisible while drawings opened on a broken-image icon and became the
+   * first thing you read the moment the viewer started rendering PDFs — a
+   * sheet titled "L01 - Tile layout" whose contents said "Mapei product
+   * warranty". A reviewer tapping a drawing is entitled to see a drawing.
+   *
+   * A3 landscape with a border, a title block in the corner where a drawing
+   * office puts one, a notes panel, and enough linework to read as a floor
+   * plan at a glance. Written by hand for the same reason data/pdf.ts is: a
+   * PDF is a few objects and a byte-offset table, and that is cheaper than a
+   * dependency.
+   */
+  function drawingPdf({ sheetName, level, revision, project, address, revisions, superseded }) {
+    const W = 1191, H = 842 // A3 landscape, points
+    const { line, rect, text, raw, wide, mid, bytes } = pdfPage(W, H)
+
+    rect(24, 24, W - 48, H - 48, 2)
+    rect(34, 34, W - 68, H - 68, 0.6, 0.6)
+
+    // Header strip: the two facts a foreman checks before reading anything.
+    line(50, 762, W - 50, 762, 0.8, 0.5)
+    text(project, 50, 774, 12, true)
+    text(address, 50 + wide(project, 12, true) + 16, 774, 9.5, false, 0.45)
+    text(`${sheetName}   ·   REV ${revision}`, W - 50 - wide(`${sheetName}   ·   REV ${revision}`, 10, true), 774, 10, true, 0.3)
+
+    // The plan sits left of the title block, not through it.
+    const px = 90, py = 150, pw = 620, ph = 580
+    const mx = px + 240      // the wet rooms are the left bay
+    const ly = py + 330      // left bay split
+    const ry = py + 300      // right bay split
+    rect(px, py, pw, ph, 1.6)
+    line(mx, py, mx, py + ph, 1.2)
+    line(px, ly, mx, ly, 1.2)
+    line(mx, ry, px + pw, ry, 1.2)
+
+    // The hatch is the graded, membraned, tiled area — the thing every one of
+    // these three sheet kinds is actually about.
+    for (let gx = px + 10; gx < mx - 8; gx += 24) line(gx, py + 370, gx, py + ph - 42, 0.4, 0.72)
+    for (let gy = py + 370; gy < py + ph - 42; gy += 24) line(px + 10, gy, mx - 10, gy, 0.4, 0.72)
+    // The floor waste, and the falls that run to it.
+    const wx = (px + mx) / 2, wy = py + 450
+    raw(`q 0.45 G 1 w ${wx - 9} ${wy} m ${wx + 9} ${wy} l S ${wx} ${wy - 9} m ${wx} ${wy + 9} l S Q`)
+    rect(wx - 12, wy - 12, 24, 24, 0.8, 0.45)
+
+    const kind = sheetName.replace(/^L\d+ - /, '')
+    text(kind === 'Balcony waterproofing' ? 'BALCONY SLAB' : 'WET AREA', px + 14, py + ph - 26, 11, true, 0.3)
+    text('FALL 1:80 TO WASTE', px + 14, py + 346, 8.5, false, 0.45)
+    text('ENSUITE', px + 14, ly - 30, 11, true, 0.3)
+    text(kind === 'Balcony waterproofing' ? 'THRESHOLD' : 'LIVING', mx + 14, py + ph - 26, 11, true, 0.3)
+    text(kind === 'Balcony waterproofing' ? 'SLAB EDGE' : 'BALCONY', mx + 14, ry - 24, 11, true, 0.3)
+
+    // Dimension run under the plan, with the figures clear of the line.
+    line(px, py - 40, px + pw, py - 40, 0.8, 0.45)
+    for (const dx of [px, mx, px + pw]) line(dx, py - 34, dx, py - 46, 0.8, 0.45)
+    mid('2400', (px + mx) / 2, py - 34, 8.5, false, 0.45)
+    mid('3800', (mx + px + pw) / 2, py - 34, 8.5, false, 0.45)
+
+    // Notes panel, above the title block, in the column the plan leaves free.
+    const nx = W - 430, ny = 300, nw = 380, nh = 430
+    rect(nx, ny, nw, nh, 1)
+    line(nx, ny + nh - 34, nx + nw, ny + nh - 34, 0.8)
+    text('NOTES', nx + 14, ny + nh - 24, 9, true, 0.35)
+    let ny2 = ny + nh - 58
+    text('All dimensions in millimetres. Verify on site', nx + 14, ny2, 8.5, false, 0.2)
+    text('before setting out or ordering material.', nx + 14, ny2 - 14, 8.5, false, 0.2)
+    ny2 -= 42
+    for (const l of SHEET_NOTES[kind] ?? []) {
+      if (l) text(l, nx + 14, ny2, 8.5, false, 0.2)
+      ny2 -= 14
+    }
+    // The revision history, which is the half of the register a paper sheet
+    // has to carry on its own face.
+    line(nx, ny + 200, nx + nw, ny + 200, 0.8)
+    text('REVISIONS', nx + 14, ny + 182, 9, true, 0.35)
+    text('REV', nx + 14, ny + 162, 7.5, true, 0.5)
+    text('DESCRIPTION', nx + 48, ny + 162, 7.5, true, 0.5)
+    text('DATE', nx + 300, ny + 162, 7.5, true, 0.5)
+    line(nx + 8, ny + 154, nx + nw - 8, ny + 154, 0.5, 0.6)
+    revisions.forEach(([letter, what, when], i) => {
+      const ry2 = ny + 136 - i * 18
+      text(letter, nx + 14, ry2, 9, true, 0.2)
+      text(what, nx + 48, ry2, 8.5, false, 0.2)
+      text(when, nx + 300, ry2, 8.5, false, 0.2)
+    })
+
+    // Legend, so the hatch means something.
+    line(nx, ny + 52, nx + nw, ny + 52, 0.8)
+    for (let gx = nx + 16; gx < nx + 46; gx += 8) line(gx, ny + 16, gx, ny + 40, 0.4, 0.72)
+    for (let gy = ny + 16; gy < ny + 40; gy += 8) line(nx + 16, gy, nx + 46, gy, 0.4, 0.72)
+    rect(nx + 16, ny + 16, 30, 24, 0.6, 0.45)
+    text('Graded and membraned wet area', nx + 56, ny + 32, 8.5, false, 0.2)
+    text('Floor waste', nx + 56, ny + 18, 8.5, false, 0.2)
+
+    // Title block, bottom right, the way a drawing office lays one out.
+    const tx = W - 430, ty = 60, tw = 380, th = 210
+    rect(tx, ty, tw, th, 1.4)
+    line(tx, ty + 150, tx + tw, ty + 150, 1)
+    line(tx, ty + 96, tx + tw, ty + 96, 0.8)
+    line(tx, ty + 48, tx + tw, ty + 48, 0.8)
+    line(tx + 250, ty, tx + 250, ty + 96, 0.8)
+    text(COMPANY_NAME.toUpperCase(), tx + 14, ty + 178, 14, true)
+    text('Wall & floor tiling · waterproofing', tx + 14, ty + 160, 9, false, 0.4)
+    text('PROJECT', tx + 14, ty + 132, 7.5, true, 0.5)
+    text(project, tx + 14, ty + 110, 11)
+    text('SHEET', tx + 14, ty + 78, 7.5, true, 0.5)
+    text(sheetName, tx + 14, ty + 58, 11, true)
+    text('LEVEL', tx + 264, ty + 78, 7.5, true, 0.5)
+    text(level, tx + 264, ty + 58, 11, true)
+    text('SCALE  1:50 @ A3', tx + 14, ty + 28, 8.5, false, 0.4)
+    text(`REV ${revision}`, tx + 264, ty + 28, 11, true)
+    text('DO NOT SCALE FROM THIS DRAWING', tx + 14, ty + 12, 7.5, false, 0.55)
+
+    // A stamp across the plan, because a superseded sheet that only says so in
+    // a list is a sheet somebody builds off.
+    if (superseded) {
+      const sw = 470, sx = px + (pw - sw) / 2
+      rect(sx, 496, sw, 76, 2.4, 0.45)
+      mid('SUPERSEDED', sx + sw / 2, 534, 30, true, 0.45)
+      mid('DO NOT BUILD FROM THIS SHEET', sx + sw / 2, 512, 10.5, true, 0.45)
+    }
+    text('DEMONSTRATION DRAWING — NOT FOR CONSTRUCTION', 90, 44, 9, false, 0.55)
+    return bytes()
   }
 
   // ------------------------------------------------------------------ drawings
@@ -940,37 +1248,80 @@ try {
   const DRAWINGS = []
   for (let level = 1; level <= 10; level++) {
     for (const kind of SHEET_KINDS) {
-      DRAWINGS.push([`L${String(level).padStart(2, '0')} - ${kind}`, false])
+      DRAWINGS.push({ name: `L${String(level).padStart(2, '0')} - ${kind}`, level, rev: 'A' })
     }
   }
-  // Two reissued sheets: the superseded pair is what a foreman has to be
-  // stopped from building off, so the demo has to contain some.
-  DRAWINGS.push(['L03 - Tile layout REV A', true], ['L07 - Bathroom setout REV A', true])
+  // Two reissued sheets. The superseded pair is what a foreman has to be
+  // stopped from building off, so the demo has to contain some — and the
+  // sheet that replaced it has to be the later revision, or the register is
+  // telling a foreman to build off the older letter.
+  DRAWINGS.push(
+    { name: 'L03 - Tile layout Rev B', level: 3, rev: 'B', replaces: 'L03 - Tile layout' },
+    { name: 'L07 - Bathroom setout Rev B', level: 7, rev: 'B', replaces: 'L07 - Bathroom setout' },
+  )
+  const replaced = new Set(DRAWINGS.map((d) => d.replaces).filter(Boolean))
+  /** dd.mm.yy — how a revision table writes a date. */
+  const shortDay = (ymd) => `${ymd.slice(8)}.${ymd.slice(5, 7)}.${ymd.slice(2, 4)}`
 
-  const haveSheets = await boss.get('site_files',
-    `select=id&site_id=eq.${site.glenelg.id}&kind=eq.document&selection_id=is.null&waterproofing_package_id=is.null&limit=1`)
-  if (!Array.isArray(haveSheets) || haveSheets.length === 0) {
-    const made = {}
-    for (const [name, isOld] of DRAWINGS) {
-      const filename = `${name.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase()}.pdf`
-      const path = `${companyId}/${site.glenelg.id}/demo-drawing-${filename}`
-      await putObject(path, TINY_PDF, 'application/pdf')
-      const res = await boss.post('site_files', [{
+  // An earlier seed wrote every sheet as the same six-line warranty stub, and
+  // named the reissues "REV A" while making them supersede the Rev B they
+  // replaced. Both are repaired in place: the bytes are re-PUT over the old
+  // object on every run, and any drawing row this list no longer names is
+  // deleted rather than left in the register as a ghost.
+  const sheetRows = {}
+  for (const d of DRAWINGS) {
+    const filename = `${d.name.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase()}.pdf`
+    const path = `${companyId}/${site.glenelg.id}/demo-drawing-${filename}`
+    const bytes = drawingPdf({
+      sheetName: d.name.replace(/ Rev [A-Z]$/, ''),
+      level: `Level ${d.level}`,
+      revision: d.rev,
+      project: SITES.glenelg.name,
+      address: SITES.glenelg.address,
+      revisions: d.rev === 'B'
+        ? [['A', 'Issued for construction', shortDay(adDay(-42))],
+           ['B', 'Wet area setout revised', shortDay(adDay(-6))]]
+        : [['A', 'Issued for construction', shortDay(adDay(-42))]],
+      superseded: replaced.has(d.name),
+    })
+    await putObject(path, bytes, 'application/pdf')
+    sheetRows[d.name] = await ensureRow(boss, 'site_files',
+      `select=id,supersedes&site_id=eq.${site.glenelg.id}&category=eq.drawing&name=eq.${encodeURIComponent(d.name)}&limit=1`,
+      {
         company_id: companyId, site_id: site.glenelg.id, uploaded_by: me.id,
-        kind: 'document', category: 'drawing', storage_path: path, name,
-        mime: 'application/pdf', size_bytes: TINY_PDF.length,
-        version: isOld ? 'A' : 'B',
-      }])
-      if (!res.ok) throw new Error(`drawing insert failed (${name}): HTTP ${res.status} ${await res.text()}`)
-      made[name] = (await body(res))[0]
-    }
-    // The REV A sheets supersede the originals they were reissued from — a
-    // version string on its own cannot tell you something newer exists, so
-    // the newer sheet has to name the one it replaces.
-    for (const [oldName, newName] of [['L03 - Tile layout', 'L03 - Tile layout REV A'],
-                                      ['L07 - Bathroom setout', 'L07 - Bathroom setout REV A']]) {
-      await boss.patch('site_files', `id=eq.${made[newName].id}`, { supersedes: made[oldName].id })
-    }
+        kind: 'document', category: 'drawing', storage_path: path, name: d.name,
+        mime: 'application/pdf', size_bytes: bytes.length, version: d.rev,
+      },
+      `drawing (${d.name})`)
+    // The size on an existing row is the stub's, and the version letter may be
+    // the one the old scheme got backwards.
+    const upd = await boss.patch('site_files', `id=eq.${sheetRows[d.name].id}`,
+      { storage_path: path, size_bytes: bytes.length, version: d.rev, mime: 'application/pdf' })
+    if (!upd.ok) throw new Error(`drawing patch failed (${d.name}): HTTP ${upd.status} ${await upd.text()}`)
+  }
+  // A version string on its own cannot tell you something newer exists, so
+  // the newer sheet has to name the one it replaces.
+  for (const d of DRAWINGS) {
+    if (!d.replaces) continue
+    const older = sheetRows[d.replaces]
+    if (!older || sheetRows[d.name].supersedes === older.id) continue
+    const upd = await boss.patch('site_files', `id=eq.${sheetRows[d.name].id}`, { supersedes: older.id })
+    if (!upd.ok) throw new Error(`supersedes patch failed (${d.name}): HTTP ${upd.status} ${await upd.text()}`)
+  }
+  // Sheets from the old naming scheme, still in the register under a name
+  // nothing issues any more.
+  const ghosts = await boss.get('site_files',
+    `select=id,name&site_id=eq.${site.glenelg.id}&category=eq.drawing`)
+  const keep = new Set(DRAWINGS.map((d) => d.name))
+  for (const row of Array.isArray(ghosts) ? ghosts : []) {
+    if (keep.has(row.name)) continue
+    // A refused delete matches zero rows and reports success, so the rows have
+    // to be read back to know it happened.
+    const gone = await body(await fetch(`${SB}/rest/v1/site_files?id=eq.${row.id}`, {
+      method: 'DELETE', headers: { ...boss.H, Prefer: 'return=representation' },
+    }))
+    if (!Array.isArray(gone) || gone.length === 0) throw new Error(`could not delete stale drawing ${row.name}`)
+    console.log(`  removed stale drawing "${row.name}"`)
   }
 
   // --------------------------------------------------- the builder's programme
@@ -985,10 +1336,27 @@ try {
   for (const [key, revision, issued, received] of PROGRAMMES) {
     const have = await boss.get('programmes',
       `select=id&site_id=eq.${site[key].id}&revision=eq.${encodeURIComponent(revision)}&limit=1`)
-    if (Array.isArray(have) && have.length > 0) continue
     const filename = `kesselman-construction-programme-${revision.toLowerCase().replace(/\s+/g, '-')}.pdf`
     const path = `${companyId}/${site[key].id}/demo-programme-${filename}`
-    await putObject(path, TINY_PDF, 'application/pdf')
+    const bytes = stubPdf(`Construction programme — ${revision}`, [
+      'Kesselman Homes · Lot 42, Kentish Avenue, Prospect',
+      '',
+      `Issued          ${fmtDay(issued)}`,
+      `Received        ${fmtDay(received)}`,
+      '',
+      'Wet area waterproofing        weeks 14 – 15',
+      'Screed and levelling          week 15',
+      'Wall tiling — ensuites        weeks 16 – 17',
+      'Floor tiling — living         weeks 17 – 18',
+      'Grout, seal and clean         week 18',
+      '',
+      'The dates the app works from are the ones on the Programme tab.',
+      'This page stands in for the builder\u2019s own PDF.',
+    ])
+    await putObject(path, bytes, 'application/pdf')
+    // A row from an earlier run points at this same object, so re-PUTting the
+    // bytes above is what repairs it; only a missing row needs inserting.
+    if (Array.isArray(have) && have.length > 0) continue
     const res = await boss.post('programmes', [{
       company_id: companyId, site_id: site[key].id,
       name: 'Construction programme', revision,
@@ -1133,6 +1501,47 @@ try {
     { title: SWMS_TITLE, body: SWMS_BODY, content: SWMS_CONTENT, version: SWMS_VERSION })
   if (!swmsUpd.ok) throw new Error(`SWMS template patch failed: HTTP ${swmsUpd.status} ${await swmsUpd.text()}`)
 
+  // What each shelf's paperwork says, so a reviewer who opens one is reading
+  // the kind of document its title claims.
+  const SAFETY_LINES = {
+    induction: [
+      'Record of site induction and toolbox talks delivered to the crew',
+      'before starting on site.',
+      '',
+      'Covers   site access and parking, exclusion zones, silica dust',
+      '         controls, wet area edge protection, first aid and the',
+      '         emergency assembly point.',
+      '',
+      'Signed by every worker on arrival and held for the life of the job.',
+    ],
+    swms: [
+      'Safe Work Method Statement for tiling and waterproofing.',
+      '',
+      'The live version of this statement is the one the app issues from',
+      'the company template — open it from the Safety tab to read the',
+      'full risk register, controls and sign-on sheet.',
+    ],
+    sds: [
+      'Safety Data Sheet, prepared to the Work Health and Safety',
+      'Regulations and GHS Revision 7.',
+      '',
+      'Hazards        may cause skin and eye irritation',
+      'PPE            gloves, eye protection, P2 respirator when mixing',
+      'First aid      rinse with water, seek medical advice if irritation',
+      '               persists',
+      'Storage        cool and dry, keep from freezing',
+    ],
+    policy: [
+      'Work health and safety policy.',
+      '',
+      'The company is committed to providing a safe workplace for every',
+      'worker, apprentice and subcontractor, and to consulting the crew',
+      'on the things that affect their safety.',
+      '',
+      'Reviewed annually and whenever the work changes.',
+    ],
+  }
+
   // key: null means the document is the company's and shows on every job.
   const SAFETY_DOCS = [
     [null, 'induction', 'Site induction and toolbox talk record', null, 'site-induction-record.pdf'],
@@ -1146,13 +1555,18 @@ try {
     const siteId = key ? site[key].id : null
     const have = await boss.get('safety_documents',
       `select=id&company_id=eq.${companyId}&kind=eq.${kind}&title=eq.${encodeURIComponent(title)}&limit=1`)
-    if (Array.isArray(have) && have.length > 0) continue
     const path = `${companyId}/${siteId ?? 'company'}/demo-safety-${filename}`
-    await putObject(path, TINY_PDF, 'application/pdf')
+    const bytes = stubPdf(title, SAFETY_LINES[kind] ?? [])
+    await putObject(path, bytes, 'application/pdf')
+    if (Array.isArray(have) && have.length > 0) {
+      const upd = await boss.patch('safety_documents', `id=eq.${have[0].id}`, { size_bytes: bytes.length })
+      if (!upd.ok) throw new Error(`safety doc patch failed (${title}): HTTP ${upd.status} ${await upd.text()}`)
+      continue
+    }
     const res = await boss.post('safety_documents', [{
       company_id: companyId, site_id: siteId, kind, title,
       expires_on: expires, storage_path: path, file_name: filename,
-      mime: 'application/pdf', size_bytes: TINY_PDF.length,
+      mime: 'application/pdf', size_bytes: bytes.length,
       created_by: me.id, updated_by: me.id,
       ...(kind === 'swms' ? { document_date: adDay(-14), builder_name: 'Kesselman Homes', version: '3' } : {}),
     }])

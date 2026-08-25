@@ -386,6 +386,10 @@ function SheetViewer({
     void (async () => setUrl(await signedUrl(BUCKET_FILES, sheet.storage_path, 3600)))()
   }, [sheet.storage_path])
 
+  /** Read the mime where there is one, and fall back to the file's own name. */
+  const isPdf =
+    (sheet.mime ?? '').toLowerCase().includes('pdf') || /\.pdf$/i.test(sheet.name ?? '')
+
   const place = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!dropping) return
     const r = e.currentTarget.getBoundingClientRect()
@@ -467,7 +471,29 @@ function SheetViewer({
           justifyContent: 'center',
         }}
       >
-        {url ? (
+        {url && isPdf ? (
+          /*
+           * A drawing office issues PDFs, and every seeded sheet is one. They
+           * were being put in an <img>, which no engine renders — so all
+           * thirty-odd sheets in the register opened on a broken-image icon,
+           * four taps into the app, behind a register that otherwise looks
+           * complete. An iframe is what the rest of the app already uses for a
+           * PDF (see simple/FileViewer.tsx) and what WKWebView renders
+           * natively.
+           *
+           * Pins are deliberately not drawn over it. They are stored as
+           * fractions of the sheet and positioned against the rendered image;
+           * an iframe scrolls and zooms its own document, so a pin placed over
+           * it would point at nothing in particular. A pin in the wrong place
+           * on a drawing is worse than no pin, so this says plainly that they
+           * need a raster sheet instead of quietly misplacing them.
+           */
+          <iframe
+            title={sheet.name}
+            src={url}
+            style={{ display: 'block', width: '100%', height: '100%', border: 0, background: '#fff' }}
+          />
+        ) : url ? (
           <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '100%' }}>
             <img src={url} alt={sheet.name} style={{ display: 'block', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
             {pins.map((p, i) => (
@@ -580,6 +606,17 @@ function SheetViewer({
         </div>
       ) : (
         <div style={{ flex: 'none', padding: '12px 16px 18px' }}>
+          {isPdf ? (
+            /* A pin is stored as a fraction of the sheet and drawn over the
+               rendered image. A PDF renders inside its own scrolling,
+               zooming document, so there is nothing stable to measure a
+               fraction against — offering the button would produce pins that
+               point somewhere other than where they were put. */
+            <span style={{ display: 'block', textAlign: 'center', fontSize: 12.5, lineHeight: 1.5, color: theme.inkFaint }}>
+              Pins go on image sheets. This one is a PDF — mark it up in the drawing itself, or
+              raise it as a defect against the job.
+            </span>
+          ) : (
           <button
             onClick={() => setDropping(true)}
             style={{
@@ -598,6 +635,7 @@ function SheetViewer({
           >
             DROP A PIN
           </button>
+          )}
         </div>
       )}
 
