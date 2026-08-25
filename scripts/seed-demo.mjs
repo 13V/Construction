@@ -234,6 +234,15 @@ try {
     crew[key] = await ensureRow(boss, 'workers', `select=id&company_id=eq.${companyId}&name=eq.${encodeURIComponent(name)}`, {
       company_id: companyId, name, initials, trade, role, is_office: false, active: true,
     }, `crew member (${name})`)
+    // ensureRow matches on the name alone, so somebody already on the books
+    // is left exactly as they were found — including deactivated. The demo is
+    // a live tenant that App Review signs into and pokes, and "Your crew" now
+    // has a Remove button on it; without this, one reviewer tapping Remove
+    // would shrink the demo roster for every reviewer after them, and the
+    // nightly refresh would faithfully preserve the damage. The seeded crew
+    // are restored to what they are meant to be, every night.
+    const restored = await boss.patch('workers', `id=eq.${crew[key].id}`, { active: true, role, trade, initials })
+    if (!restored.ok) throw new Error(`crew restore (${name}): HTTP ${restored.status} ${await restored.text()}`)
     // PATCH, not ensure: schema_v24's backfill trigger creates an empty
     // worker_pay row the moment the worker lands, so "a row exists" proves
     // nothing about the rate being set.
