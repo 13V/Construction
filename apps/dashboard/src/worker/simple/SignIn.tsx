@@ -31,6 +31,39 @@ const labelText = {
   color: '#7B838B',
 } as const
 
+/**
+ * Auth errors arrive as the wire's own wording, which is written for whoever
+ * built the thing rather than whoever is holding the phone.
+ *
+ * "email rate limit exceeded" is the one that matters. It is what a project
+ * without its own mail sender says once it has spent its allowance for the
+ * hour, and it lands on somebody who has done nothing wrong and has never
+ * heard of a rate limit. Left as it arrives it reads like the app is broken,
+ * and the next move is to give up rather than to wait.
+ *
+ * Exported so the wording can be tested on its own — a regex typo here would
+ * quietly put the raw string back in front of a customer.
+ */
+export function readableAuthError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  if (/rate limit|too many requests|over_email_send/i.test(raw)) {
+    return 'Too many accounts have been set up in the last hour. Wait about an hour and try again — nothing you typed was lost, and the address is still free.'
+  }
+  if (/invalid login credentials/i.test(raw)) {
+    return 'That email and password do not match an account. Check for a typo, or set up a new company below.'
+  }
+  if (/email not confirmed/i.test(raw)) {
+    return 'This account has not been confirmed yet. Open the link in the email we sent, then sign in.'
+  }
+  if (/already registered|already been registered/i.test(raw)) {
+    return 'There is already an account on that email. Sign in with it instead, or use a different address.'
+  }
+  if (/failed to fetch|networkerror|load failed/i.test(raw)) {
+    return 'Could not reach Crewline. Check your signal and try again — sites are good at eating reception.'
+  }
+  return raw
+}
+
 export function SimpleSignIn() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
@@ -60,7 +93,7 @@ export function SimpleSignIn() {
       const { error: err } = await supabase().auth.verifyOtp({ type: 'magiclink', token_hash: d.token_hash })
       if (err) throw err
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(readableAuthError(err))
       setDemoBusy(false)
     }
   }
@@ -121,7 +154,7 @@ export function SimpleSignIn() {
       }
       window.location.reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(readableAuthError(err))
     } finally {
       setBusy(false)
     }
