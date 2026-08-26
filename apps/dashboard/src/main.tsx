@@ -54,7 +54,12 @@ const isWorker = workerOnlyBuild || isNativeShell || path === '/worker'
  */
 const isPrivacy = path === '/privacy'
 
+/** Same reasoning as /privacy: Apple opens the Support URL with no account. */
+const isSupport = path === '/support'
+
 const Privacy = lazy(() => import('./legal/Privacy.tsx').then((m) => ({ default: m.Privacy })))
+
+const Support = lazy(() => import('./legal/Support.tsx').then((m) => ({ default: m.Support })))
 
 const WorkerApp = lazy(() => import('./worker/WorkerApp.tsx').then((m) => ({ default: m.WorkerApp })))
 
@@ -125,6 +130,8 @@ const configError = apiConfigError()
 
 const surface = isPrivacy ? (
   <Privacy />
+) : isSupport ? (
+  <Support />
 ) : configError ? (
   <ConfigError message={configError} />
 ) : isWorker ? (
