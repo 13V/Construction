@@ -28,12 +28,28 @@
     - Phone number. The business phone on the company profile, which for a
       sole trader is the owner's own mobile. Declared for that reason rather
       than because the app asks any worker for a number — it does not.
+    - Other user contact info. builder_contacts stores the name, mobile and
+      email of people who never sign in at all: the builder's site supervisor,
+      the contract administrator, accounts. They are third parties whose
+      details the office types in, which is precisely what this data type is
+      for, and it is a separate thing from the account holder's own name and
+      email above.
+    - Physical address. job_sites.address — the street address of every job
+      the company works on. Not the worker's home, but a real address the app
+      stores and shows, so it is declared rather than argued about.
 
-  Three of those were missing from this file until they were checked against
+  Five of those were missing from this file until they were checked against
   the schema rather than against memory. The list here and the answers in App
   Store Connect are the same declaration in two places, and Apple compares
   them — a data type the app plainly collects being absent from one of them is
   a discrepancy waiting to be found.
+
+  Note what is deliberately NOT here. Product interaction is not collected:
+  there is no analytics SDK in this app and no event log in the schema, and
+  the "telemetry" heading in schema.sql is a comment above the positions
+  table, which is precise location and already declared. Emails or text
+  messages is not collected either: the app has in-app chat, which is other
+  user content, and it reads no mail and no SMS.
 
   None of it feeds tracking as Apple defines the term: nothing here is used to
   link the worker's activity to advertising, sold or shared with a data
@@ -114,6 +130,30 @@
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContactInfo</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhysicalAddress</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
