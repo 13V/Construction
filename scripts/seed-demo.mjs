@@ -39,7 +39,7 @@
  * demo PASSWORD is the one exception — it is meant to be handed to Apple.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 
 function fromEnvFile(key) {
   try {
@@ -68,6 +68,28 @@ const PROJECT = SB.replace(/^https:\/\//, '').split('.')[0]
 if (!ANON || !PAT) {
   console.error('Need SUPABASE_ANON_KEY and SUPABASE_PAT — in the environment, or in apps/dashboard/.env.local.')
   process.exit(2)
+}
+
+/**
+ * Hold the reseed while the app is in front of App Review.
+ *
+ * This script is not read-only. It closes every open shift on a site
+ * (`ended_at=is.null` -> now) and re-anchors the whole world onto today, so a
+ * reviewer signed into the demo account sees jobs, dates and open shifts
+ * change between one session and the next, with nobody touching the phone.
+ *
+ * That is indistinguishable, from Apple's side of the glass, from a developer
+ * altering what the reviewer can see — which is what guideline 5.6 is about.
+ * Version 1.0 was rejected under 5.6 the day after this ran against the very
+ * account named in the review notes.
+ *
+ * Delete scripts/.review-hold to resume. Do that only once the app is
+ * approved, or once review is using an account this script does not touch.
+ */
+if (existsSync(new URL('./.review-hold', import.meta.url))) {
+  console.log('Reseed held: scripts/.review-hold exists (app is in App Review).')
+  console.log('The demo world is deliberately frozen. Delete that file to resume.')
+  process.exit(0)
 }
 
 const DEMO_EMAIL = process.env.DEMO_EMAIL ?? 'appreview@crewline.app'

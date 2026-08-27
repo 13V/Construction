@@ -1,0 +1,8 @@
+Held while Proven - For Tilers 1.0 is in App Review.
+
+The reseed rewrites the demo account that App Review signs into: it closes
+open shifts and moves every date onto today. Running it mid-review makes the
+app look like it changes under the reviewer, which is how 1.0 drew a 5.6.
+
+Delete this file once the app is approved, or once review has its own account
+that scripts/seed-demo.mjs never touches.
