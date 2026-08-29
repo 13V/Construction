@@ -225,6 +225,31 @@ or a field worker's colleague's raw location to someone who isn't office
 staff. Location is only ever written for the account making the request —
 a worker's phone can insert its own position and nothing else.
 
+### 8.1 The outside services the app talks to
+
+Three services outside Crewline receive something, and it is worth being
+precise about what reaches each one.
+
+**Map images come from OpenFreeMap.** When you open the map to place a job
+site's boundary, your phone asks that service for the map tiles covering that
+area. The request says which part of the world is on screen. It carries no
+account, no name, and none of your recorded location history — the map you are
+looking at is not the same thing as where you are.
+
+**Address lookup uses OpenStreetMap's geocoder.** When you tap to find a job's
+address on the map, the address you typed is sent to it to be turned into
+coordinates. It is sent by Crewline's own server rather than by your phone, so
+your device and your session are never exposed to it, and nothing travels with
+the address but the address.
+
+**Reading a receipt or a programme uses Anthropic's Claude API.** When you
+photograph a receipt so the app can fill in the supplier and the amount, that
+image is sent there to be read. The same applies to a builder's programme you
+upload, and — when the app drafts a daily log for you — to the crew names,
+hours and photo captions for that day. It is used to read the document and
+nothing else: not to train a model, and not kept afterwards. Every one of those
+features is optional; the same fields can be typed by hand.
+
 ## 9. Australian Privacy Principles
 
 Crewline is designed to meet the Australian Privacy Principles under the
