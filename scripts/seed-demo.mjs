@@ -86,16 +86,19 @@ if (!ANON || !PAT) {
  * Delete scripts/.review-hold to resume. Do that only once the app is
  * approved, or once review is using an account this script does not touch.
  */
-if (existsSync(new URL('./.review-hold', import.meta.url))) {
+if (existsSync(new URL('./.review-hold', import.meta.url)) && !process.env.SEED_NEW_TENANT) {
   console.log('Reseed held: scripts/.review-hold exists (app is in App Review).')
   console.log('The demo world is deliberately frozen. Delete that file to resume.')
+  console.log('To build a brand new tenant instead, set SEED_NEW_TENANT=1 with')
+  console.log('DEMO_EMAIL, DEMO_PASSWORD and COMPANY_NAME — that writes somewhere else.')
   process.exit(0)
 }
 
 const DEMO_EMAIL = process.env.DEMO_EMAIL ?? 'appreview@crewline.app'
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'Crewline-Review-2026!'
-const COMPANY_NAME = 'Semaphore Tiling & Waterproofing'
-const OWNER_NAME = 'Marnie Sutcliffe'
+const COMPANY_NAME = process.env.COMPANY_NAME ?? 'Semaphore Tiling & Waterproofing'
+const OWNER_NAME = process.env.OWNER_NAME ?? 'Marnie Sutcliffe'
+const LEGAL_NAME = process.env.LEGAL_NAME ?? 'Semaphore Trades Pty. Ltd.'
 
 const body = async (r) => {
   const t = await r.text()
@@ -220,7 +223,7 @@ try {
   // there — printing a live licence number on a made-up business's compliance
   // certificate would be a false record, whoever is reading it.
   const identity = {
-    legal_name: 'Semaphore Trades Pty. Ltd.',
+    legal_name: LEGAL_NAME,
     // 51 824 753 556 passes the ATO's checksum, which the Business details
     // screen now checks — the old placeholder did not, so the demo showed
     // itself an invalid-ABN warning. This is the ATO's own documentation
