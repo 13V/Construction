@@ -18,6 +18,7 @@ import { BUCKET_FILES, BUCKET_RECEIPTS, objectPath, signedUrl, uploadFile } from
 import { DWELL_IN_MS, type DwellPhase } from '../geofence/dwell'
 import { distanceM } from '../geofence/geo'
 import { backend, backendNote, startWatching, type LocationWatch } from './location'
+import { LoneWorkerCard } from './LoneWorker'
 import { clockTime, dayDate, shortDate } from '../format'
 import { DailyLogScreen } from './DailyLogScreen'
 import { useSites } from './useSites'
@@ -539,6 +540,7 @@ function Tracker({ me }: { me: WorkerRow }) {
               since={phase.kind === 'onsite' || phase.kind === 'departing' ? phase.since : tick}
               elapsedMs={elapsed}
               onOpenPanel={(k) => setScreen(k)}
+              loneWorkerFix={() => (fix ? { lat: fix.pos.lat, lng: fix.pos.lng, accuracyM: fix.accuracyM } : null)}
               clockOutConfirm={clockOutConfirm}
               onClockOutTap={() => setClockOutConfirm(true)}
               onClockOutCancel={() => setClockOutConfirm(false)}
@@ -1626,6 +1628,7 @@ function OnClockScreen({
   since,
   elapsedMs,
   onOpenPanel,
+  loneWorkerFix,
   clockOutConfirm,
   onClockOutTap,
   onClockOutCancel,
@@ -1636,6 +1639,7 @@ function OnClockScreen({
   since: number
   elapsedMs: number
   onOpenPanel: (s: PanelScreen) => void
+  loneWorkerFix: () => { lat: number; lng: number; accuracyM: number | null } | null
   clockOutConfirm: boolean
   onClockOutTap: () => void
   onClockOutCancel: () => void
@@ -1684,6 +1688,8 @@ function OnClockScreen({
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <ActionGrid onOpen={onOpenPanel} />
+
+        <LoneWorkerCard siteId={site.id} getFix={loneWorkerFix} />
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '4px 20px 0', borderTop: `1px solid ${theme.border}`, overflowY: 'auto' }}>
           <span style={{ padding: '14px 0 10px', ...sectionLabel }}>TODAY'S TIMELINE</span>

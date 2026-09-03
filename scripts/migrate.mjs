@@ -57,6 +57,7 @@ const MIGRATIONS = [
   { file: 'schema_v33.sql', proves: ['job_sites.starts_on', 'job_sites.ends_on'] },
   { file: 'schema_v34.sql', proves: ['shifts_read_v34', 'channels_dm_create', 'channel_members_dm_join'] },
   { file: 'schema_v35.sql', proves: ['safety_documents.content'] },
+  { file: 'schema_v36.sql', proves: ['lone_worker_sessions', 'lone_worker_events', 'lone_worker_sessions_read'] },
 ]
 
 // ------------------------------------------------------------- credentials
