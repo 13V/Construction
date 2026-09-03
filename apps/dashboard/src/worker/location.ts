@@ -60,9 +60,7 @@ export function backend(): Backend {
 export function backendNote(): string {
   switch (backend()) {
     case 'web':
-      return regionMonitoringAvailable()
-        ? 'Arriving at a site clocks you on even with the app closed. While it is open, your position updates as you move.'
-        : 'In a browser, tracking pauses when your phone locks. Install the app to be clocked on without keeping this open.'
+      return 'Your location is read only while this app is open. Clock on when you reach a site and clock off when you leave.'
     default:
       return 'This device has no location services.'
   }
@@ -111,59 +109,4 @@ export async function startWatching(
    * running at all. See armRegions below.
    */
   return startWeb(onFix, onError)
-}
-
-/**
- * Hand the job sites to iOS so it can watch the boundaries itself.
- *
- * This is what replaced the location background mode. iOS monitors the
- * regions in the system, wakes the app when one is crossed, and the native
- * side (SiteGeofencePlugin.swift) reports the crossing to /api/ping without
- * needing this JavaScript to be alive — which it will not be, because the
- * app will have been terminated.
- *
- * A no-op in a browser and in any build where the plugin is not registered.
- * Failing loudly here would put an error in front of a worker about something
- * they cannot act on; the foreground watcher above is what records hours
- * while the app is open either way.
- */
-export interface RegionSite {
-  id: string
-  lat: number
-  lng: number
-  radiusM: number
-}
-
-interface GeofencePlugin {
-  requestAlways(): Promise<{ granted: boolean }>
-  setCredentials(o: { apiBase: string; supabaseUrl: string; anonKey: string; refreshToken: string }): Promise<void>
-  setRegions(o: { sites: RegionSite[] }): Promise<{ monitoring: number }>
-  monitored(): Promise<{ count: number; ids: string[] }>
-  clear(): Promise<void>
-}
-
-function geofence(): GeofencePlugin | null {
-  const plugins = (globalThis as { Capacitor?: { Plugins?: Record<string, unknown> } }).Capacitor?.Plugins
-  const api = plugins?.SiteGeofence as GeofencePlugin | undefined
-  return api && typeof api.setRegions === 'function' ? api : null
-}
-
-export function regionMonitoringAvailable(): boolean {
-  return geofence() !== null
-}
-
-export async function armRegions(
-  sites: RegionSite[],
-  credentials: { apiBase: string; supabaseUrl: string; anonKey: string; refreshToken: string },
-): Promise<number> {
-  const api = geofence()
-  if (!api) return 0
-  await api.requestAlways().catch(() => ({ granted: false }))
-  await api.setCredentials(credentials)
-  const { monitoring } = await api.setRegions({ sites })
-  return monitoring
-}
-
-export async function disarmRegions(): Promise<void> {
-  await geofence()?.clear()
 }

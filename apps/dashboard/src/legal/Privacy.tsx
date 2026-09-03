@@ -5,7 +5,8 @@ import { Panel, PanelHead, Note, LABEL } from '../ui/kit'
 /**
  * Renders PRIVACY.md (repo root) for the app itself — Apple requires a
  * privacy policy URL for every listing, and this one covers an app that
- * records precise location roughly every 20 seconds while tracking is on.
+ * records precise location roughly every 20 seconds while tracking is on and
+ * the app is open. It has no background location access.
  *
  * The two files are meant to stay identical in substance. This is not a
  * markdown renderer pointed at that file — there is no fetch, no build step
@@ -143,10 +144,10 @@ export function Privacy() {
           <div style={{ padding: '13px 15px' }}>
             <Ul>
               <Li>
-                While location tracking is switched on in the app, your phone reports your precise
-                GPS position roughly <strong>every 20 seconds</strong> — including while
-                you&rsquo;re driving to a job, before you&rsquo;ve clocked on, and on the drive
-                home.
+                While location tracking is switched on <strong>and the app is open</strong>, your
+                phone reports your precise GPS position roughly every 20 seconds. Closing the app,
+                or locking your phone, stops it — nothing is recorded while Crewline is in the
+                background or shut.
               </Li>
               <Li>
                 Your office staff (the people who run your company&rsquo;s Crewline account) can
@@ -194,9 +195,11 @@ export function Privacy() {
         <Section id="collect" title="2. What Crewline collects">
           <H3>2.1 Precise location — the sensitive part</H3>
           <P>
-            When you turn tracking on in the worker app, your phone sends your GPS coordinates to
-            Crewline&rsquo;s server about every 20 seconds, for as long as tracking stays on. Each
-            report (&ldquo;ping&rdquo;) includes:
+            When you turn tracking on and have the worker app open, your phone sends your GPS
+            coordinates to Crewline&rsquo;s server about every 20 seconds. It stops the moment the
+            app is closed or the screen locks: Crewline has no background location access at all,
+            so it cannot record where you are when you are not looking at it. Each report
+            (&ldquo;ping&rdquo;) includes:
           </P>
           <Ul>
             <Li>latitude and longitude, to full GPS precision</Li>
@@ -219,13 +222,12 @@ export function Privacy() {
           </P>
           <P>
             Each report is matched against your company&rsquo;s job site boundaries by the server.
-            If you stay inside a site&rsquo;s boundary for two minutes, you&rsquo;re clocked in
-            automatically; driving past one doesn&rsquo;t count. Leaving a site&rsquo;s boundary
-            starts a similar timer before you&rsquo;re clocked out, so a trip to the truck for a
-            tool doesn&rsquo;t end your shift. You can also tap &ldquo;Clock in manually&rdquo;
-            while you&rsquo;re standing inside a site — this sends the same kind of location
-            report, flagged as a deliberate request, and is still refused if you&rsquo;re not
-            actually inside the boundary.
+            With the app open, staying inside a boundary for two minutes clocks you in, and leaving
+            it starts a similar timer before you are clocked out, so a trip to the truck for a tool
+            doesn&rsquo;t end your shift. Because none of this runs in the background, the usual
+            way to start and end a shift is to tap &ldquo;Clock in manually&rdquo; when you arrive
+            and &ldquo;End my shift now&rdquo; when you leave. Both send a location report the
+            server checks: clocking in is refused if you are not actually inside the boundary.
           </P>
 
           <H3>2.2 What&rsquo;s built from that location</H3>
@@ -321,8 +323,8 @@ export function Privacy() {
           </P>
           <P>
             <strong>Raw location pings are deleted after 3 days.</strong> The twenty-second
-            breadcrumb trail — every coordinate, whether you were on a site or driving between
-            them — is automatically removed once it is three days old. It exists to draw the live
+            breadcrumb trail — every coordinate reported while the app was open, whether you were
+            on a site or between them — is automatically removed once it is three days old. It exists to draw the live
             map and to work out when you arrived and left; once the shift it produced has been
             written, the trail itself has done its job. Nobody has to ask for this and nobody can
             switch it off.
@@ -442,7 +444,7 @@ export function Privacy() {
             purposes can, in some circumstances, sit outside the Act under the employee records
             exemption — Crewline does not rely on that exemption as a reason to say less here.
             Whether or not the exemption technically applies to a given business, the workers whose
-            location this app records every 20 seconds are entitled to know exactly what is
+            location this app records while it is open are entitled to know exactly what is
             collected, who sees it, and how long it&rsquo;s kept, and that is what this document
             sets out to do.
           </P>

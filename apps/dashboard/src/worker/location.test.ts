@@ -5,16 +5,15 @@ import { backend, backendNote, startWatching } from './location'
  * What this file guards has inverted, and the reason is worth recording.
  *
  * It used to assert that a native background watcher starts, because
- * background location was the whole argument for shipping a binary. App
- * Review rejected 1.0 under guideline 2.5.4 — an app may not declare the
- * location background mode when tracking employees is its only use for it —
- * so the mode, the plugin and that watcher are gone. iOS region monitoring
- * replaced them: the system watches the boundaries and wakes the app, and
- * SiteGeofencePlugin.swift reports the crossing without this code running.
+ * background location was the whole argument for shipping a binary. Two
+ * rejections later — 2.5.4 for declaring the location background mode with
+ * employee tracking as its only use, then 5.6 when a native region-monitoring
+ * plugin was offered in its place — the app reads location only while it is
+ * open, and only to check a worker is at the site when they clock on or off.
  *
- * So the invariant now is the opposite one: reaching for a background watcher
- * again, even behind a bridge check that looks harmless, is what would put
- * the app back in front of the same guideline.
+ * So the invariant now is the opposite one: reaching for any background
+ * location path again, however it is dressed, is what put this app in front
+ * of App Review four times.
  *
  * The second thing tested here has not changed and never should: the app must
  * not tell a worker their hours are being recorded when they are not. A
@@ -68,7 +67,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('background location', () => {
+describe('location, and what the app claims about it', () => {
   it('never starts a native background watcher, even when one is offered', async () => {
     // A registered BackgroundGeolocation plugin must not tempt it. Using one
     // is what requires UIBackgroundModes, and that key is what App Review
@@ -84,25 +83,15 @@ describe('background location', () => {
     watch.stop()
   })
 
-  it('never claims tracking survives a locked screen on its own', async () => {
-    // Without region monitoring registered, the honest answer is that closing
-    // the app stops it — the old "keeps running with your screen off" line
-    // would now be a lie that costs a worker their hours.
+  it('never claims location keeps working once the app is closed', async () => {
+    // It does not, on a phone or in a browser. The app reads location only
+    // while it is open, and a worker who believes otherwise loses hours.
     shell({ native: true, bridged: true })
     expect(backend()).toBe('web')
     expect(backendNote()).not.toMatch(/screen off/i)
-    expect(backendNote()).toMatch(/pauses when your phone locks/i)
+    expect(backendNote()).toMatch(/only while this app is open/i)
   })
 
-  it('promises clock-on with the app closed only when iOS is watching the boundary', async () => {
-    const counts = shell({ native: true, bridged: true, regions: true })
-    expect(backendNote()).toMatch(/even with the app closed/i)
-    // Still the browser watcher in the foreground; region monitoring is the
-    // background half, not a replacement for it.
-    await startWatching(() => {}, () => {})
-    expect(counts.webWatchCalls).toBe(1)
-    expect(counts.addWatcherCalls).toBe(0)
-  })
 
   it('uses the browser watcher in a browser, without pretending otherwise', async () => {
     const counts = shell({ native: false, bridged: false })
@@ -110,6 +99,6 @@ describe('background location', () => {
     expect(counts.addWatcherCalls).toBe(0)
     expect(counts.webWatchCalls).toBe(1)
     expect(backend()).toBe('web')
-    expect(backendNote()).toMatch(/pauses when your phone locks/i)
+    expect(backendNote()).toMatch(/only while this app is open/i)
   })
 })

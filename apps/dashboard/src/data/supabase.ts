@@ -5,15 +5,6 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
 export const supabaseConfigured = Boolean(url && anonKey)
 
-/**
- * The project URL and anon key, for the one caller that cannot use the JS
- * client: the native region-monitoring plugin refreshes its own token in
- * Swift, in a process woken with no web view, so it has to be handed these.
- */
-export function supabaseConfig(): { url: string; anonKey: string } {
-  if (!url || !anonKey) throw new Error('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required')
-  return { url, anonKey }
-}
 
 let client: SupabaseClient | null = null
 

@@ -18,9 +18,10 @@ this policy.
 
 ## 1. The short version
 
-- While location tracking is switched on in the app, your phone reports your
-  precise GPS position roughly **every 20 seconds** — including while you're
-  driving to a job, before you've clocked on, and on the drive home.
+- While location tracking is switched on **and the app is open**, your phone
+  reports your precise GPS position roughly every 20 seconds. Closing the app,
+  or locking your phone, stops it — nothing is recorded while Crewline is in
+  the background or shut.
 - Your office staff (the people who run your company's Crewline account) can
   see that location trail on a live map, for as long as it's kept.
 - Location is what starts and stops your paid shift automatically: you don't
@@ -55,9 +56,11 @@ also covers what office staff can see and do with that data.
 
 ### 3.1 Precise location — the sensitive part
 
-When you turn tracking on in the worker app, your phone sends your GPS
-coordinates to Crewline's server about every 20 seconds, for as long as
-tracking stays on. Each report ("ping") includes:
+When you turn tracking on and have the worker app open, your phone sends your
+GPS coordinates to Crewline's server about every 20 seconds. It stops the
+moment the app is closed or the screen locks: Crewline has no background
+location access at all, so it cannot record where you are when you are not
+looking at it. Each report ("ping") includes:
 
 - latitude and longitude, to full GPS precision
 - the GPS accuracy radius reported by your phone, in metres
@@ -78,13 +81,13 @@ tapping it opens the app. In a browser, tracking stops the moment your
 screen locks or you switch apps.
 
 Each report is matched against your company's job site boundaries by the
-server. If you stay inside a site's boundary for two minutes, you're clocked
-in automatically; driving past one doesn't count. Leaving a site's boundary
-starts a similar timer before you're clocked out, so a trip to the truck for
-a tool doesn't end your shift. You can also tap "Clock in manually" while
-you're standing inside a site — this sends the same kind of location report,
-flagged as a deliberate request, and is still refused if you're not actually
-inside the boundary.
+server. With the app open, staying inside a boundary for two minutes clocks
+you in, and leaving it starts a similar timer before you're clocked out, so a
+trip to the truck for a tool doesn't end your shift. Because none of this runs
+in the background, the usual way to start and end a shift is to tap "Clock in
+manually" when you arrive and "End my shift now" when you leave. Both send a
+location report the server checks: clocking in is refused if you're not
+actually inside the boundary.
 
 ### 3.2 What's built from that location
 
@@ -158,7 +161,7 @@ Different things are kept for very different lengths of time, and the
 difference matters most for the data that is most sensitive.
 
 **Raw location pings are deleted after 3 days.** The twenty-second breadcrumb
-trail — every coordinate, whether you were on a site or driving between them —
+trail — every coordinate reported while the app was open, on a site or not —
 is automatically removed once it is three days old. It exists to draw the live
 map and to work out when you arrived and left; once the shift it produced has
 been written, the trail itself has done its job. Nobody has to ask for this and
@@ -258,7 +261,7 @@ employment purposes can, in some circumstances, sit outside the Act under
 the employee records exemption — Crewline does not rely on that exemption
 as a reason to say less here. Whether or not the exemption technically
 applies to a given business, the workers whose location this app records
-every 20 seconds are entitled to know exactly what is collected, who sees
+while it is open are entitled to know exactly what is collected, who sees
 it, and how long it's kept, and that is what this document sets out to do.
 
 If you believe your location or personal information has been mishandled,

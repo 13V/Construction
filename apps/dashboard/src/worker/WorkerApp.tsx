@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { useSession } from '../auth/useSession'
 import { api } from '../data/api'
 import { DeleteAccount } from './DeleteAccount'
-import { supabase, supabaseConfig, supabaseConfigured } from '../data/supabase'
+import { supabase, supabaseConfigured } from '../data/supabase'
 import type {
   AssignmentRow,
   ChannelRow,
@@ -17,8 +17,7 @@ import type {
 import { BUCKET_FILES, BUCKET_RECEIPTS, objectPath, signedUrl, uploadFile } from '../data/storage'
 import { DWELL_IN_MS, type DwellPhase } from '../geofence/dwell'
 import { distanceM } from '../geofence/geo'
-import { backend, backendNote, startWatching, type LocationWatch, armRegions } from './location'
-import { LoneWorkerCard } from './LoneWorker'
+import { backend, backendNote, startWatching, type LocationWatch } from './location'
 import { clockTime, dayDate, shortDate } from '../format'
 import { DailyLogScreen } from './DailyLogScreen'
 import { useSites } from './useSites'
@@ -302,33 +301,6 @@ function Tracker({ me }: { me: WorkerRow }) {
     }
   }, [tracking, onFix])
 
-  /**
-   * Hand the site boundaries to iOS once tracking is on.
-   *
-   * This is what does the work when the app is closed. The foreground watcher
-   * above only reports while somebody is looking at the screen; region
-   * monitoring is watched by the system, and the native side reports the
-   * crossing itself. A no-op in a browser.
-   */
-  useEffect(() => {
-    if (!tracking || sites.length === 0) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const { data } = await supabase().auth.getSession()
-        const refreshToken = data.session?.refresh_token
-        if (!refreshToken || cancelled) return
-        const cfg = supabaseConfig()
-        await armRegions(
-          sites.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng, radiusM: s.radiusM })),
-          { apiBase: api('/').replace(/\/$/, ''), supabaseUrl: cfg.url, anonKey: cfg.anonKey, refreshToken },
-        )
-      } catch {
-        // Nothing a worker can act on, and the foreground watcher still runs.
-      }
-    })()
-    return () => { cancelled = true }
-  }, [tracking, sites])
 
   // "Clock in manually" is not a client-side clock — RLS and the
   // shifts_worker_guard trigger refuse a direct insert, correctly, because a
@@ -602,7 +574,6 @@ function Tracker({ me }: { me: WorkerRow }) {
               since={phase.kind === 'onsite' || phase.kind === 'departing' ? phase.since : tick}
               elapsedMs={elapsed}
               onOpenPanel={(k) => setScreen(k)}
-              loneWorkerFix={() => (fix ? { lat: fix.pos.lat, lng: fix.pos.lng, accuracyM: fix.accuracyM } : null)}
               clockOutConfirm={clockOutConfirm}
               onClockOutTap={() => setClockOutConfirm(true)}
               onClockOutCancel={() => setClockOutConfirm(false)}
@@ -1389,8 +1360,8 @@ function GateScreen({
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 20px 20px', overflowY: 'auto' }}>
         <Callout>
-          Turn on tracking and you'll be clocked in <b style={{ fontWeight: 700 }}>automatically</b> when you reach a
-          job site.
+          Turn this on, then clock on when you reach a job site — the app checks you are
+          <b style={{ fontWeight: 700 }}> actually there</b> before your hours start.
         </Callout>
 
         <div style={{ marginTop: 18 }}>
@@ -1400,9 +1371,8 @@ function GateScreen({
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <span style={{ fontSize: 13, color: design.faint, lineHeight: 1.45 }}>
-            Nothing is recorded until you tap this. Tracking then keeps using GPS in the background so
-            your hours record with the phone in your pocket, which can dramatically decrease battery
-            life.
+            Nothing is recorded until you tap this. Your location is then read while this app is open,
+            so it can check you are at the job site when you clock on and when you clock off.
           </span>
           <button onClick={onStart} style={ctaYellow(56)}>
             START TRACKING
@@ -1450,7 +1420,7 @@ function ApproachingScreen({
               <span style={{ fontSize: 15, color: theme.inkSoft }}>{distanceLabel}</span>
             </div>
             <Callout>
-              You'll clock in <b style={{ fontWeight: 700 }}>automatically</b> when you arrive.
+              Clock on once you're there — the app checks you're <b style={{ fontWeight: 700 }}>inside the site</b> first.
             </Callout>
           </>
         ) : (
@@ -1691,7 +1661,6 @@ function OnClockScreen({
   since,
   elapsedMs,
   onOpenPanel,
-  loneWorkerFix,
   clockOutConfirm,
   onClockOutTap,
   onClockOutCancel,
@@ -1703,7 +1672,6 @@ function OnClockScreen({
   since: number
   elapsedMs: number
   onOpenPanel: (s: PanelScreen) => void
-  loneWorkerFix: () => { lat: number; lng: number; accuracyM: number | null } | null
   clockOutConfirm: boolean
   onClockOutTap: () => void
   onClockOutCancel: () => void
@@ -1754,7 +1722,6 @@ function OnClockScreen({
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <ActionGrid onOpen={onOpenPanel} />
 
-        <LoneWorkerCard siteId={site.id} getFix={loneWorkerFix} />
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '4px 20px 0', borderTop: `1px solid ${theme.border}`, overflowY: 'auto' }}>
           <span style={{ padding: '14px 0 10px', ...sectionLabel }}>TODAY'S TIMELINE</span>
