@@ -77,7 +77,7 @@ export function LoneWorkerCard({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
-  const [interval, setIntervalMin] = useState(30)
+  const [interval, setIntervalMin] = useState(60)
   const mounted = useRef(true)
 
   const call = useCallback(async (action: Action, extra: Record<string, unknown> = {}) => {
@@ -134,13 +134,14 @@ export function LoneWorkerCard({
         <div style={row}>
           <span style={title}>Working on your own?</span>
           <span style={sub}>
-            Turn this on and the app will check you're all right every so often. Miss a check-in and the
-            office is told, with where you were last seen.
+            Only if you want it. Turn it on and the app asks once an hour whether you're all right —
+            miss one and the office is told, with where you were last seen. Nothing asks you anything
+            unless you switch this on, and it stops the moment you say you're not on your own.
           </span>
         </div>
         <div style={{ padding: '0 15px 13px', display: 'flex', flexDirection: 'column', gap: 9 }}>
           <div style={{ display: 'flex', gap: 7 }}>
-            {[15, 30, 60].map((m) => (
+            {[30, 60, 120].map((m) => (
               <button
                 key={m}
                 onClick={() => setIntervalMin(m)}

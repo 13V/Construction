@@ -169,7 +169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const existing = await openSession()
       if (existing) return res.status(409).json({ error: 'You already have a lone worker session running.' })
 
-      const intervalMin = clampInt(body.intervalMin, 5, 240, 30)
+      const intervalMin = clampInt(body.intervalMin, 5, 240, 60)
       const graceMin = clampInt(body.graceMin, 1, 60, 5)
       const { data, error } = await db
         .from('lone_worker_sessions')
