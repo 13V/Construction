@@ -60,7 +60,9 @@ export function backend(): Backend {
 export function backendNote(): string {
   switch (backend()) {
     case 'web':
-      return 'Your location is read only while this app is open. Clock on when you reach a site and clock off when you leave.'
+      return arrivalRemindersAvailable()
+        ? 'Your position is read while this app is open. With it closed, your phone still tells you when you reach a site so you can clock on.'
+        : 'Your location is read only while this app is open. Clock on when you reach a site and clock off when you leave.'
     default:
       return 'This device has no location services.'
   }
@@ -109,4 +111,57 @@ export async function startWatching(
    * running at all. See armRegions below.
    */
   return startWeb(onFix, onError)
+}
+
+/**
+ * Arrival reminders.
+ *
+ * Hands the job sites to iOS so it can watch the boundaries and tell the
+ * worker when they reach one. That is the whole of it: the native side
+ * (SiteArrivalPlugin.swift) raises a local notification and nothing else — no
+ * network call, no credentials, no position leaving the phone. The worker taps
+ * the notification, the app opens, and they clock on through the same
+ * server-checked path they always have.
+ *
+ * A no-op in a browser and in any build without the plugin registered.
+ * Reminders are a convenience; losing them must never look like an error a
+ * worker has to act on.
+ */
+export interface ArrivalSite {
+  id: string
+  name: string
+  lat: number
+  lng: number
+  radiusM: number
+}
+
+interface ArrivalPlugin {
+  requestPermissions(): Promise<{ granted: boolean }>
+  setSites(o: { sites: ArrivalSite[] }): Promise<{ monitoring: number }>
+  monitored(): Promise<{ count: number }>
+  clear(): Promise<void>
+}
+
+function arrivals(): ArrivalPlugin | null {
+  const plugins = (globalThis as { Capacitor?: { Plugins?: Record<string, unknown> } }).Capacitor?.Plugins
+  const api = plugins?.SiteArrival as ArrivalPlugin | undefined
+  return api && typeof api.setSites === 'function' ? api : null
+}
+
+export function arrivalRemindersAvailable(): boolean {
+  return arrivals() !== null
+}
+
+/** Returns how many sites iOS is watching, or 0 where reminders aren't available. */
+export async function armArrivalReminders(sites: ArrivalSite[]): Promise<number> {
+  const api = arrivals()
+  if (!api) return 0
+  const { granted } = await api.requestPermissions().catch(() => ({ granted: false }))
+  if (!granted) return 0
+  const { monitoring } = await api.setSites({ sites })
+  return monitoring
+}
+
+export async function clearArrivalReminders(): Promise<void> {
+  await arrivals()?.clear()
 }

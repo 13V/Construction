@@ -80,6 +80,8 @@
 	  A vague one gets declined, and a declined permission means a worker's
 	  hours silently stop being recorded.
 	-->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Crewline can remind you to clock on when you reach a job site, and to clock off when you leave, so you do not lose hours you worked. Choose "Always" and the reminder still arrives with the app closed. The reminder is made on your phone: your location is never sent anywhere in the background, and you are the one who clocks on.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Crewline checks you are at the job site when you clock on or off. It reads your location only while the app is open.</string>
 

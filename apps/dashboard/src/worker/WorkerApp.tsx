@@ -17,7 +17,7 @@ import type {
 import { BUCKET_FILES, BUCKET_RECEIPTS, objectPath, signedUrl, uploadFile } from '../data/storage'
 import { DWELL_IN_MS, type DwellPhase } from '../geofence/dwell'
 import { distanceM } from '../geofence/geo'
-import { backend, backendNote, startWatching, type LocationWatch } from './location'
+import { backend, backendNote, startWatching, type LocationWatch, armArrivalReminders } from './location'
 import { clockTime, dayDate, shortDate } from '../format'
 import { DailyLogScreen } from './DailyLogScreen'
 import { useSites } from './useSites'
@@ -300,6 +300,21 @@ function Tracker({ me }: { me: WorkerRow }) {
       watch?.stop()
     }
   }, [tracking, onFix])
+
+  /**
+   * Ask iOS to watch the site boundaries and tell the worker when they reach
+   * one. The notification is raised on the phone; nothing is reported from
+   * the background. Tapping it opens the app, where they clock on themselves.
+   *
+   * A no-op in a browser. Reminders are a convenience, and failing to arm
+   * them must never surface as an error a worker is expected to act on.
+   */
+  useEffect(() => {
+    if (!tracking || sites.length === 0) return
+    void armArrivalReminders(
+      sites.map((s) => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, radiusM: s.radiusM })),
+    ).catch(() => {})
+  }, [tracking, sites])
 
 
   // "Clock in manually" is not a client-side clock — RLS and the

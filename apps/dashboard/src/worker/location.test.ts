@@ -48,7 +48,9 @@ function shell(opts: { native: boolean; bridged: boolean; regions?: boolean }): 
     // old code was permanently in, because it never looked here at all.
     Plugins: {
       ...(opts.bridged ? { BackgroundGeolocation: plugin } : {}),
-      ...(opts.regions ? { SiteGeofence: { setRegions: async () => ({ monitoring: 1 }) } } : {}),
+      ...(opts.regions
+        ? { SiteArrival: { setSites: async () => ({ monitoring: 1 }), requestPermissions: async () => ({ granted: true }) } }
+        : {}),
     },
   })
   vi.stubGlobal('navigator', {
@@ -92,6 +94,22 @@ describe('location, and what the app claims about it', () => {
     expect(backendNote()).toMatch(/only while this app is open/i)
   })
 
+
+  it('offers a reminder when iOS is watching, and never claims background recording', async () => {
+    // The distinction this whole feature rests on. Region monitoring is
+    // allowed to tell a worker they have arrived; it is not allowed to record
+    // where they are. Saying the second when we mean the first is both a lie
+    // to the worker and the claim that drew 2.5.4.
+    const counts = shell({ native: true, bridged: true, regions: true })
+    const note = backendNote()
+    expect(note).toMatch(/tells you when you reach a site/i)
+    expect(note).not.toMatch(/records|tracking keeps|screen off/i)
+
+    // And it is still the browser watcher doing the foreground work.
+    await startWatching(() => {}, () => {})
+    expect(counts.webWatchCalls).toBe(1)
+    expect(counts.addWatcherCalls).toBe(0)
+  })
 
   it('uses the browser watcher in a browser, without pretending otherwise', async () => {
     const counts = shell({ native: false, bridged: false })
