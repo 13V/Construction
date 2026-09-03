@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { useSession } from '../auth/useSession'
 import { api } from '../data/api'
 import { DeleteAccount } from './DeleteAccount'
-import { supabase, supabaseConfigured } from '../data/supabase'
+import { supabase, supabaseConfig, supabaseConfigured } from '../data/supabase'
 import type {
   AssignmentRow,
   ChannelRow,
@@ -17,7 +17,7 @@ import type {
 import { BUCKET_FILES, BUCKET_RECEIPTS, objectPath, signedUrl, uploadFile } from '../data/storage'
 import { DWELL_IN_MS, type DwellPhase } from '../geofence/dwell'
 import { distanceM } from '../geofence/geo'
-import { backend, backendNote, startWatching, type LocationWatch } from './location'
+import { backend, backendNote, startWatching, type LocationWatch, armRegions } from './location'
 import { LoneWorkerCard } from './LoneWorker'
 import { clockTime, dayDate, shortDate } from '../format'
 import { DailyLogScreen } from './DailyLogScreen'
@@ -301,6 +301,34 @@ function Tracker({ me }: { me: WorkerRow }) {
       watch?.stop()
     }
   }, [tracking, onFix])
+
+  /**
+   * Hand the site boundaries to iOS once tracking is on.
+   *
+   * This is what does the work when the app is closed. The foreground watcher
+   * above only reports while somebody is looking at the screen; region
+   * monitoring is watched by the system, and the native side reports the
+   * crossing itself. A no-op in a browser.
+   */
+  useEffect(() => {
+    if (!tracking || sites.length === 0) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const { data } = await supabase().auth.getSession()
+        const refreshToken = data.session?.refresh_token
+        if (!refreshToken || cancelled) return
+        const cfg = supabaseConfig()
+        await armRegions(
+          sites.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng, radiusM: s.radiusM })),
+          { apiBase: api('/').replace(/\/$/, ''), supabaseUrl: cfg.url, anonKey: cfg.anonKey, refreshToken },
+        )
+      } catch {
+        // Nothing a worker can act on, and the foreground watcher still runs.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [tracking, sites])
 
   // "Clock in manually" is not a client-side clock — RLS and the
   // shifts_worker_guard trigger refuse a direct insert, correctly, because a

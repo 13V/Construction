@@ -49,7 +49,6 @@ export function isNative(): boolean {
 }
 
 export function backend(): Backend {
-  if (isNative()) return 'native'
   return typeof navigator !== 'undefined' && 'geolocation' in navigator ? 'web' : 'none'
 }
 
@@ -60,124 +59,16 @@ export function backend(): Backend {
  */
 export function backendNote(): string {
   switch (backend()) {
-    case 'native':
-      return 'Tracking keeps running with your screen off.'
     case 'web':
-      return 'In a browser, tracking pauses when your phone locks. Install the app to be clocked in without keeping this open.'
+      return regionMonitoringAvailable()
+        ? 'Arriving at a site clocks you on even with the app closed. While it is open, your position updates as you move.'
+        : 'In a browser, tracking pauses when your phone locks. Install the app to be clocked on without keeping this open.'
     default:
       return 'This device has no location services.'
   }
 }
 
-interface NativeWatcherModule {
-  BackgroundGeolocation: {
-    addWatcher(
-      options: {
-        backgroundMessage?: string
-        backgroundTitle?: string
-        requestPermissions?: boolean
-        stale?: boolean
-        distanceFilter?: number
-      },
-      callback: (
-        position:
-          | { latitude: number; longitude: number; accuracy: number; time: number | null }
-          | undefined,
-        error?: { code?: string; message?: string },
-      ) => void,
-    ): Promise<string>
-    removeWatcher(options: { id: string }): Promise<void>
-  }
-}
 
-type WatcherApi = NativeWatcherModule['BackgroundGeolocation']
-
-/**
- * Get at the background-geolocation plugin from a bundle that does not contain
- * it.
- *
- * This used to be a runtime-assembled dynamic import, on the reasoning that
- * the browser build has no Capacitor packages installed so nothing must be
- * bundled. The reasoning was right and the mechanism was wrong: what shipped
- * was a literal `import("@capacitor-community/background-geolocation")` — a
- * bare specifier — and a bare specifier cannot be resolved by any browser
- * engine, WKWebView included. It threw on every phone, every time.
- *
- * Nothing looked broken, which is why it survived: startWatching() catches the
- * failure and falls back to navigator.geolocation, which reports happily while
- * the app is open. So tracking appeared to work in the hand and stopped the
- * moment the phone went into a pocket — the exact failure the native app was
- * built to fix, and the one nobody sees until a day's hours are missing.
- *
- * The bridge is the right door. Capacitor injects every natively-registered
- * plugin at window.Capacitor.Plugins, so the JavaScript package never has to
- * be resolved at all; the plugin's own iOS registration
- * (CAP_PLUGIN(BackgroundGeolocation, "BackgroundGeolocation", …)) is what puts
- * it there. The dynamic import is kept as a second chance for a future build
- * that does bundle the package, but it is no longer the only path.
- */
-async function watcherApi(): Promise<WatcherApi> {
-  const bridged = capacitor()?.Plugins?.BackgroundGeolocation as WatcherApi | undefined
-  if (bridged && typeof bridged.addWatcher === 'function') return bridged
-
-  const specifier = ['@capacitor-community', 'background-geolocation'].join('/')
-  const mod = (await import(/* @vite-ignore */ specifier)) as
-    | NativeWatcherModule
-    | { default: NativeWatcherModule }
-  const api = 'BackgroundGeolocation' in mod ? mod.BackgroundGeolocation : mod.default.BackgroundGeolocation
-  if (!api || typeof api.addWatcher !== 'function') {
-    throw new Error('the background location plugin is not registered in this build')
-  }
-  return api
-}
-
-async function startNative(
-  onFix: (f: Fix) => void,
-  onError: (message: string) => void,
-): Promise<LocationWatch> {
-  const api = await watcherApi()
-
-  const id = await api.addWatcher(
-    {
-      // Android requires a visible notification for background location. That
-      // is a feature here, not a tax: the crew can see exactly when the app is
-      // tracking them, and dismissing tracking is one tap away.
-      backgroundTitle: 'Crewline is tracking your location',
-      // Was "Only while you are clocked on" — false. The watcher this
-      // notification belongs to runs from the START TRACKING tap, which is
-      // well before any clock-in (the drive to site, the arrival dwell), and
-      // every fix it produces is sent and stored, not just ones near a site.
-      backgroundMessage: 'Recording your location while tracking is on. Tap to open.',
-      requestPermissions: true,
-      // A stale fix is worse than none for a geofence decision.
-      stale: false,
-      distanceFilter: 15,
-    },
-    (position, error) => {
-      if (error) {
-        onError(
-          error.code === 'NOT_AUTHORIZED'
-            ? 'Location permission is off. Turn it on in Settings, and choose "Allow all the time" so your hours keep recording with the screen off.'
-            : (error.message ?? 'Location error'),
-        )
-        return
-      }
-      if (!position) return
-      onFix({
-        lat: position.latitude,
-        lng: position.longitude,
-        accuracyM: position.accuracy,
-        at: position.time ?? Date.now(),
-      })
-    },
-  )
-
-  return {
-    stop: () => {
-      void api.removeWatcher({ id })
-    },
-  }
-}
 
 function startWeb(onFix: (f: Fix) => void, onError: (message: string) => void): LocationWatch {
   const id = navigator.geolocation.watchPosition(
@@ -207,16 +98,72 @@ export async function startWatching(
     onError('This device has no location services.')
     return { stop: () => {} }
   }
-  if (isNative()) {
-    try {
-      return await startNative(onFix, onError)
-    } catch (err) {
-      onError(
-        `Background tracking could not start (${
-          err instanceof Error ? err.message : String(err)
-        }). Falling back to foreground only — keep this screen open.`,
-      )
-    }
-  }
+  /*
+   * One watcher, and it is the browser's. It reports while the app is open,
+   * which is all a foreground watcher was ever doing.
+   *
+   * What used to be here — a background-location plugin, and the
+   * UIBackgroundModes key that let it run — is gone. App Review rejected 1.0
+   * under guideline 2.5.4 for declaring that mode with employee tracking as
+   * its only use. iOS region monitoring took its place: the system watches
+   * the site boundaries, wakes the app on a crossing, and the native side
+   * (SiteGeofencePlugin.swift) reports it without needing this code to be
+   * running at all. See armRegions below.
+   */
   return startWeb(onFix, onError)
+}
+
+/**
+ * Hand the job sites to iOS so it can watch the boundaries itself.
+ *
+ * This is what replaced the location background mode. iOS monitors the
+ * regions in the system, wakes the app when one is crossed, and the native
+ * side (SiteGeofencePlugin.swift) reports the crossing to /api/ping without
+ * needing this JavaScript to be alive — which it will not be, because the
+ * app will have been terminated.
+ *
+ * A no-op in a browser and in any build where the plugin is not registered.
+ * Failing loudly here would put an error in front of a worker about something
+ * they cannot act on; the foreground watcher above is what records hours
+ * while the app is open either way.
+ */
+export interface RegionSite {
+  id: string
+  lat: number
+  lng: number
+  radiusM: number
+}
+
+interface GeofencePlugin {
+  requestAlways(): Promise<{ granted: boolean }>
+  setCredentials(o: { apiBase: string; supabaseUrl: string; anonKey: string; refreshToken: string }): Promise<void>
+  setRegions(o: { sites: RegionSite[] }): Promise<{ monitoring: number }>
+  monitored(): Promise<{ count: number; ids: string[] }>
+  clear(): Promise<void>
+}
+
+function geofence(): GeofencePlugin | null {
+  const plugins = (globalThis as { Capacitor?: { Plugins?: Record<string, unknown> } }).Capacitor?.Plugins
+  const api = plugins?.SiteGeofence as GeofencePlugin | undefined
+  return api && typeof api.setRegions === 'function' ? api : null
+}
+
+export function regionMonitoringAvailable(): boolean {
+  return geofence() !== null
+}
+
+export async function armRegions(
+  sites: RegionSite[],
+  credentials: { apiBase: string; supabaseUrl: string; anonKey: string; refreshToken: string },
+): Promise<number> {
+  const api = geofence()
+  if (!api) return 0
+  await api.requestAlways().catch(() => ({ granted: false }))
+  await api.setCredentials(credentials)
+  const { monitoring } = await api.setRegions({ sites })
+  return monitoring
+}
+
+export async function disarmRegions(): Promise<void> {
+  await geofence()?.clear()
 }

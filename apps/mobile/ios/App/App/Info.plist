@@ -101,11 +101,6 @@
 
 	<!-- Without the location background mode, iOS suspends the app and the
 	     fixes stop the moment the screen locks. -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>location</string>
-	</array>
-
 	<key>NSCameraUsageDescription</key>
 	<string>Take site photos and photograph receipts.</string>
 

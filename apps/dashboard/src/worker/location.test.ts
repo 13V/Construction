@@ -2,23 +2,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { backend, backendNote, startWatching } from './location'
 
 /**
- * The one thing this app is native FOR.
+ * What this file guards has inverted, and the reason is worth recording.
  *
- * Background location is the whole argument for shipping a binary instead of a
- * website: a worker drives to site with the phone in a pocket and is on the
- * clock before they get out of the ute. It reached production not working.
- * The native plugin was loaded with a runtime-assembled bare specifier —
- * `import("@capacitor-community/background-geolocation")` — which no browser
- * engine can resolve, WKWebView included, so it threw on every phone.
+ * It used to assert that a native background watcher starts, because
+ * background location was the whole argument for shipping a binary. App
+ * Review rejected 1.0 under guideline 2.5.4 — an app may not declare the
+ * location background mode when tracking employees is its only use for it —
+ * so the mode, the plugin and that watcher are gone. iOS region monitoring
+ * replaced them: the system watches the boundaries and wakes the app, and
+ * SiteGeofencePlugin.swift reports the crossing without this code running.
  *
- * What made it survive is the thing worth testing: startWatching() catches
- * that failure and falls back to navigator.geolocation, which reports
- * perfectly well while the app is open. So it looked right in the hand and
- * stopped the moment the screen locked, and the only symptom was a day's hours
- * quietly missing.
+ * So the invariant now is the opposite one: reaching for a background watcher
+ * again, even behind a bridge check that looks harmless, is what would put
+ * the app back in front of the same guideline.
  *
- * A silent, correct-looking fallback is exactly the kind of failure that needs
- * a test rather than a pair of eyes.
+ * The second thing tested here has not changed and never should: the app must
+ * not tell a worker their hours are being recorded when they are not. A
+ * silent, correct-looking fallback is the failure that costs somebody a day's
+ * pay, and it needs a test rather than a pair of eyes.
  */
 
 interface Fake {
@@ -26,7 +27,7 @@ interface Fake {
   webWatchCalls: number
 }
 
-function shell(opts: { native: boolean; bridged: boolean }): Fake {
+function shell(opts: { native: boolean; bridged: boolean; regions?: boolean }): Fake {
   const counts: Fake = { addWatcherCalls: 0, webWatchCalls: 0 }
 
   const plugin = {
@@ -46,7 +47,10 @@ function shell(opts: { native: boolean; bridged: boolean }): Fake {
     // The bridge injects natively-registered plugins here. `bridged: false`
     // is the shell as it behaves when nothing has registered — the state the
     // old code was permanently in, because it never looked here at all.
-    Plugins: opts.bridged ? { BackgroundGeolocation: plugin } : {},
+    Plugins: {
+      ...(opts.bridged ? { BackgroundGeolocation: plugin } : {}),
+      ...(opts.regions ? { SiteGeofence: { setRegions: async () => ({ monitoring: 1 }) } } : {}),
+    },
   })
   vi.stubGlobal('navigator', {
     geolocation: {
@@ -65,38 +69,39 @@ afterEach(() => {
 })
 
 describe('background location', () => {
-  it('uses the native watcher the Capacitor bridge exposes', async () => {
+  it('never starts a native background watcher, even when one is offered', async () => {
+    // A registered BackgroundGeolocation plugin must not tempt it. Using one
+    // is what requires UIBackgroundModes, and that key is what App Review
+    // named in the 2.5.4 rejection.
     const counts = shell({ native: true, bridged: true })
-    const fixes: Array<{ lat: number; lng: number }> = []
     const errors: string[] = []
 
-    const watch = await startWatching((f) => fixes.push(f), (e) => errors.push(e))
+    const watch = await startWatching(() => {}, (e) => errors.push(e))
 
-    expect(counts.addWatcherCalls).toBe(1)
-    // The whole point: it must NOT be the browser watcher, which stops dead
-    // when the phone locks.
-    expect(counts.webWatchCalls).toBe(0)
+    expect(counts.addWatcherCalls).toBe(0)
+    expect(counts.webWatchCalls).toBe(1)
     expect(errors).toEqual([])
-    expect(fixes).toEqual([{ lat: -34.93, lng: 138.6, accuracyM: 8, at: 1_700_000_000_000 }])
     watch.stop()
   })
 
-  it('says tracking survives a locked screen only when it actually will', async () => {
+  it('never claims tracking survives a locked screen on its own', async () => {
+    // Without region monitoring registered, the honest answer is that closing
+    // the app stops it — the old "keeps running with your screen off" line
+    // would now be a lie that costs a worker their hours.
     shell({ native: true, bridged: true })
-    expect(backend()).toBe('native')
-    expect(backendNote()).toContain('screen off')
+    expect(backend()).toBe('web')
+    expect(backendNote()).not.toMatch(/screen off/i)
+    expect(backendNote()).toMatch(/pauses when your phone locks/i)
   })
 
-  it('falls back to the browser watcher, and says so, when no plugin is there', async () => {
-    const counts = shell({ native: true, bridged: false })
-    const errors: string[] = []
-
-    await startWatching(() => {}, (e) => errors.push(e))
-
-    // Degrading is correct — going silent is not. A worker who believes they
-    // are being tracked in the background when they are not loses hours.
+  it('promises clock-on with the app closed only when iOS is watching the boundary', async () => {
+    const counts = shell({ native: true, bridged: true, regions: true })
+    expect(backendNote()).toMatch(/even with the app closed/i)
+    // Still the browser watcher in the foreground; region monitoring is the
+    // background half, not a replacement for it.
+    await startWatching(() => {}, () => {})
     expect(counts.webWatchCalls).toBe(1)
-    expect(errors.join(' ')).toMatch(/foreground only/i)
+    expect(counts.addWatcherCalls).toBe(0)
   })
 
   it('uses the browser watcher in a browser, without pretending otherwise', async () => {
@@ -105,6 +110,6 @@ describe('background location', () => {
     expect(counts.addWatcherCalls).toBe(0)
     expect(counts.webWatchCalls).toBe(1)
     expect(backend()).toBe('web')
-    expect(backendNote()).toContain('pauses when your phone locks')
+    expect(backendNote()).toMatch(/pauses when your phone locks/i)
   })
 })
