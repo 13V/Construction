@@ -215,7 +215,7 @@ function Tracker({ me }: { me: WorkerRow }) {
     return () => window.clearTimeout(t)
   }, [celebration])
 
-  const send = useCallback(async (body: { lat: number; lng: number; accuracyM: number; at: number; manual?: boolean }) => {
+  const send = useCallback(async (body: { lat: number; lng: number; accuracyM: number; at: number; manual?: boolean; manualOut?: boolean }) => {
     const { data } = await supabase().auth.getSession()
     const token = data.session?.access_token
     if (!token) throw new Error('Session expired — sign in again.')
@@ -352,6 +352,40 @@ function Tracker({ me }: { me: WorkerRow }) {
         // only a fallback for a response that reached here without one.
         setNote(payload.notes[0] ?? "That didn't clock you in — make sure you're inside the site's boundary and try again.")
       }
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : String(err))
+    }
+  }, [fix, send])
+
+  /**
+   * Ending the shift by hand, as a fallback rather than the normal path.
+   *
+   * Leaving a site is still what usually closes a shift: iOS reports the
+   * boundary crossing and the server's dwell engine acts on it. This exists
+   * for when that does not happen — an exit event that never fires leaves a
+   * worker on the clock overnight, and until region monitoring has been
+   * proven on real phones that is a live possibility, not a theoretical one.
+   *
+   * The write is still the server's. The phone says where it is and asks; RLS
+   * and the shifts_worker_guard trigger keep a field worker's device out of
+   * its own hours, which is the property worth not trading away for a button.
+   */
+  const manualClockOut = useCallback(async () => {
+    setNote(null)
+    try {
+      const payload = await send({
+        lat: fix?.pos.lat ?? 0,
+        lng: fix?.pos.lng ?? 0,
+        accuracyM: fix?.accuracyM ?? 0,
+        at: Date.now(),
+        manualOut: true,
+      })
+      if (!payload.events.some((e) => e.kind === 'clock_out')) {
+        setNote(payload.notes[0] ?? "That didn't close your shift — try again in a moment.")
+        return
+      }
+      setClockOutConfirm(false)
+      setCelebration(null)
     } catch (err) {
       setNote(err instanceof Error ? err.message : String(err))
     }
@@ -572,6 +606,7 @@ function Tracker({ me }: { me: WorkerRow }) {
               clockOutConfirm={clockOutConfirm}
               onClockOutTap={() => setClockOutConfirm(true)}
               onClockOutCancel={() => setClockOutConfirm(false)}
+              onClockOutNow={() => void manualClockOut()}
               onStopTracking={stopTracking}
               onShowAccount={() => setShowAccount(true)}
             />
@@ -1660,6 +1695,7 @@ function OnClockScreen({
   clockOutConfirm,
   onClockOutTap,
   onClockOutCancel,
+  onClockOutNow,
   onStopTracking,
   onShowAccount,
 }: {
@@ -1671,6 +1707,7 @@ function OnClockScreen({
   clockOutConfirm: boolean
   onClockOutTap: () => void
   onClockOutCancel: () => void
+  onClockOutNow: () => void
   onStopTracking: () => void
   onShowAccount: () => void
 }) {
@@ -1750,12 +1787,14 @@ function OnClockScreen({
           {clockOutConfirm ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <span style={{ fontSize: 13, color: design.mid, lineHeight: 1.5 }}>
-                Leaving the site is what actually clocks you out — GPS closes the shift a few minutes after you
-                walk away. If your phone won't be with you, you can stop sending location now instead; tell your
-                foreman if the hours need fixing by hand.
+                Normally you don't need this — leaving the site closes the shift a few minutes after you
+                drive off. Use it if you've left and you're still showing as on the clock.
               </span>
-              <button onClick={onStopTracking} style={ctaRed}>
-                STOP TRACKING ON THIS PHONE
+              <button onClick={onClockOutNow} style={ctaRed}>
+                END MY SHIFT NOW
+              </button>
+              <button onClick={onStopTracking} style={ctaGhost}>
+                Just stop sending my location
               </button>
               <button onClick={onClockOutCancel} style={ctaGhost}>
                 Keep tracking
