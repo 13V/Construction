@@ -81,7 +81,7 @@
 	  hours silently stop being recorded.
 	-->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Crewline checks you are at the job site when you clock on or off.</string>
+	<string>Crewline clocks you in automatically when you arrive at a job site.</string>
 
 	<!--
 	  "Always" is the one that matters. Without it iOS only reports while the
@@ -96,8 +96,16 @@
 	  Review, and an inaccurate one is worse: it is the sentence a worker reads
 	  before deciding whether to trust the app with their location.
 	-->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Crewline records your location continuously while tracking is switched on — not only near a job site — so your hours keep recording with your phone in your pocket. Choose "Always" so this keeps working with the screen off. Turn tracking off any time to stop.</string>
+
 	<!-- Without the location background mode, iOS suspends the app and the
 	     fixes stop the moment the screen locks. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+
 	<key>NSCameraUsageDescription</key>
 	<string>Take site photos and photograph receipts.</string>
 
