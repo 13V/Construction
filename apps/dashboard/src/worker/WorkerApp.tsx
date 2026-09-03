@@ -1297,7 +1297,14 @@ const sectionLabel: CSSProperties = {
  *  on schedule, which a mobile browser cannot do without a tap. Built from
  *  the same visual language (header, blue callout, big yellow CTA) as the
  *  "Approaching" screen it hands off to, so it reads as part of the same
- *  app rather than a bolt-on. Nothing is recorded before this tap. */
+ *  app rather than a bolt-on. Nothing is recorded before this tap.
+ *
+ *  The battery sentence above the button is not decoration. Guideline 2.5.4
+ *  requires an app using the location background mode to remind people that
+ *  it can dramatically decrease battery life, and 1.0 was rejected under it
+ *  when that reminder existed only in the App Store description. This screen
+ *  is the last thing between a worker and continuous background GPS, so it is
+ *  where the warning has to be — for the reviewer and for the worker. */
 function GateScreen({
   me,
   onStart,
@@ -1328,7 +1335,9 @@ function GateScreen({
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <span style={{ fontSize: 13, color: design.faint, lineHeight: 1.45 }}>
-            Nothing is recorded until you tap this.
+            Nothing is recorded until you tap this. Tracking then keeps using GPS in the background so
+            your hours record with the phone in your pocket, which can dramatically decrease battery
+            life.
           </span>
           <button onClick={onStart} style={ctaYellow(56)}>
             START TRACKING
