@@ -214,7 +214,7 @@ function Tracker({ me }: { me: WorkerRow }) {
     return () => window.clearTimeout(t)
   }, [celebration])
 
-  const send = useCallback(async (body: { lat: number; lng: number; accuracyM: number; at: number; manual?: boolean }) => {
+  const send = useCallback(async (body: { lat: number; lng: number; accuracyM: number; at: number; manual?: boolean; manualOut?: boolean }) => {
     const { data } = await supabase().auth.getSession()
     const token = data.session?.access_token
     if (!token) throw new Error('Session expired — sign in again.')
@@ -328,20 +328,32 @@ function Tracker({ me }: { me: WorkerRow }) {
     }
   }, [fix, send])
 
-  // The one thing this tap really does: stop sending location. It does NOT
-  // write a clock-out — only the geofence (server-side, via /api/ping) may
-  // do that, and RLS blocks a field worker from writing shifts/dwell_state
-  // directly. If they're still standing inside the fence, the shift they
-  // already have stays open and correctly resumes if they start tracking
-  // again; the honest promise here is "stop sharing my location," not
-  // "end my paid shift," so it's never offered under the CLOCK OUT label
-  // without this explanation alongside it.
-  function stopTracking() {
-    setTracking(false)
-    setClockOutConfirm(false)
-    setCelebration(null)
-    setScreen('tracker')
-  }
+  // Ending the shift for real. With the location background mode gone,
+  // nothing can notice a worker leaving a site, so this tap is the only thing
+  // that closes a shift — which makes it the opposite of the old button, that
+  // deliberately did not. The write still happens on the server: the phone
+  // sends where it is and asks, and RLS keeps it from touching shifts itself.
+  const manualClockOut = useCallback(async () => {
+    setNote(null)
+    try {
+      const here = fix ? { lat: fix.pos.lat, lng: fix.pos.lng, accuracyM: fix.accuracyM } : null
+      const payload = await send({
+        lat: here?.lat ?? 0,
+        lng: here?.lng ?? 0,
+        accuracyM: here?.accuracyM ?? 0,
+        at: Date.now(),
+        manualOut: true,
+      })
+      const clockedOut = payload.events.some((e) => e.kind === 'clock_out')
+      if (!clockedOut) setNote(payload.notes[0] ?? "That didn't close your shift — try again in a moment.")
+      else {
+        setClockOutConfirm(false)
+        setTracking(false)
+      }
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : String(err))
+    }
+  }, [fix, send])
 
   const currentSiteId = phase.kind === 'offsite' ? null : phase.siteId
   const site = currentSiteId ? sites.find((s) => s.id === currentSiteId) ?? null : null
@@ -542,7 +554,7 @@ function Tracker({ me }: { me: WorkerRow }) {
               clockOutConfirm={clockOutConfirm}
               onClockOutTap={() => setClockOutConfirm(true)}
               onClockOutCancel={() => setClockOutConfirm(false)}
-              onStopTracking={stopTracking}
+              onClockOutNow={() => void manualClockOut()}
               onShowAccount={() => setShowAccount(true)}
             />
           ) : confirming && site ? (
@@ -1299,12 +1311,12 @@ const sectionLabel: CSSProperties = {
  *  "Approaching" screen it hands off to, so it reads as part of the same
  *  app rather than a bolt-on. Nothing is recorded before this tap.
  *
- *  The battery sentence above the button is not decoration. Guideline 2.5.4
- *  requires an app using the location background mode to remind people that
- *  it can dramatically decrease battery life, and 1.0 was rejected under it
- *  when that reminder existed only in the App Store description. This screen
- *  is the last thing between a worker and continuous background GPS, so it is
- *  where the warning has to be — for the reviewer and for the worker. */
+ *  The line above the button used to warn about background GPS draining the
+ *  battery. It no longer does, because there is no background GPS: App Review
+ *  rejected 1.0 under guideline 2.5.4 for declaring the location background
+ *  mode with employee tracking as its only use, so the mode and the plugin
+ *  were removed. What it says now is the truth — location is read while the
+ *  app is open, to check the worker is where they say they are. */
 function GateScreen({
   me,
   onStart,
@@ -1324,8 +1336,8 @@ function GateScreen({
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 20px 20px', overflowY: 'auto' }}>
         <Callout>
-          Turn on tracking and you'll be clocked in <b style={{ fontWeight: 700 }}>automatically</b> when you reach a
-          job site.
+          Turn this on, then tap to clock on when you reach a job site — the app checks you're
+          <b style={{ fontWeight: 700 }}> actually there</b> before it starts your hours.
         </Callout>
 
         <div style={{ marginTop: 18 }}>
@@ -1335,9 +1347,8 @@ function GateScreen({
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <span style={{ fontSize: 13, color: design.faint, lineHeight: 1.45 }}>
-            Nothing is recorded until you tap this. Tracking then keeps using GPS in the background so
-            your hours record with the phone in your pocket, which can dramatically decrease battery
-            life.
+            Nothing is recorded until you tap this. Your location is then read while this app is open,
+            so it can check you are at the job site when you clock on and when you clock off.
           </span>
           <button onClick={onStart} style={ctaYellow(56)}>
             START TRACKING
@@ -1629,7 +1640,7 @@ function OnClockScreen({
   clockOutConfirm,
   onClockOutTap,
   onClockOutCancel,
-  onStopTracking,
+  onClockOutNow,
   onShowAccount,
 }: {
   site: ServerSite
@@ -1639,7 +1650,7 @@ function OnClockScreen({
   clockOutConfirm: boolean
   onClockOutTap: () => void
   onClockOutCancel: () => void
-  onStopTracking: () => void
+  onClockOutNow: () => void
   onShowAccount: () => void
 }) {
   const h = Math.floor(elapsedMs / 3_600_000)
@@ -1716,12 +1727,12 @@ function OnClockScreen({
           {clockOutConfirm ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <span style={{ fontSize: 13, color: design.mid, lineHeight: 1.5 }}>
-                Leaving the site is what actually clocks you out — GPS closes the shift a few minutes after you
-                walk away. If your phone won't be with you, you can stop sending location now instead; tell your
-                foreman if the hours need fixing by hand.
+                This ends your shift now — your hours stop at this moment, and your location stops being
+                recorded. If you clock out by mistake, clock back on and tell your foreman so the timesheet
+                can be fixed.
               </span>
-              <button onClick={onStopTracking} style={ctaRed}>
-                STOP TRACKING ON THIS PHONE
+              <button onClick={onClockOutNow} style={ctaRed}>
+                END MY SHIFT NOW
               </button>
               <button onClick={onClockOutCancel} style={ctaGhost}>
                 Keep tracking

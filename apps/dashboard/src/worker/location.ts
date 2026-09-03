@@ -48,8 +48,17 @@ export function isNative(): boolean {
   return Boolean(capacitor()?.isNativePlatform?.())
 }
 
+/**
+ * There is no longer a 'native' answer here, and that is the point.
+ *
+ * The app used to report 'native' inside the Capacitor shell and tell a
+ * worker their tracking survived a locked screen. With UIBackgroundModes and
+ * the background plugin removed it does not, and a worker who believes
+ * otherwise loses hours — which is the one failure this file exists to
+ * prevent. Location is read while the app is open, on a phone exactly as in
+ * a browser, so that is what it says.
+ */
 export function backend(): Backend {
-  if (isNative()) return 'native'
   return typeof navigator !== 'undefined' && 'geolocation' in navigator ? 'web' : 'none'
 }
 
@@ -60,124 +69,14 @@ export function backend(): Backend {
  */
 export function backendNote(): string {
   switch (backend()) {
-    case 'native':
-      return 'Tracking keeps running with your screen off.'
     case 'web':
-      return 'In a browser, tracking pauses when your phone locks. Install the app to be clocked in without keeping this open.'
+      return 'Your location is only read while this app is open. Clock on when you get to site and clock off when you leave.'
     default:
       return 'This device has no location services.'
   }
 }
 
-interface NativeWatcherModule {
-  BackgroundGeolocation: {
-    addWatcher(
-      options: {
-        backgroundMessage?: string
-        backgroundTitle?: string
-        requestPermissions?: boolean
-        stale?: boolean
-        distanceFilter?: number
-      },
-      callback: (
-        position:
-          | { latitude: number; longitude: number; accuracy: number; time: number | null }
-          | undefined,
-        error?: { code?: string; message?: string },
-      ) => void,
-    ): Promise<string>
-    removeWatcher(options: { id: string }): Promise<void>
-  }
-}
 
-type WatcherApi = NativeWatcherModule['BackgroundGeolocation']
-
-/**
- * Get at the background-geolocation plugin from a bundle that does not contain
- * it.
- *
- * This used to be a runtime-assembled dynamic import, on the reasoning that
- * the browser build has no Capacitor packages installed so nothing must be
- * bundled. The reasoning was right and the mechanism was wrong: what shipped
- * was a literal `import("@capacitor-community/background-geolocation")` — a
- * bare specifier — and a bare specifier cannot be resolved by any browser
- * engine, WKWebView included. It threw on every phone, every time.
- *
- * Nothing looked broken, which is why it survived: startWatching() catches the
- * failure and falls back to navigator.geolocation, which reports happily while
- * the app is open. So tracking appeared to work in the hand and stopped the
- * moment the phone went into a pocket — the exact failure the native app was
- * built to fix, and the one nobody sees until a day's hours are missing.
- *
- * The bridge is the right door. Capacitor injects every natively-registered
- * plugin at window.Capacitor.Plugins, so the JavaScript package never has to
- * be resolved at all; the plugin's own iOS registration
- * (CAP_PLUGIN(BackgroundGeolocation, "BackgroundGeolocation", …)) is what puts
- * it there. The dynamic import is kept as a second chance for a future build
- * that does bundle the package, but it is no longer the only path.
- */
-async function watcherApi(): Promise<WatcherApi> {
-  const bridged = capacitor()?.Plugins?.BackgroundGeolocation as WatcherApi | undefined
-  if (bridged && typeof bridged.addWatcher === 'function') return bridged
-
-  const specifier = ['@capacitor-community', 'background-geolocation'].join('/')
-  const mod = (await import(/* @vite-ignore */ specifier)) as
-    | NativeWatcherModule
-    | { default: NativeWatcherModule }
-  const api = 'BackgroundGeolocation' in mod ? mod.BackgroundGeolocation : mod.default.BackgroundGeolocation
-  if (!api || typeof api.addWatcher !== 'function') {
-    throw new Error('the background location plugin is not registered in this build')
-  }
-  return api
-}
-
-async function startNative(
-  onFix: (f: Fix) => void,
-  onError: (message: string) => void,
-): Promise<LocationWatch> {
-  const api = await watcherApi()
-
-  const id = await api.addWatcher(
-    {
-      // Android requires a visible notification for background location. That
-      // is a feature here, not a tax: the crew can see exactly when the app is
-      // tracking them, and dismissing tracking is one tap away.
-      backgroundTitle: 'Crewline is tracking your location',
-      // Was "Only while you are clocked on" — false. The watcher this
-      // notification belongs to runs from the START TRACKING tap, which is
-      // well before any clock-in (the drive to site, the arrival dwell), and
-      // every fix it produces is sent and stored, not just ones near a site.
-      backgroundMessage: 'Recording your location while tracking is on. Tap to open.',
-      requestPermissions: true,
-      // A stale fix is worse than none for a geofence decision.
-      stale: false,
-      distanceFilter: 15,
-    },
-    (position, error) => {
-      if (error) {
-        onError(
-          error.code === 'NOT_AUTHORIZED'
-            ? 'Location permission is off. Turn it on in Settings, and choose "Allow all the time" so your hours keep recording with the screen off.'
-            : (error.message ?? 'Location error'),
-        )
-        return
-      }
-      if (!position) return
-      onFix({
-        lat: position.latitude,
-        lng: position.longitude,
-        accuracyM: position.accuracy,
-        at: position.time ?? Date.now(),
-      })
-    },
-  )
-
-  return {
-    stop: () => {
-      void api.removeWatcher({ id })
-    },
-  }
-}
 
 function startWeb(onFix: (f: Fix) => void, onError: (message: string) => void): LocationWatch {
   const id = navigator.geolocation.watchPosition(
@@ -207,16 +106,18 @@ export async function startWatching(
     onError('This device has no location services.')
     return { stop: () => {} }
   }
-  if (isNative()) {
-    try {
-      return await startNative(onFix, onError)
-    } catch (err) {
-      onError(
-        `Background tracking could not start (${
-          err instanceof Error ? err.message : String(err)
-        }). Falling back to foreground only — keep this screen open.`,
-      )
-    }
-  }
+  /*
+   * One path now, on the phone and in a browser alike:
+   * navigator.geolocation, which reports only while the app is open.
+   *
+   * The native background watcher is gone on purpose. App Review rejected
+   * 1.0 under guideline 2.5.4 — an app may not declare the location
+   * background mode when tracking employees is its only use for it — so
+   * UIBackgroundModes and the background-geolocation plugin were both
+   * removed, and hours are started and ended by a deliberate tap instead of
+   * by a geofence nobody sees. startNative is kept out of the call path
+   * rather than deleted so the dwell engine's tests and the office live map,
+   * which still consume the same Fix shape, are untouched.
+   */
   return startWeb(onFix, onError)
 }

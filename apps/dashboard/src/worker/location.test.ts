@@ -65,38 +65,29 @@ afterEach(() => {
 })
 
 describe('background location', () => {
-  it('uses the native watcher the Capacitor bridge exposes', async () => {
+  it('never starts a native background watcher, even inside the app shell', async () => {
+    // The inversion of what this asserted before, and the reason it is worth
+    // a test at all: App Review rejected 1.0 under guideline 2.5.4 for
+    // declaring the location background mode with employee tracking as its
+    // only use. Reaching for a background watcher again — even behind a
+    // bridge check that looks harmless — puts the app straight back there.
     const counts = shell({ native: true, bridged: true })
-    const fixes: Array<{ lat: number; lng: number }> = []
     const errors: string[] = []
 
-    const watch = await startWatching((f) => fixes.push(f), (e) => errors.push(e))
+    const watch = await startWatching(() => {}, (e) => errors.push(e))
 
-    expect(counts.addWatcherCalls).toBe(1)
-    // The whole point: it must NOT be the browser watcher, which stops dead
-    // when the phone locks.
-    expect(counts.webWatchCalls).toBe(0)
+    expect(counts.addWatcherCalls).toBe(0)
+    expect(counts.webWatchCalls).toBe(1)
     expect(errors).toEqual([])
-    expect(fixes).toEqual([{ lat: -34.93, lng: 138.6, accuracyM: 8, at: 1_700_000_000_000 }])
     watch.stop()
   })
 
-  it('says tracking survives a locked screen only when it actually will', async () => {
+  it('never tells a worker tracking survives a locked screen', async () => {
+    // It does not any more, and a worker who believes it does loses hours.
     shell({ native: true, bridged: true })
-    expect(backend()).toBe('native')
-    expect(backendNote()).toContain('screen off')
-  })
-
-  it('falls back to the browser watcher, and says so, when no plugin is there', async () => {
-    const counts = shell({ native: true, bridged: false })
-    const errors: string[] = []
-
-    await startWatching(() => {}, (e) => errors.push(e))
-
-    // Degrading is correct — going silent is not. A worker who believes they
-    // are being tracked in the background when they are not loses hours.
-    expect(counts.webWatchCalls).toBe(1)
-    expect(errors.join(' ')).toMatch(/foreground only/i)
+    expect(backend()).toBe('web')
+    expect(backendNote()).not.toMatch(/screen off/i)
+    expect(backendNote()).toMatch(/only read while this app is open/i)
   })
 
   it('uses the browser watcher in a browser, without pretending otherwise', async () => {
@@ -105,6 +96,6 @@ describe('background location', () => {
     expect(counts.addWatcherCalls).toBe(0)
     expect(counts.webWatchCalls).toBe(1)
     expect(backend()).toBe('web')
-    expect(backendNote()).toContain('pauses when your phone locks')
+    expect(backendNote()).toMatch(/only read while this app is open/i)
   })
 })

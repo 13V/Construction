@@ -28,6 +28,12 @@ interface Body {
    * worker onto the no-dwell path.
    */
   manual?: boolean
+  /**
+   * The clock-out half of the same idea. Without the location background
+   * mode nothing can notice a worker leaving, so ending a shift has to be a
+   * deliberate tap — but the write still happens here, never on the phone.
+   */
+  manualOut?: boolean
 }
 
 const MAX_CLOCK_SKEW_MS = 5 * 60_000
@@ -104,6 +110,103 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // says about which site it's at. Handled entirely separately from the
   // dwell engine below so the automatic path — the one running for every
   // worker who never touches the button — is untouched by this feature.
+  // Ending a shift on purpose. Unlike clocking in, this is NOT refused off
+  // site: a worker taps it as they leave, or in the ute a street away, and
+  // refusing them because they already stepped past the boundary would strand
+  // an open shift that nothing else can now close. The position is still
+  // recorded, so the office can see where the tap happened.
+  if (body?.manualOut === true) {
+    const { error: positionError } = await db.from('positions').insert({
+      worker_id: worker.id,
+      at: new Date(at).toISOString(),
+      lat,
+      lng,
+      accuracy_m: Number.isFinite(Number(body?.accuracyM)) ? Number(body.accuracyM) : null,
+    })
+    if (positionError) console.error('[ping] position insert failed', positionError)
+
+    const { data: open, error: openError } = await db
+      .from('shifts')
+      .select('id, site_id, started_at')
+      .eq('worker_id', worker.id)
+      .is('ended_at', null)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (openError) {
+      console.error('[ping] open shift lookup failed', openError)
+      return res.status(500).json({ error: 'Could not check your shift status' })
+    }
+    if (!open) return res.status(409).json({ error: "You don't have a shift open." })
+
+    const { error: closeError } = await db
+      .from('shifts')
+      .update({ ended_at: new Date(at).toISOString() })
+      .eq('id', open.id)
+      .is('ended_at', null)
+    if (closeError) {
+      console.error('[ping] manual clock_out update failed', closeError)
+      return res.status(500).json({ error: 'Could not close your shift' })
+    }
+
+    // Back to offsite, so a later ping starts a fresh arrival rather than
+    // resuming the shift that was just deliberately ended.
+    const { error: stateError } = await db.from('dwell_state').upsert({
+      worker_id: worker.id,
+      phase: initialPhase,
+      updated_at: new Date().toISOString(),
+    })
+    if (stateError) console.error('[ping] dwell_state reset failed', stateError)
+
+    const site = sites.find((s2) => s2.id === open.site_id)
+    const hhmmOut = new Date(at).toLocaleTimeString('en-AU', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: SITE_TIME_ZONE,
+    })
+    const outMessage = `${worker.name} clocked out of ${site?.name ?? 'site'} · ${hhmmOut} · manual`
+
+    if (open.site_id) {
+      await db.from('geofence_events').insert({
+        company_id: worker.company_id,
+        worker_id: worker.id,
+        site_id: open.site_id,
+        at: new Date(at).toISOString(),
+        kind: 'clock_out',
+        message: outMessage,
+      })
+      const { data: channel } = await db
+        .from('channels')
+        .select('id')
+        .eq('site_id', open.site_id)
+        .eq('kind', 'site')
+        .maybeSingle()
+      if (channel) {
+        await db.from('messages').insert({
+          company_id: worker.company_id,
+          channel_id: channel.id,
+          author_id: null,
+          kind: 'system',
+          body: outMessage,
+        })
+      }
+    }
+
+    return res.status(200).json({
+      ok: true,
+      notes: [],
+      phase: initialPhase,
+      events: [{ kind: 'clock_out', siteId: open.site_id, at, since: new Date(open.started_at).getTime() }],
+      sites: sites.map((s2) => ({
+        id: s2.id,
+        name: s2.name,
+        lat: s2.center.lat,
+        lng: s2.center.lng,
+        radiusM: s2.radiusM,
+      })),
+    })
+  }
+
   if (body?.manual === true) {
     // Still a location report, whatever the outcome — same as the automatic
     // path a few lines down, and worth keeping even for a refused attempt.
