@@ -1,21 +1,27 @@
 name: Refresh the demo tenant
 
-# The demo world is anchored to Adelaide's today: shifts that are open right
-# now, this week's schedule, a daily log from yesterday. Left alone for a few
-# days it becomes an app with nothing happening in it, which is exactly what an
-# App Review reviewer would open.
+# Run by hand, not on a schedule, and that is the whole point of this comment.
 #
-# So it is reseeded nightly. This runs at 16:00 UTC — 01:30 in Adelaide, just
-# after the new day starts there, so the day a reviewer sees is always the one
-# the seed built.
+# It was nightly. The reason was that the demo world is anchored to Adelaide's
+# today, so left alone it becomes an app with nothing happening in it — which
+# is what an App Review reviewer would open.
 #
-# The seed is idempotent by design: it looks for each row before inserting,
-# patches the ones that exist, and re-PUTs file bytes over the same object
-# every run. Running it twice changes nothing; missing a night is the failure
-# mode, not running again.
+# Two things killed that reasoning. App Review no longer opens the demo: they
+# sign into appstore.review@crewline.app, a separate tenant that is frozen on
+# purpose. And the reseed is not read-only — it closes open shifts and moves
+# every date onto today. It ran against the account named in the review notes
+# while version 1.0 was in review, which meant a reviewer watched records
+# change with nobody touching the phone. That drew a rejection under guideline
+# 5.6: manipulative behaviour, features "intentionally hidden during the
+# review process".
+#
+# So the demo world going stale is now a cosmetic problem for whoever taps
+# "Try the demo", and reseeding it on a timer is a way to get an app rejected.
+# Dispatch it deliberately, when somebody wants the demo fresh and nothing is
+# in front of App Review.
+#
+# scripts/.review-hold blocks the seed regardless while a submission is open.
 on:
-  schedule:
-    - cron: '0 16 * * *'
   workflow_dispatch:
 
 concurrency:
