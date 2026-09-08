@@ -65,12 +65,31 @@ export function readableAuthError(err: unknown): string {
 }
 
 export function SimpleSignIn() {
+/**
+ * Whether this build may create a company.
+ *
+ * App Review rejected 1.0 (50) under guideline 3.1.1: an account registration
+ * feature for businesses is treated as access to an external mechanism for
+ * purchases, even in an app that charges nothing and contains no purchase of
+ * any kind. Their instruction was to remove it, and every B2B app on the
+ * store has made the same change — you sign into Slack or Xero on a phone,
+ * you do not create the organisation there.
+ *
+ * So a company is created on the web and nowhere else. What stays on the
+ * phone is a worker making their own login for a crew their office has
+ * already added them to, which is not a business registering anything.
+ *
+ * VITE_SURFACE=worker is set only by the iOS build (see ios-testflight.yml),
+ * so the browser keeps the full sign-up it has always had.
+ */
+const CAN_CREATE_COMPANY = import.meta.env.VITE_SURFACE !== 'worker'
+
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [company, setCompany] = useState('')
   const [name, setName] = useState('')
-  const [joining, setJoining] = useState(false)
+  const [joining, setJoining] = useState(!CAN_CREATE_COMPANY)
   const [busy, setBusy] = useState(false)
   const [demoBusy, setDemoBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -175,21 +194,21 @@ export function SimpleSignIn() {
         <span style={{ fontSize: 14.5, lineHeight: 1.4, color: '#98A0A8' }}>
           {mode === 'signin'
             ? 'Sign in to your company.'
-            : joining
-              ? 'Sign up with the email your office invited.'
-              : 'Create a company account.'}
+            : CAN_CREATE_COMPANY && !joining
+              ? 'Create a company account.'
+              : 'Sign up with the email your office invited.'}
         </span>
       </div>
 
       <form onSubmit={submit} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: `22px 20px calc(28px + ${SAFE_BOTTOM})` }}>
-        {mode === 'signup' && (
+        {mode === 'signup' && CAN_CREATE_COMPANY && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', background: '#fff', border: '1px solid #DCE0E6', borderRadius: 10, fontSize: 14.5, color: '#4A5057', cursor: 'pointer' }}>
             <input type="checkbox" checked={joining} onChange={(e) => setJoining(e.target.checked)} style={{ width: 18, height: 18, accentColor: s.accent }} />
             My office already added me to a crew
           </label>
         )}
 
-        {mode === 'signup' && !joining && (
+        {mode === 'signup' && CAN_CREATE_COMPANY && !joining && (
           <>
             {label('COMPANY NAME', (
               <input style={field} value={company} onChange={(e) => setCompany(e.target.value)} required placeholder="e.g. Proven Tiling Solutions" />
@@ -235,7 +254,11 @@ export function SimpleSignIn() {
           }}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 48, background: 'none', border: 0, fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600, color: s.accent, cursor: 'pointer' }}
         >
-          {mode === 'signin' ? 'Set up a new company' : 'I already have an account'}
+          {mode === 'signin'
+            ? CAN_CREATE_COMPANY
+              ? 'Set up a new company'
+              : 'My office added me — create my login'
+            : 'I already have an account'}
         </button>
 
         {mode === 'signin' && (
