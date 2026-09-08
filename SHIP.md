@@ -164,7 +164,10 @@ Not by reading the code — by running it against the live database.
 
 A missing feature you know about is cheaper than one that looks present.
 
-- **Background location needs the native app.** The single biggest gap. See above.
+- **Nothing records with the app closed.** The native app was supposed to fix
+  this; App Review refused it twice under 5.6 and the capability is gone. A
+  worker clocks on by tapping, or automatically while the app is open in front
+  of them. See `apps/mobile/README.md`.
 - **Notifications are in-app only.** A roster published, leave decided or a punch
   correction ruled on all raise a notice, and it shows on the bell and in the
   worker app. There is no email, SMS or push transport, so someone who never

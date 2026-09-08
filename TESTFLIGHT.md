@@ -98,8 +98,8 @@ developer.apple.com → Certificates, Identifiers & Profiles → Identifiers →
 - Bundle ID: **explicit**, `app.crewline.worker`. It must match
   `apps/mobile/capacitor.config.ts` and `PRODUCT_BUNDLE_IDENTIFIER` in the Xcode
   project exactly.
-- Capabilities: nothing needs enabling. The app uses background location, which
-  is an `Info.plist` background mode, not an entitlement.
+- Capabilities: nothing needs enabling. The app has no entitlements beyond the
+  default, and no background modes — location is read only while it is open.
 
 This is the step that decides ownership. See section 0.
 
@@ -212,11 +212,12 @@ Processing takes 5–30 minutes, then the build appears under TestFlight.
   without it.
 - **Internal testers** — anyone with an App Store Connect account on the team,
   up to 100 — get the build immediately with no review.
-- **External testers** wait on Beta App Review, and background location gets that
-  read properly. Say plainly that tracking is switched on by the worker, exists
-  to clock them in at their own employer's sites, runs with a persistent
-  notification, and can be switched off at any time. `PRIVACY.md` is the source
-  of truth for the wording.
+- **External testers** wait on Beta App Review. Say plainly that the app reads
+  location only while it is open, to check a worker is at their own employer's
+  job site when they clock on or off, that tracking is switched on by the
+  worker, and that it can be switched off at any time. There is no background
+  location and no `Always` prompt — do not describe one. `PRIVACY.md` is the
+  source of truth for the wording.
 - **Testing it in Australia from Cupertino.** The demo tenant seeded by
   `scripts/seed-demo.mjs` includes a job site at Apple Park (lat 37.3349, lng
   -122.0090, 800 m radius) precisely so a reviewer standing in Cupertino is

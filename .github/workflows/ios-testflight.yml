@@ -339,10 +339,11 @@ jobs:
             echo "  workflow can set it."
             echo "- Internal testers (anyone with an App Store Connect account on"
             echo "  the team) get it immediately, no beta review."
-            echo "- External testers wait on Beta App Review, and background"
-            echo "  location gets that read properly. Explain in the review notes"
-            echo "  that tracking is worker-initiated, for clock-in at the"
-            echo "  employer's own sites, with a persistent notification."
+            echo "- External testers wait on Beta App Review. Location here is"
+            echo "  While Using only - no background modes, no Always prompt -"
+            echo "  so say in the review notes that the app reads location only"
+            echo "  while it is open, to check a worker is at their employer's"
+            echo "  own job site when they clock on or off."
           } >> "$GITHUB_STEP_SUMMARY"
 
       # The keychain holds a distribution private key and the profile is a

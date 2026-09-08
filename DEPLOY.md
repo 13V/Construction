@@ -322,13 +322,13 @@ extraction. Nothing else in the app depends on it.
 
 ## Still to do before this is a real product
 
-- **Background location.** Mobile web only reports while the page is open. The native
-  shell that fixes this is scaffolded in `apps/mobile` — the app already picks a
-  location backend at run time and tells the worker when tracking is degraded — but
-  neither platform has been compiled: this was built in a container with no Android SDK
-  and no Xcode. Read `apps/mobile/README.md` before trusting it, and test on a real
-  phone with the screen off. This is still the last thing between the app and a paying
-  crew.
+- **Location only reports while the app is open**, on web and on the phone alike.
+  The native shell was built to fix that and could not: App Review rejected
+  background location twice under 5.6, and does not accept employee timekeeping
+  as a justification for it on iOS at any framing. The plugin, the `Always`
+  prompt and `UIBackgroundModes` are all gone. A worker clocks on by tapping, or
+  automatically while the app is in front of them. Read `apps/mobile/README.md`
+  before reopening this.
 - **Payroll export** produces Xero and MYOB timesheet CSVs plus a detailed audit
   trail, ordinary/overtime split at 38 hours. The earnings-rate names
   ("Ordinary Hours", "Overtime Hours") must match what is set up in your payroll
@@ -355,6 +355,6 @@ gap you know about.
   schedule is a plan, not a gate.
 - **A shift cannot be split across two cost codes.** A worker sets one code on
   their open shift; moving them mid-day means the office edits the timesheet.
-- **Background location needs a native app.** Mobile web only reports while
-  the page is open. This is still the single biggest gap before a paying crew
-  relies on it.
+- **Nothing reports with the app closed**, and on iOS nothing will: see above.
+  A crew that needs hands-off clock-in needs a different mechanism — a site
+  beacon, a supervisor's roll call, or the office correcting timesheets.

@@ -1,27 +1,29 @@
 # Crewline — the phone app
 
-Exists for one reason: **background location**.
+It existed for one reason — **background location** — and that reason is gone.
 
-Mobile web stops reporting the moment the phone locks or the browser is
-backgrounded, which is most of a working day. The whole product promise is that
-a worker drives to site and is on the clock before they get out of the ute, and
-on the web that promise is false. This shell keeps the watcher running with the
-screen off. Everything else on the phone — the clock, the day's hours, photos,
-chat — is the same worker surface the web serves at `/worker`.
+App Review rejected it twice under 5.6, so the plugin, the `Always` prompt and
+`UIBackgroundModes` all came out (see `location.ts`). What ships now reads
+location **only while the app is open**, to check a worker is standing at the
+job site when they clock on or off. A shift can still open on its own, but only
+with the app in front of the worker.
+
+That leaves the shell earning its keep on the smaller things: an icon on the
+home screen, the camera and photo pickers behaving like a native app, and no
+browser chrome in the sun. Everything on the phone — the clock, the day's hours,
+photos, chat — is the same worker surface the web serves at `/worker`.
 
 ## State of play
 
 | | |
 |---|---|
 | Android | **Builds.** `app-debug.apk`, 5.2 MB, produced and inspected. Not yet run on a physical phone. |
-| iOS | **Scaffolded, never compiled.** Needs macOS and Xcode; neither existed in the environment this was written in. There is a pipeline for it now — `.github/workflows/ios-testflight.yml` builds on a GitHub macOS runner. See `TESTFLIGHT.md`. |
+| iOS | **Ships.** `.github/workflows/ios-testflight.yml` builds and uploads on a GitHub macOS runner; builds have gone through TestFlight and App Review. See `TESTFLIGHT.md`. |
 
-What "not yet run on a physical phone" rules out: whether Android's Doze mode
-lets the foreground service keep reporting overnight, whether the manufacturer's
-battery optimiser kills it (Xiaomi, Huawei and Samsung are the usual offenders),
-and whether the fixes actually arrive often enough for the 2-minute dwell rule.
-Those cannot be answered without a phone in a ute. Do that before a crew relies
-on it.
+What "not yet run on a physical phone" still rules out on Android: whether the
+fixes arrive often enough for the 2-minute dwell rule while the worker has the
+app open. That cannot be answered without a phone in a ute. Do it before a crew
+relies on it.
 
 ## Build it
 
@@ -84,32 +86,31 @@ Take Photo, Upload Receipt, Plans, Safety and Daily Log.
 
 ## Permissions, and why each one
 
-Android — the plugin's own manifest merges in fine/coarse location, the
-foreground service, its type, and `POST_NOTIFICATIONS`. It deliberately leaves
-one to us:
+There is no location plugin any more. The web layer's own
+`navigator.geolocation` is all that runs, so the permission surface is the
+smallest one either platform offers.
 
-- **`ACCESS_BACKGROUND_LOCATION`** — declared in
-  `android/app/src/main/AndroidManifest.xml`. This is the one that matters and
-  the one that triggers a Play Store review, which is why the plugin makes it an
-  explicit decision rather than declaring it for you. Without it Android stops
-  delivering fixes the moment the app leaves the foreground.
-- **`WAKE_LOCK`** — keeps the service alive through Doze between fixes.
+iOS — `Info.plist` carries **`NSLocationWhenInUseUsageDescription` and nothing
+else**. No `NSLocationAlwaysAndWhenInUseUsageDescription`, no `UIBackgroundModes`.
+The app cannot ask for `Always`; the prompt does not offer it. iOS shows that
+string verbatim, so it is written for the worker holding the phone, not for a
+reviewer.
 
-iOS — `Info.plist` carries `NSLocationAlwaysAndWhenInUseUsageDescription` and
-`UIBackgroundModes: location`. iOS shows those strings verbatim in the prompt, so
-they are written for the worker holding the phone, not for a reviewer. A vague
-one gets declined, and a declined permission means hours silently stop
-recording.
+Android — fine and coarse location only. **`ACCESS_BACKGROUND_LOCATION` is not
+declared** and must not be added back without re-reading the section below.
 
-Android requires a persistent notification for background location. That is a
-feature here, not a tax: the crew can see exactly when the app is tracking them,
-and turning it off is one tap away.
+Keep both plists honest with what `location.ts` actually does. Two of the six
+rejections on 1.0 were the gap between the two.
 
 ## Store review
 
-Background location gets a manual review on both stores. The declared use is
-automatic timesheet clock-in at the employer's own job sites, only while the
-worker has switched tracking on, with a visible notification throughout.
+Background location gets a manual review on both stores, and on iOS this app
+lost that argument twice — App Review does not accept employee-monitoring as a
+justification for it, however the feature is framed. Do not reach for it again
+without a use case that survives 5.6 and 5.1.2 on its own.
+
+What is declared now: location read while the app is open, to confirm a worker
+is at their employer's own job site when they clock on or off.
 
 **Have written consent from every worker on file before you submit.** Australian
 workplace surveillance law is state-based and the notice requirements differ.
@@ -117,12 +118,12 @@ See `SHIP.md`.
 
 ## Known rough edges
 
-- `@capacitor-community/background-geolocation@1.2.26` declares Capacitor 7 in
-  its `devDependencies`, and the CLI warns about it on `cap add ios`. The
-  warning reads worse than it is: the plugin's own `Package.swift` depends on
-  `capacitor-swift-pm` `from: "8.0.0"`, which this project's `exact: "8.5.0"`
-  satisfies, so Swift Package Manager resolves it cleanly. Android builds
-  regardless. Still unproven on a device.
+- `ios/App/CapApp-SPM/Package.swift` is regenerated by `npx cap sync ios` on
+  every CI build, so the committed copy is only ever a snapshot. It went stale
+  once already, still naming the background-geolocation package after the
+  plugin had been removed from `package.json`. CI was unaffected — it syncs
+  first — but a local `xcodebuild` would have failed to resolve. If you change
+  plugins, run `cap sync` and commit what it writes.
 - The web assets are bundled rather than pointed at the hosted URL, because a
   job site is exactly where signal drops — the app has to open and show the
   clock with no network. The trade is that a web deploy no longer reaches
