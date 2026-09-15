@@ -69,8 +69,8 @@ const PAT = pick(process.env.SUPABASE_PAT, fromEnvFile('SUPABASE_PAT'))
 const SERVICE_KEY = pick(process.env.SUPABASE_SERVICE_ROLE_KEY, fromEnvFile('SUPABASE_SERVICE_ROLE_KEY'))
 const PROJECT = SB.replace(/^https:\/\//, '').split('.')[0]
 
-if (!ANON || !PAT) {
-  console.error('Need SUPABASE_ANON_KEY and SUPABASE_PAT — in the environment, or in apps/dashboard/.env.local.')
+if (!ANON || !(SERVICE_KEY || PAT)) {
+  console.error('Need SUPABASE_ANON_KEY and either SUPABASE_SERVICE_ROLE_KEY or SUPABASE_PAT — in the environment, or in apps/dashboard/.env.local.')
   process.exit(2)
 }
 
