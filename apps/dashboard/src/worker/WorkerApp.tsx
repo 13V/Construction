@@ -36,6 +36,7 @@ import { PlansScreen } from './PlansScreen'
 import { SafetyScreen } from './SafetyScreen'
 import { theme } from '../theme'
 import type { LatLng } from '../types'
+import { BRAND } from './brand'
 
 /**
  * The worker's phone — ported screen-for-screen from
@@ -771,10 +772,10 @@ function AccountSheet({ me, onClose }: { me: WorkerRow; onClose: () => void }) {
             Delete my account
           </button>
           <span
-            onClick={() => viewFile({ url: '/privacy', name: 'What Crewline records about you' })}
+            onClick={() => viewFile({ url: '/privacy', name: `What ${BRAND} records about you` })}
             style={{ fontSize: 12.5, color: design.faint, textAlign: 'center', textDecoration: 'underline', cursor: 'pointer' }}
           >
-            What Crewline records about you
+            What {BRAND} records about you
           </span>
         </div>
       </div>

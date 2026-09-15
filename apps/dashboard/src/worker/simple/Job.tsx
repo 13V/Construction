@@ -14,6 +14,7 @@ import { distanceM } from '../../geofence/geo'
 import { SafetyTab } from './Safety'
 import { OverviewTab } from './Overview'
 import { addressLine, avatarGrey, builderOf, s, SAFE_BOTTOM, SAFE_TOP, ticketTone, TICKET_MISSING } from './stheme'
+import { BRAND } from '../brand'
 
 export type JobTab = 'overview' | 'safety' | 'crew' | 'photos' | 'chat' | 'money'
 
@@ -695,7 +696,7 @@ function MoneyTab({
       </div>
 
       <span style={{ flex: 'none', fontSize: 13, lineHeight: 1.5, color: '#696D74' }}>
-        Tap any line for the full rundown. Photograph a supplier invoice and Crewline reads
+        Tap any line for the full rundown. Photograph a supplier invoice and {BRAND} reads
         the total, then files it against this job. Only owners and the office see this tab.
       </span>
     </div>

@@ -5,6 +5,7 @@ import { ghostStyle, labelStyle, fieldStyle } from '../ui/kit'
 import { api } from '../data/api'
 import { supabase } from '../data/supabase'
 import type { WorkerRow } from '../data/supabase'
+import { BRAND } from './brand'
 
 /**
  * Account deletion — App Store Guideline 5.1.1(v). Self-contained: mount it
@@ -236,7 +237,7 @@ export function DeleteAccount({ me, onClose }: { me: WorkerRow; onClose: () => v
           <>
             <h2 style={heading}>Delete your account</h2>
             <p style={sub}>
-              This removes your login from Crewline for good. It doesn't erase your work — here's exactly
+              This removes your login from {BRAND} for good. It doesn't erase your work — here's exactly
               what stays and what goes.
             </p>
 

@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, type WorkerRow } from '../../data/supabase'
 import { s, SAFE_BOTTOM, avatarGrey } from './stheme'
+import { BRAND } from '../brand'
 
 interface Member {
   id: string
@@ -282,7 +283,7 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
                   <span style={label}>EMAIL TO SIGN UP WITH (OPTIONAL)</span>
                   <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="them@example.com" inputMode="email" style={field} />
                   <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
-                    They download Crewline, sign up with this address, confirm it, and their account
+                    They download {BRAND}, sign up with this address, confirm it, and their account
                     joins this record — nothing to send, nothing to expire. Leave it blank and they
                     still show on the roster; add it later when you know it.
                   </span>

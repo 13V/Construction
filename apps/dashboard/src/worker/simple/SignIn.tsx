@@ -5,24 +5,55 @@
  * in), so this screen is composed strictly from the parts it did draw — the
  * sign-up form fields and buttons — carrying the same logic the old screen
  * had: sign in, create a company, or claim an invited spot.
+ *
+ * The mark in the hero is the app icon's own tiles, drawn from the icon's
+ * measured geometry (AppIcon-512@2x.png: tiles #fff and #007bff on #1a1d21,
+ * which is this theme's ink) so the screen matches what the person just
+ * tapped on their home screen. The name under it is BRAND — Proven on the
+ * phone, Crewline in a browser — see ../brand.ts for why they differ.
  */
 import { useState } from 'react'
 import { supabase } from '../../data/supabase'
 import { api } from '../../data/api'
 import { s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
+import { BRAND, WHITE_LABELLED } from '../brand'
+import { viewFile } from './FileViewer'
 
 const field = {
   width: '100%',
   height: 56,
-  padding: '0 14px',
+  padding: '0 16px',
+  boxSizing: 'border-box',
   background: '#fff',
   border: '1px solid #DCE0E6',
-  borderRadius: 10,
+  borderRadius: 12,
   font: 'inherit',
   fontSize: 16,
   color: '#1A1D21',
   outline: 'none',
+  transition: 'border-color .12s, box-shadow .12s',
 } as const
+
+/**
+ * The focus ring, and the only stylesheet on this screen. Inline styles
+ * cannot express :focus, and a field that does not show it has focus is the
+ * one thing a form on a phone in daylight cannot afford.
+ */
+const FOCUS_RING = `
+.si-field:focus { border-color: #1A1D21; box-shadow: 0 0 0 3px rgba(26,29,33,.10); }
+.si-field::placeholder { color: #A5ABB2; }
+`
+
+/** The app icon's tiles, cropped to their own bounds. See the header comment. */
+const Mark = () => (
+  <svg width="46" viewBox="195 255 634 514" role="img" aria-label={BRAND} style={{ display: 'block', height: 'auto' }}>
+    <rect x="195" y="255" width="301" height="241" rx="28" fill="#fff" />
+    <rect x="529" y="255" width="301" height="241" rx="28" fill="#fff" />
+    <rect x="195" y="529" width="134" height="241" rx="28" fill="#fff" />
+    <rect x="362" y="529" width="301" height="241" rx="28" fill="#007bff" />
+    <rect x="696" y="529" width="134" height="241" rx="28" fill="#fff" />
+  </svg>
+)
 
 const labelText = {
   fontSize: 12,
@@ -59,7 +90,7 @@ export function readableAuthError(err: unknown): string {
     return 'There is already an account on that email. Sign in with it instead, or use a different address.'
   }
   if (/failed to fetch|networkerror|load failed/i.test(raw)) {
-    return 'Could not reach Crewline. Check your signal and try again — sites are good at eating reception.'
+    return `Could not reach ${BRAND}. Check your signal and try again — sites are good at eating reception.`
   }
   return raw
 }
@@ -180,50 +211,73 @@ const CAN_CREATE_COMPANY = import.meta.env.VITE_SURFACE !== 'worker'
   }
 
   const label = (text: string, input: React.ReactNode) => (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <span style={labelText}>{text}</span>
       {input}
     </label>
   )
 
+  // What the form is for, said once above it rather than in the hero, so the
+  // hero can stay the same picture whichever way the person is going.
+  //
+  // CAN_CREATE_COMPANY is written first and inline in every one of these,
+  // not hoisted into a tidier boolean: `false && …` folds at the site and
+  // the company-signup strings drop out of the phone bundle, which is what
+  // the notes filed with App Review say happens. Behind a derived const the
+  // minifier kept them. Checked by grepping the built output, both ways.
+  const heading =
+    mode === 'signin' ? 'Sign in' : CAN_CREATE_COMPANY && !joining ? 'Create a company account' : 'Create your login'
+  const lede =
+    mode === 'signin'
+      ? 'Use the email your office has for you.'
+      : CAN_CREATE_COMPANY && !joining
+        ? 'You are setting up a new company. Your crew join it afterwards.'
+        : 'Your office has already added you to a crew. Sign up with the email they have for you.'
+
+  const linkStyle = { fontFamily: 'inherit', fontSize: 15, background: 'none', border: 0, padding: 0, cursor: 'pointer' } as const
+  const footLink = { fontSize: 12.5, fontWeight: 600, color: s.muted, background: 'none', border: 0, padding: '6px 2px', fontFamily: 'inherit', cursor: 'pointer' } as const
+
   return (
-    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', background: '#F5F6F7', overflow: 'auto' }}>
-      {/* The dark identity block — the drawing's gradient, the wordmark. */}
-      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 6, padding: `calc(54px + ${SAFE_TOP}) 24px 26px`, background: 'linear-gradient(#23272C,#15181C)' }}>
-        <span style={{ fontSize: 27, fontWeight: 700, letterSpacing: '-.02em', color: '#fff' }}>Crewline</span>
-        <span style={{ fontSize: 14.5, lineHeight: 1.4, color: '#98A0A8' }}>
-          {mode === 'signin'
-            ? 'Sign in to your company.'
-            : CAN_CREATE_COMPANY && !joining
-              ? 'Create a company account.'
-              : 'Sign up with the email your office invited.'}
-        </span>
+    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', background: s.appBg, overflow: 'auto' }}>
+      <style>{FOCUS_RING}</style>
+
+      {/* The dark identity block — the drawing's gradient, the icon's mark, the name. */}
+      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: `calc(60px + ${SAFE_TOP}) 24px 32px`, background: 'linear-gradient(#24282D,#15181C)' }}>
+        <Mark />
+        <span style={{ marginTop: 18, fontSize: 31, fontWeight: 700, letterSpacing: '-.025em', lineHeight: 1.1, color: '#fff' }}>{BRAND}</span>
+        <span style={{ marginTop: 6, fontSize: 15, lineHeight: 1.4, color: s.onDarkMuted }}>Crew hours, sites and safety.</span>
       </div>
 
-      <form onSubmit={submit} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: `22px 20px calc(28px + ${SAFE_BOTTOM})` }}>
-        {mode === 'signup' && CAN_CREATE_COMPANY && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', background: '#fff', border: '1px solid #DCE0E6', borderRadius: 10, fontSize: 14.5, color: '#4A5057', cursor: 'pointer' }}>
-            <input type="checkbox" checked={joining} onChange={(e) => setJoining(e.target.checked)} style={{ width: 18, height: 18, accentColor: s.accent }} />
+      <form onSubmit={submit} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: `26px 20px calc(24px + ${SAFE_BOTTOM})` }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 2 }}>
+          <span style={{ fontSize: 21, fontWeight: 600, letterSpacing: '-.015em', color: s.ink }}>{heading}</span>
+          <span style={{ fontSize: 14.5, lineHeight: 1.45, color: s.body }}>{lede}</span>
+        </div>
+
+        {CAN_CREATE_COMPANY && mode === 'signup' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: '#fff', border: `1px solid ${s.border}`, borderRadius: 12, fontSize: 15, color: s.body, cursor: 'pointer' }}>
+            <input type="checkbox" checked={joining} onChange={(e) => setJoining(e.target.checked)} style={{ width: 18, height: 18, margin: 0, accentColor: s.accent }} />
             My office already added me to a crew
           </label>
         )}
 
-        {mode === 'signup' && CAN_CREATE_COMPANY && !joining && (
+        {CAN_CREATE_COMPANY && mode === 'signup' && !joining && (
           <>
             {label('COMPANY NAME', (
-              <input style={field} value={company} onChange={(e) => setCompany(e.target.value)} required placeholder="e.g. Proven Tiling Solutions" />
+              <input className="si-field" style={field} value={company} onChange={(e) => setCompany(e.target.value)} required placeholder="e.g. Proven Tiling Solutions" />
             ))}
             {label('YOUR NAME', (
-              <input style={field} value={name} onChange={(e) => setName(e.target.value)} required placeholder="First and last" />
+              <input className="si-field" style={field} value={name} onChange={(e) => setName(e.target.value)} required placeholder="First and last" />
             ))}
           </>
         )}
 
         {label('EMAIL', (
-          <input style={field} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@company.com.au" />
+          <input className="si-field" style={field} type="email" autoComplete="email" inputMode="email" autoCapitalize="none" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@company.com.au" />
         ))}
         {label('PASSWORD', (
           <input
+            className="si-field"
             style={field}
             type="password"
             autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
@@ -231,20 +285,27 @@ const CAN_CREATE_COMPANY = import.meta.env.VITE_SURFACE !== 'worker'
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
+            placeholder={mode === 'signin' ? 'Your password' : 'At least 8 characters'}
           />
         ))}
 
-        {error && <span style={{ fontSize: 13.5, lineHeight: 1.45, color: '#A3282E' }}>{error}</span>}
-        {message && <span style={{ fontSize: 13.5, lineHeight: 1.45, color: '#1F7A4D' }}>{message}</span>}
+        {error && (
+          <span style={{ padding: '12px 14px', borderRadius: 10, background: s.redFill, fontSize: 13.5, lineHeight: 1.45, color: s.red }}>{error}</span>
+        )}
+        {message && (
+          <span style={{ padding: '12px 14px', borderRadius: 10, background: s.greenFill, fontSize: 13.5, lineHeight: 1.45, color: s.green }}>{message}</span>
+        )}
 
         <button
           type="submit"
           disabled={busy}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 56, marginTop: 4, background: busy ? '#4A5057' : '#1A1D21', border: 0, borderRadius: 10, color: '#fff', fontFamily: 'inherit', fontSize: 15.5, fontWeight: 700, letterSpacing: '.03em', cursor: busy ? 'default' : 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 56, marginTop: 4, background: busy ? s.charcoal : s.ink, border: 0, borderRadius: 12, color: '#fff', fontFamily: 'inherit', fontSize: 15.5, fontWeight: 700, letterSpacing: '.04em', cursor: busy ? 'default' : 'pointer', boxShadow: busy ? 'none' : '0 6px 16px rgba(26,29,33,.18)' }}
         >
           {busy ? 'WORKING…' : mode === 'signin' ? 'SIGN IN' : 'CREATE ACCOUNT'}
         </button>
 
+        {/* The other way in: a sentence, then the action, so the action reads
+            as a link and not as a second button competing with the first. */}
         <button
           type="button"
           onClick={() => {
@@ -252,36 +313,59 @@ const CAN_CREATE_COMPANY = import.meta.env.VITE_SURFACE !== 'worker'
             setError(null)
             setMessage(null)
           }}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 48, background: 'none', border: 0, fontFamily: 'inherit', fontSize: 14.5, fontWeight: 600, color: s.accent, cursor: 'pointer' }}
+          style={{ ...linkStyle, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', columnGap: 5, width: '100%', minHeight: 44, color: s.body }}
         >
-          {mode === 'signin'
-            ? CAN_CREATE_COMPANY
-              ? 'Set up a new company'
-              : 'My office added me — create my login'
-            : 'I already have an account'}
+          {mode === 'signin' ? (
+            CAN_CREATE_COMPANY ? (
+              <>
+                <span>New here?</span>
+                <span style={{ fontWeight: 700, color: s.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Set up a new company</span>
+              </>
+            ) : (
+              <>
+                <span>My office added me.</span>
+                <span style={{ fontWeight: 700, color: s.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Create my login</span>
+              </>
+            )
+          ) : (
+            <>
+              <span>Already have a login?</span>
+              <span style={{ fontWeight: 700, color: s.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>Sign in</span>
+            </>
+          )}
         </button>
 
         {mode === 'signin' && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '2px 4px' }}>
-              <span style={{ flex: 1, height: 1, background: '#DCE0E6' }} />
-              <span style={{ flex: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '.11em', color: '#8B9096' }}>OR</span>
-              <span style={{ flex: 1, height: 1, background: '#DCE0E6' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 4px 0' }}>
+              <span style={{ flex: 1, height: 1, background: s.border }} />
+              <span style={{ flex: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '.11em', color: s.faint }}>OR</span>
+              <span style={{ flex: 1, height: 1, background: s.border }} />
             </div>
             <button
               type="button"
               onClick={() => void openDemo()}
               disabled={demoBusy}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 56, background: '#fff', border: '1px solid #DCE0E6', borderRadius: 10, fontFamily: 'inherit', fontSize: 15.5, fontWeight: 700, letterSpacing: '.03em', color: '#1A1D21', cursor: demoBusy ? 'default' : 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 56, background: '#fff', border: `1px solid ${s.border}`, borderRadius: 12, fontFamily: 'inherit', fontSize: 15.5, fontWeight: 700, letterSpacing: '.04em', color: s.ink, cursor: demoBusy ? 'default' : 'pointer' }}
             >
               {demoBusy ? 'OPENING THE DEMO…' : 'TRY THE DEMO'}
             </button>
-            <span style={{ fontSize: 13, lineHeight: 1.5, color: '#696D74', textAlign: 'center', padding: '0 8px' }}>
-              A fictional tiling company — five jobs, ten crew, the money — to poke
-              around in. Nothing here is real.
+            <span style={{ fontSize: 13, lineHeight: 1.5, color: s.muted, textAlign: 'center', padding: '0 12px' }}>
+              A fictional tiling company — five jobs, ten crew, the money. Nothing in it is real.
             </span>
           </>
         )}
+
+        {/* The legal lines every sign-in owes, reachable before anyone has an
+            account — the same pages App Review opens with none. */}
+        <div style={{ marginTop: 'auto', paddingTop: 22, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button type="button" onClick={() => viewFile({ url: '/privacy', name: 'Privacy policy' })} style={footLink}>Privacy policy</button>
+            <span style={{ color: s.ghost, fontSize: 12 }}>·</span>
+            <button type="button" onClick={() => viewFile({ url: '/support', name: 'Support' })} style={footLink}>Support</button>
+          </span>
+          {WHITE_LABELLED && <span style={{ fontSize: 12, color: s.faint, letterSpacing: '.01em' }}>Powered by Crewline</span>}
+        </div>
       </form>
     </div>
   )

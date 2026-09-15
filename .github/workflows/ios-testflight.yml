@@ -52,6 +52,10 @@ jobs:
       # entirely by this flag — see the comment in src/main.tsx for why it is a
       # build-time constant rather than a runtime check.
       VITE_SURFACE: worker
+      # What the sign-in screen and the copy call the app. The listing is
+      # "Proven - For Tilers"; a phone that says Crewline under a Proven icon
+      # is the 2.3.8 finding 1.0 (44) drew. See src/worker/brand.ts.
+      VITE_BRAND: Proven
       VITE_API_BASE: ${{ inputs.api_base || 'https://construction-opal-three.vercel.app' }}
       # RAW_, not VITE_: a hand-pasted secret can carry an invisible trailing
       # newline, and one baked into the bundle breaks every request the phone
