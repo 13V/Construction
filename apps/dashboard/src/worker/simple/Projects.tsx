@@ -579,27 +579,47 @@ export function ProjectsScreen({
                     <span style={{ fontSize: 15.5, fontWeight: 600, color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {addressLine(site) || site.name}
                     </span>
-                    {builderOf(site) && (
-                      <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{builderOf(site)}</span>
-                    )}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                      {builderOf(site) && (
+                        <span style={{ flex: '0 1 auto', fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{builderOf(site)}</span>
+                      )}
+                      <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 5, height: 20, padding: '0 8px', borderRadius: 10, fontSize: 10.5, fontWeight: 700, background: '#FFF6E3', color: '#8A6100' }}>
+                        <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#8A6100' }} />
+                        {site.schedule_note || 'Starting soon'}
+                      </span>
+                    </span>
                   </span>
-                  {/* The only way a phone-created job ever left 'starting_soon'
-                      before this: nothing did. See setSiteStatus above. */}
+                  {/* Two things the office needs on a job that has not begun,
+                      and neither was reachable before. Rostering comes first
+                      deliberately: a crew is booked the week before a job
+                      starts, not the morning of, and making "active" the price
+                      of admission to the crew list is what stranded every job
+                      a phone ever created. Assignments do not read job status
+                      anywhere (Schedule.tsx, data.ts), so a roster set here
+                      shows up the same as one set on a running job. */}
                   {office && (
-                    <span
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (statusBusy !== site.id) void setSiteStatus(site, 'active')
-                      }}
-                      style={{ flex: 'none', display: 'flex', alignItems: 'center', height: 26, padding: '0 10px', borderRadius: 13, fontSize: 11, fontWeight: 700, background: '#14171A', color: '#fff', cursor: 'pointer', opacity: statusBusy === site.id ? 0.6 : 1 }}
-                    >
-                      {statusBusy === site.id ? 'Marking…' : 'Mark active'}
+                    <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setAssignError(null)
+                          setAssignFor(site)
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', height: 26, padding: '0 10px', borderRadius: 13, fontSize: 11, fontWeight: 700, background: '#fff', border: '1px solid #DCE0E6', color: '#14171A', cursor: 'pointer' }}
+                      >
+                        Roster
+                      </span>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (statusBusy !== site.id) void setSiteStatus(site, 'active')
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', height: 26, padding: '0 10px', borderRadius: 13, fontSize: 11, fontWeight: 700, background: '#14171A', color: '#fff', cursor: 'pointer', opacity: statusBusy === site.id ? 0.6 : 1 }}
+                      >
+                        {statusBusy === site.id ? 'Marking…' : 'Mark active'}
+                      </span>
                     </span>
                   )}
-                  <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 5, height: 23, padding: '0 9px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#FFF6E3', color: '#8A6100' }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#8A6100' }} />
-                    {site.schedule_note || 'Starting soon'}
-                  </span>
                   <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none' }}>
                     <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
