@@ -98,7 +98,11 @@ export function DailyLogScreen({
 
   /** Ask the server to assemble today from the punches, photos and deliveries. */
   const draft = async () => {
-    if (!siteId || drafting) return
+    // Guarded against send() too: fetchDraft() re-runs the server's draft
+    // computation and saves it, so if this overlapped a send in flight, this
+    // response could land after the PATCH and silently overwrite what the
+    // worker just typed and sent with the auto-generated placeholder.
+    if (!siteId || drafting || busy) return
     setDrafting(true)
     setError(null)
     try {
@@ -116,7 +120,10 @@ export function DailyLogScreen({
   }
 
   const send = async () => {
-    if (!siteId || busy) return
+    // Mirror of the guard in draft(): don't let SEND fire its own
+    // draft-log call (and race the one already in flight) while DRAFTING…
+    // is still showing.
+    if (!siteId || busy || drafting) return
     setBusy(true)
     setError(null)
     const payload = {
@@ -199,7 +206,7 @@ export function DailyLogScreen({
               The app can assemble a draft from today's punches, photos and deliveries. You correct it before
               anything is posted.
             </span>
-            <button onClick={() => void draft()} disabled={drafting || !siteId} style={{ ...primary, opacity: drafting ? 0.6 : 1 }}>
+            <button onClick={() => void draft()} disabled={drafting || busy || !siteId} style={{ ...primary, opacity: drafting ? 0.6 : 1 }}>
               {drafting ? 'DRAFTING…' : 'DRAFT TODAY FOR ME'}
             </button>
           </div>
@@ -250,7 +257,7 @@ export function DailyLogScreen({
       </div>
 
       <div style={{ flex: 'none', padding: '10px 18px 18px', borderTop: `1px solid ${theme.border}`, background: theme.panel }}>
-        <button onClick={() => void send()} disabled={busy || !siteId} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>
+        <button onClick={() => void send()} disabled={busy || drafting || !siteId} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>
           {busy ? 'SENDING…' : sent ? 'SEND THE CHANGES' : 'SEND TODAY’S LOG'}
         </button>
         <span style={{ display: 'block', marginTop: 8, textAlign: 'center', fontSize: 12, color: theme.inkFaint }}>

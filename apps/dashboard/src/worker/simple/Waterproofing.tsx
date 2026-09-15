@@ -922,14 +922,14 @@ function StepSheet({
    * turn up in the job's Photos grid — that screen asks for kind='photo' with
    * no package, which is the day's site photos and nothing else.
    */
-  async function attach(list: FileList, category: string | null = null) {
+  async function attach(list: File[], category: string | null = null) {
     setBusy(true)
     setError(null)
     try {
       const row = await ensurePackage()
       if (!row) return
       const client = supabase()
-      for (const file of Array.from(list)) {
+      for (const file of list) {
         const path = objectPath(me.company_id, site.id, file.name)
         await uploadFile(BUCKET_FILES, path, file)
         const isImage = /^image\//.test(file.type)
@@ -1185,7 +1185,7 @@ function Note({ children }: { children: ReactNode }) {
  * One control, two ways in: the camera for what is in front of you, the file
  * picker for a PDF that came by email. Both accept several at once.
  */
-function Uploader({ label, busy, camera, onFiles }: { label: string; busy: boolean; camera?: boolean; onFiles: (l: FileList) => void }) {
+function Uploader({ label, busy, camera, onFiles }: { label: string; busy: boolean; camera?: boolean; onFiles: (l: File[]) => void }) {
   return (
     <span style={{ display: 'flex', gap: 9 }}>
       {camera && (
@@ -1197,8 +1197,14 @@ function Uploader({ label, busy, camera, onFiles }: { label: string; busy: boole
             multiple
             disabled={busy}
             onChange={(e) => {
-              if (e.target.files?.length) onFiles(e.target.files)
+              // e.target.files is a live FileList tied to this input, not a snapshot —
+              // resetting e.target.value below (needed so picking the same file twice
+              // still fires onChange) mutates that same list out from under attach(),
+              // which is async and doesn't read it until after its first await. Copy
+              // it to a plain array first so the reset can't empty it underneath us.
+              const picked = e.target.files ? Array.from(e.target.files) : []
               e.target.value = ''
+              if (picked.length) onFiles(picked)
             }}
             style={{ display: 'none' }}
           />
@@ -1216,8 +1222,10 @@ function Uploader({ label, busy, camera, onFiles }: { label: string; busy: boole
           multiple
           disabled={busy}
           onChange={(e) => {
-            if (e.target.files?.length) onFiles(e.target.files)
+            // Same live-FileList hazard as the camera input above: snapshot before reset.
+            const picked = e.target.files ? Array.from(e.target.files) : []
             e.target.value = ''
+            if (picked.length) onFiles(picked)
           }}
           style={{ display: 'none' }}
         />
@@ -1349,7 +1357,7 @@ function CertificateStep({
   wet: WetRow[]
   busy: boolean
   onPatch: (values: Record<string, unknown>) => Promise<boolean>
-  onAttach: (l: FileList, category: string | null) => Promise<void>
+  onAttach: (l: File[], category: string | null) => Promise<void>
   onRemove: (id: string) => void
 }) {
   const [company, setCompany] = useState<CompanyDetails | null>(null)
@@ -1575,7 +1583,29 @@ function CertificateStep({
         {detail('Builder', site.client_name || '—')}
         {detail('Site address', site.address || '—')}
         {detail('Date of completion', completion ? shortDate(completion) : '—')}
-        {detail('Scope of work', scope)}
+        {office ? (
+          <span style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '11px 14px', borderBottom: '1px solid #EDEFF1' }}>
+            <span style={{ flex: 'none', width: 108, fontSize: 12, color: '#7B838B', paddingTop: 12 }}>Scope of work</span>
+            {/* Nothing in the app writes to the per-wet-area `waterproofing` table, so the
+                auto-seed above never has real areas to name and always falls back to the
+                generic 'waterproofing'. Until that's built, this is the only way to put the
+                actual scope on a legal compliance document — office can type over it here.
+                Locked once issued so the PDF and this field can't drift apart afterwards. */}
+            <textarea
+              key={pkg?.id ?? 'unsaved'}
+              defaultValue={scope}
+              disabled={issued}
+              rows={2}
+              onBlur={(e) => {
+                const next = e.target.value.trim()
+                if (next && next !== scope) void onPatch({ scope_of_work: next })
+              }}
+              style={{ ...field, flex: 1, minWidth: 0, height: 'auto', minHeight: 48, padding: '10px 13px', fontSize: 13.5, lineHeight: 1.4, resize: 'vertical' }}
+            />
+          </span>
+        ) : (
+          detail('Scope of work', scope)
+        )}
         {detail('Warranty period', `${pkg?.warranty_years ?? 2} years`)}
         <span style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '11px 14px' }}>
           <span style={{ flex: 'none', width: 108, fontSize: 12, color: '#7B838B', paddingTop: 1 }}>Certificate no.</span>

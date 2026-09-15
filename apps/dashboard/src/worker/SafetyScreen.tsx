@@ -31,6 +31,7 @@ interface SafetyDoc {
   body: string | null
   cost_code: string | null
   version: string
+  expires_on: string | null
 }
 
 interface Signed {
@@ -39,6 +40,22 @@ interface Signed {
 }
 
 const DAY = 86_400_000
+
+/**
+ * The same current/expiring/overdue reading the shelf screen (simple/Safety.tsx)
+ * gives a document's expires_on, in this screen's own colours — so a SWMS that
+ * is overdue for review does not sit here reading as a plain "REQUIRED" with no
+ * sign that revising it, not just signing it, is what's actually needed. Null
+ * for a document that isn't due soon: an empty gate row is not a problem, same
+ * reasoning as the shelf's "not required" state.
+ */
+function reviewState(expiresOn: string | null): { label: string; bg: string; fg: string } | null {
+  if (!expiresOn) return null
+  const days = Math.round((new Date(`${expiresOn}T00:00:00`).getTime() - Date.now()) / DAY)
+  if (days < 0) return { label: `Review overdue · ${fullDate(expiresOn)}`, bg: theme.alertFill, fg: theme.alertInk }
+  if (days <= 30) return { label: `Review due in ${days} day${days === 1 ? '' : 's'}`, bg: theme.warnFill, fg: theme.warnInk }
+  return null
+}
 
 function ticketState(c: Cert): { label: string; bg: string; fg: string; expired: boolean } {
   if (!c.expires_on) return { label: 'CURRENT', bg: theme.successFill, fg: theme.successInk, expired: false }
@@ -86,9 +103,19 @@ export function SafetyScreen({
     const [c, d, s, u] = await Promise.all([
       client.from('certifications').select('id,name,expires_on,restriction').eq('worker_id', me.id).order('expires_on', { nullsFirst: false }),
       // Same scope as unsigned_safety_docs() below: a document with no site is
-      // company-wide, one with a site belongs only to that job.
+      // company-wide, one with a site belongs only to that job. Restricted to
+      // the signable kinds and to real issued documents — a company policy or
+      // a bare SWMS template was being pulled in here (and by the RPC) as
+      // something to sign, with nowhere on this screen to actually sign it.
       siteId
-        ? client.from('safety_documents').select('id,kind,title,body,cost_code,version').eq('active', true).or(`site_id.is.null,site_id.eq.${siteId}`).order('kind')
+        ? client
+            .from('safety_documents')
+            .select('id,kind,title,body,cost_code,version,expires_on')
+            .eq('active', true)
+            .eq('is_template', false)
+            .in('kind', ['swms', 'induction'])
+            .or(`site_id.is.null,site_id.eq.${siteId}`)
+            .order('kind')
         : Promise.resolve({ data: [], error: null }),
       client.from('safety_signatures').select('document_id,signed_at').eq('worker_id', me.id),
       // The gate itself, asked of the database rather than recomputed here —
@@ -111,7 +138,8 @@ export function SafetyScreen({
 
   const expired = certs.filter((c) => ticketState(c).expired)
   const gateOpen = unsigned.length === 0
-  const siteDocs = docs.filter((d) => d.kind !== 'policy')
+  // docs is already scoped to signable, non-template documents by the query above.
+  const siteDocs = docs
   // Nothing to sign if it's not on the gate — the sheet just shows what was signed.
   const openSig = openDoc && !unsigned.some((u) => u.id === openDoc.id) ? signed.find((s) => s.document_id === openDoc.id) : undefined
 
@@ -161,6 +189,7 @@ export function SafetyScreen({
             {siteDocs.map((d) => {
               const sig = signed.find((s) => s.document_id === d.id)
               const need = unsigned.some((u) => u.id === d.id)
+              const rs = reviewState(d.expires_on)
               return (
                 <button
                   key={d.id}
@@ -191,6 +220,11 @@ export function SafetyScreen({
                           ? `${d.cost_code} · tap to read and sign`
                           : 'Tap to read and sign'}
                     </span>
+                    {rs && (
+                      <span style={{ alignSelf: 'flex-start', marginTop: 2, padding: '2px 8px', borderRadius: 8, background: rs.bg, color: rs.fg, fontSize: 10.5, fontWeight: 700 }}>
+                        {rs.label}
+                      </span>
+                    )}
                   </span>
                   <span
                     style={{

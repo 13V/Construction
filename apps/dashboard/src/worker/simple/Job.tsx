@@ -180,6 +180,10 @@ function PhotoGrid({ me, site, onTakePhoto }: { me: WorkerRow; site: JobSiteRow;
           onIndex={setViewerIndex}
           onClose={() => setViewerIndex(null)}
           onChanged={() => { void load().then((rows) => setFiles(rows)) }}
+          onDeleted={() => {
+            setViewerIndex(null)
+            void load().then((rows) => setFiles(rows))
+          }}
           ensureUrl={ensureUrl}
         />
       )}
@@ -202,6 +206,7 @@ function PhotoViewer({
   onIndex,
   onClose,
   onChanged,
+  onDeleted,
   ensureUrl,
 }: {
   files: SiteFileRow[]
@@ -212,6 +217,7 @@ function PhotoViewer({
   onIndex: (n: number) => void
   onClose: () => void
   onChanged: () => void
+  onDeleted: () => void
   ensureUrl: (f: SiteFileRow) => void
 }) {
   const file = files[index]!
@@ -219,6 +225,8 @@ function PhotoViewer({
   const here = onSite(file, site)
   const [busy, setBusy] = useState(false)
   const [flagErr, setFlagErr] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteErr, setDeleteErr] = useState<string | null>(null)
 
   useEffect(() => {
     if (!url) ensureUrl(file)
@@ -252,6 +260,27 @@ function PhotoViewer({
       setFlagErr(null)
       onChanged()
     }
+  }
+
+  const remove = async () => {
+    if (deleting) return
+    // Deleting a site photo cannot be undone and the evidence it carries —
+    // what a wet area looked like before it was covered — is often the whole
+    // reason it was taken. Same window.confirm the crew list uses before it
+    // takes somebody off the roster.
+    if (!window.confirm('Delete this photo? It cannot be undone.')) return
+    setDeleting(true)
+    // Same trap as removeAttachment in Overview.tsx: site_files DELETE is
+    // office-only (site_files_office_write), and a refused DELETE matches
+    // zero rows rather than erroring — PostgREST reports that as success, so
+    // the row coming back is the only proof it actually went.
+    const { data, error } = await supabase().from('site_files').delete().eq('id', file.id).select('id')
+    setDeleting(false)
+    if (error || !data || data.length === 0) {
+      setDeleteErr(error?.message ?? 'That did not delete — only the office can remove photos.')
+      return
+    }
+    onDeleted()
   }
 
   return (
@@ -311,6 +340,16 @@ function PhotoViewer({
           </button>
         )}
         {flagErr && <span style={{ fontSize: 12.5, color: '#FF8A94' }}>{flagErr}</span>}
+
+        {/* Same call as removeAttachment in Overview.tsx: shown to everyone,
+            same as that button, and left to site_files_office_write (RLS)
+            plus the read-back above to say whether a non-office tap
+            actually went through, rather than hiding it and duplicating
+            the role check here. */}
+        <button onClick={() => void remove()} disabled={deleting} style={{ ...vFlagBtn, borderColor: 'rgba(255,138,148,.4)', color: '#FF8A94', opacity: deleting ? 0.6 : 1 }}>
+          {deleting ? 'DELETING…' : 'DELETE PHOTO'}
+        </button>
+        {deleteErr && <span style={{ fontSize: 12.5, color: '#FF8A94' }}>{deleteErr}</span>}
       </div>
     </div>
   )
@@ -941,6 +980,7 @@ export function JobScreen({
   onTakePhoto,
   onAddInvoice,
   initialTab,
+  onTabChange,
 }: {
   me: WorkerRow
   site: JobSiteRow
@@ -954,9 +994,24 @@ export function JobScreen({
   /** "cost" is a manual entry with no camera step — see MoneyTab. */
   onAddInvoice: (mode?: 'invoice' | 'cost') => void
   initialTab?: JobTab
+  /**
+   * The shell unmounts this whole screen while PhotoScreen/ReceiptScreen are
+   * up (they're only rendered for screen==='tracker'), which drops this
+   * component's local `tab` state. Mirroring every switch up to the shell
+   * means the remount after a photo upload picks `initialTab` back up as
+   * whatever tab the user was actually on, not the tab the job was first
+   * opened to.
+   */
+  onTabChange?: (tab: JobTab) => void
 }) {
   const office = me.is_office
   const [tab, setTab] = useState<JobTab>(initialTab ?? 'overview')
+  // The header below reads from `site`, which is this screen's own prop from
+  // when the job was opened — Overview.tsx edits the DB row directly and
+  // reloads only its own local state, so without this the header kept
+  // showing the old builder/address until the job was closed and reopened.
+  const [siteEdits, setSiteEdits] = useState<{ client_name?: string; address?: string }>({})
+  const headerSite = { ...site, ...siteEdits }
 
   // The client's order. Waterproofing is not here because it moved inside
   // Overview, under the drawings — a job's wet areas are part of what the job
@@ -973,8 +1028,8 @@ export function JobScreen({
     return office ? all : all.filter((t) => t.key !== 'money')
   }, [office])
 
-  const where = addressLine(site)
-  const builder = builderOf(site)
+  const where = addressLine(headerSite)
+  const builder = builderOf(headerSite)
   /**
    * The state line that used to sit under the header is gone: every one of
    * its facts — who is on site, how far through, what is overdue — is already
@@ -1034,7 +1089,7 @@ export function JobScreen({
           return (
             <button
               key={t.key}
-              onClick={() => setTab(t.key)}
+              onClick={() => { setTab(t.key); onTabChange?.(t.key) }}
               style={{
                 position: 'relative',
                 flex: 'none',
@@ -1068,7 +1123,9 @@ export function JobScreen({
 
       <div style={{ flex: 1, minHeight: 0, background: '#F5F6F7', paddingBottom: SAFE_BOTTOM }}>
         {tab === 'photos' && <PhotoGrid me={me} site={site} onTakePhoto={onTakePhoto} />}
-        {tab === 'overview' && <OverviewTab me={me} site={site} />}
+        {tab === 'overview' && (
+          <OverviewTab me={me} site={site} onSiteChange={(patch) => setSiteEdits((prev) => ({ ...prev, ...patch }))} />
+        )}
         {tab === 'safety' && <SafetyTab me={me} site={site} />}
         {tab === 'chat' && chat(() => setTab('overview'))}
         {tab === 'money' && office && <MoneyTab site={site} floodHoldCount={floodHoldCount} onAddInvoice={onAddInvoice} />}

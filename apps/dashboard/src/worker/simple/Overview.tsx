@@ -337,7 +337,18 @@ function ReadinessBar({ counts }: { counts: Record<ScopeStatus, number> }) {
   )
 }
 
-export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
+export function OverviewTab({
+  me,
+  site,
+  onSiteChange,
+}: {
+  me: WorkerRow
+  site: JobSiteRow
+  /** Bubbles a builder/address edit up to Job.tsx's header, which holds its
+      own copy of `site` from when the screen was opened and otherwise stays
+      stale until the job is reopened. */
+  onSiteChange?: (patch: { client_name?: string; address?: string }) => void
+}) {
   const office = me.is_office
   const [rows, setRows] = useState<SelectionRow[]>([])
   const [notes, setNotes] = useState<NoteRow[]>([])
@@ -396,7 +407,11 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
     const client = supabase()
     const patch = {
       status,
-      chosen: chosen.trim() || null,
+      // "Chosen" only means anything once the line is actually Confirmed — a
+      // Not applicable/Required save used to keep whatever text was still
+      // sitting in the field, so the list went on printing it in the same
+      // green "confirmed" styling as a real selection.
+      chosen: status === 'chosen' ? chosen.trim() || null : null,
       chosen_at: status === 'chosen' ? new Date().toISOString() : null,
     }
     const res = row
@@ -424,7 +439,7 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
    * photos, and against the line so they travel with the decision. An
    * untouched line has no row yet, so the first upload creates one.
    */
-  async function attach(line: ScopeLine, row: SelectionRow | null, list: FileList) {
+  async function attach(line: ScopeLine, row: SelectionRow | null, list: File[]) {
     setUploading(line.key)
     setError(null)
     try {
@@ -447,7 +462,7 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
         if (err) throw new Error(err.message)
         selectionId = (data as { id: string }).id
       }
-      for (const file of Array.from(list)) {
+      for (const file of list) {
         const path = objectPath(me.company_id, site.id, file.name)
         await uploadFile(BUCKET_FILES, path, file)
         const { error: err } = await client.from('site_files').insert({
@@ -518,7 +533,7 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 26 }}>
       {section === 'details' && (
-        <ProjectDetails me={me} site={site} office={office} notes={notes} onOpenNotes={() => setNotesOpen(true)} />
+        <ProjectDetails me={me} site={site} office={office} notes={notes} onOpenNotes={() => setNotesOpen(true)} onSiteChange={onSiteChange} />
       )}
 
       {section === 'drawings' && <DrawingsPanel me={me} site={site} />}
@@ -548,8 +563,28 @@ export function OverviewTab({ me, site }: { me: WorkerRow; site: JobSiteRow }) {
               <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: '-.005em', color: s.ink }}>{line.name}</span>
                 <span style={{ fontSize: 12.5, lineHeight: 1.35, color: '#7B838B' }}>{line.detail}</span>
-                {row?.chosen && (
-                  <span style={{ marginTop: 2, fontSize: 12.5, fontWeight: 600, color: '#1B7A2C' }}>{row.chosen}</span>
+                {/* Only a Confirmed line's text gets the "this was decided"
+                    green styling — a row saved before that was enforced can
+                    still carry chosen text against another status, and a
+                    Not applicable/Required line showing it that way reads as
+                    a real selection. Clamped to 2 lines: a several-thousand
+                    character paste used to push every line below it off
+                    screen — the sheet still shows it in full. */}
+                {row?.status === 'chosen' && row.chosen && (
+                  <span
+                    style={{
+                      marginTop: 2,
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: '#1B7A2C',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {row.chosen}
+                  </span>
                 )}
                 {(() => {
                   const n = (row && files.get(row.id)?.length) || 0
@@ -723,13 +758,18 @@ function ScopeSheet({
   row: SelectionRow | null
   attachments: AttachmentRow[]
   uploading: boolean
-  onAttach: (list: FileList) => void
+  onAttach: (list: File[]) => void
   onRemoveAttachment: (id: string) => void
   onCancel: () => void
   onSave: (status: ScopeStatus, chosen: string) => void
 }) {
   const [status, setStatus] = useState<ScopeStatus>(row?.status ?? 'pending')
   const [chosen, setChosen] = useState(row?.chosen ?? '')
+  // Confirmed with nothing recorded reads, on the scope list and in the
+  // Complete tally, exactly like a line where a real product was chosen —
+  // so the save itself is where this gets caught, not left to whoever
+  // reads the readiness bar later.
+  const needsChosen = status === 'chosen' && !chosen.trim()
 
   return (
     <div
@@ -796,9 +836,15 @@ function ScopeSheet({
                 multiple
                 disabled={uploading}
                 onChange={(e) => {
-                  const l = e.target.files
-                  if (l && l.length) onAttach(l)
+                  // e.target.files is live, not a snapshot: the reset below
+                  // (needed so the same file can be picked twice) empties that
+                  // same object, and attach() does not read it until after its
+                  // first await — which happens only when this scope line has
+                  // no selection row yet, so the first attach silently did
+                  // nothing and the second worked. Copy it first.
+                  const picked = e.target.files ? Array.from(e.target.files) : []
                   e.target.value = ''
+                  if (picked.length) onAttach(picked)
                 }}
                 style={{ display: 'none' }}
               />
@@ -815,9 +861,10 @@ function ScopeSheet({
                 multiple
                 disabled={uploading}
                 onChange={(e) => {
-                  const l = e.target.files
-                  if (l && l.length) onAttach(l)
+                  // Same live-FileList hazard as the photo input above.
+                  const picked = e.target.files ? Array.from(e.target.files) : []
                   e.target.value = ''
+                  if (picked.length) onAttach(picked)
                 }}
                 style={{ display: 'none' }}
               />
@@ -825,9 +872,15 @@ function ScopeSheet({
           </span>
         </span>
 
+        {needsChosen && (
+          <span style={{ marginTop: -6, fontSize: 12.5, lineHeight: 1.4, color: '#A3282E' }}>
+            Enter what was chosen, or set this to Required/Not applicable instead.
+          </span>
+        )}
         <button
-          onClick={() => onSave(status, chosen)}
-          style={{ width: '100%', minHeight: 52, marginTop: 2, border: 0, borderRadius: 10, background: '#1A1D21', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, letterSpacing: '.03em', color: '#fff', cursor: 'pointer' }}
+          onClick={() => !needsChosen && onSave(status, chosen)}
+          disabled={needsChosen}
+          style={{ width: '100%', minHeight: 52, marginTop: 2, border: 0, borderRadius: 10, background: needsChosen ? '#C3C9D0' : '#1A1D21', fontFamily: 'inherit', fontSize: 15, fontWeight: 700, letterSpacing: '.03em', color: '#fff', cursor: needsChosen ? 'default' : 'pointer' }}
         >
           SAVE
         </button>
@@ -909,12 +962,14 @@ function ProjectDetails({
   office,
   notes,
   onOpenNotes,
+  onSiteChange,
 }: {
   me: WorkerRow
   site: JobSiteRow
   office: boolean
   notes: NoteRow[]
   onOpenNotes: () => void
+  onSiteChange?: (patch: { client_name?: string; address?: string }) => void
 }) {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [dates, setDates] = useState<{ start: string | null; end: string | null }>({ start: null, end: null })
@@ -1227,7 +1282,19 @@ function ProjectDetails({
           mapsHref={mapsHref}
           onClose={() => setEditRow(null)}
           onSaved={(patch) => {
-            if (patch) setShown((prev) => ({ ...prev, ...patch }))
+            if (patch) {
+              setShown((prev) => ({ ...prev, ...patch }))
+              // The job header (Job.tsx) renders from the `site` object it was
+              // opened with, not from this card's own state — without this it
+              // stayed on the old address until the job was closed and reopened.
+              // Only the key that actually changed: onSaved supplies one of
+              // client/address, and passing the other as an explicit undefined
+              // would spread over the real value in Job.tsx's header merge.
+              onSiteChange?.({
+                ...(patch.client !== undefined ? { client_name: patch.client } : {}),
+                ...(patch.address !== undefined ? { address: patch.address } : {}),
+              })
+            }
             setEditRow(null)
             void reloadDetails()
           }}

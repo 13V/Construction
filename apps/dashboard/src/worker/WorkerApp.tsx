@@ -26,7 +26,7 @@ import { HomeScreen } from './simple/Home'
 import { PhoneFrame } from './simple/PhoneFrame'
 import { SimpleSignIn } from './simple/SignIn'
 import { FileViewerHost, viewFile } from './simple/FileViewer'
-import { JobScreen } from './simple/Job'
+import { JobScreen, type JobTab } from './simple/Job'
 import { MeScreen } from './simple/Me'
 import { ProjectsScreen } from './simple/Projects'
 import { SimpleSchedule } from './simple/Schedule'
@@ -182,6 +182,11 @@ function Tracker({ me }: { me: WorkerRow }) {
   const [sites, setSites] = useState<ServerSite[]>([])
   const [error, setError] = useState<string | null>(null)
   const [queued, setQueued] = useState(0)
+  // General "no network at all" indicator — separate from `queued`, which
+  // only ever means "GPS pings for geofence tracking piled up". A worker who
+  // isn't tracking (office staff, or between jobs) had no way to tell offline
+  // apart from "the app is just quiet right now"; this covers every tab.
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
   const [tick, setTick] = useState(Date.now())
   const [tracking, setTracking] = useState(false)
   const [screen, setScreen] = useState<Screen>('tracker')
@@ -197,13 +202,42 @@ function Tracker({ me }: { me: WorkerRow }) {
   const [clockOutConfirm, setClockOutConfirm] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [showAccount, setShowAccount] = useState(false)
+  // Only for the manual clock buttons' own in-flight feedback — the passive
+  // 20s loop never touches this, so it doesn't grey out the screen for a
+  // background ping the worker didn't ask about.
+  const [clockBusy, setClockBusy] = useState(false)
 
   const lastSent = useRef(0)
   const pending = useRef<Array<{ lat: number; lng: number; accuracyM: number; at: number }>>([])
+  // Mirrors JobScreen's local `tab` while it's mounted, so returning from
+  // PhotoScreen (which fully unmounts JobScreen — see screen==='photo' below)
+  // reopens on the tab the worker actually had open, not `openJobTab`, which
+  // only records where the job was first navigated to. A ref, not state: it
+  // must not force JobScreen's key to change on every ordinary tab click.
+  // Cleared on every explicit navigation to a job so a stale tab from a
+  // previous job (or a previous visit to this one) never leaks in.
+  const jobTabRef = useRef<JobTab | null>(null)
+  // Which tab a job was opened from, so the back chevron can return there
+  // instead of always landing on Home. Every onOpenJob that switches to the
+  // 'home' tab to show the job records where it switched FROM here first;
+  // null means the job was opened while already on Home, so there's nowhere
+  // else to go back to.
+  const openJobOriginTab = useRef<Tab | null>(null)
 
   useEffect(() => {
     const t = setInterval(() => setTick(Date.now()), 1000)
     return () => clearInterval(t)
+  }, [])
+
+  useEffect(() => {
+    const goOnline = () => setOnline(true)
+    const goOffline = () => setOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
   }, [])
 
   // The celebration is a timed handoff, not a screen the worker navigates —
@@ -266,11 +300,22 @@ function Tracker({ me }: { me: WorkerRow }) {
       setQueued(0)
 
       void (async () => {
-        for (const item of backlog) {
+        for (let i = 0; i < backlog.length; i++) {
           try {
-            await send(item)
+            const payload = await send(backlog[i])
+            // The passive loop has no button tap to hang a "why" off, but the
+            // server still hands one back (e.g. a stale shift it just closed
+            // for us) — surface it the same way the manual buttons do rather
+            // than silently discarding it, so the worker isn't left guessing.
+            if (payload.notes.length) setNote(payload.notes[0])
           } catch (err) {
-            pending.current.push(item)
+            // Put this item AND everything still behind it in the backlog
+            // back on the queue, not just this one. The old code pushed only
+            // the failed item, so a fix that failed while newer fixes were
+            // already queued behind it silently dropped every one of those —
+            // each later throttle tick just replaced that single slot instead
+            // of the queue ever growing past 1.
+            pending.current.push(...backlog.slice(i))
             setQueued(pending.current.length)
             setError(err instanceof Error ? err.message : String(err))
             return
@@ -316,6 +361,7 @@ function Tracker({ me }: { me: WorkerRow }) {
       return
     }
     setNote(null)
+    setClockBusy(true)
     try {
       const payload = await send({ lat: fix.pos.lat, lng: fix.pos.lng, accuracyM: fix.accuracyM, at: Date.now(), manual: true })
       const clockedIn = payload.events.some((e) => e.kind === 'clock_in')
@@ -327,6 +373,8 @@ function Tracker({ me }: { me: WorkerRow }) {
       }
     } catch (err) {
       setNote(err instanceof Error ? err.message : String(err))
+    } finally {
+      setClockBusy(false)
     }
   }, [fix, send])
 
@@ -345,6 +393,7 @@ function Tracker({ me }: { me: WorkerRow }) {
    */
   const manualClockOut = useCallback(async () => {
     setNote(null)
+    setClockBusy(true)
     try {
       const payload = await send({
         lat: fix?.pos.lat ?? 0,
@@ -361,6 +410,8 @@ function Tracker({ me }: { me: WorkerRow }) {
       setCelebration(null)
     } catch (err) {
       setNote(err instanceof Error ? err.message : String(err))
+    } finally {
+      setClockBusy(false)
     }
   }, [fix, send])
 
@@ -428,7 +479,16 @@ function Tracker({ me }: { me: WorkerRow }) {
           here instead of widening a shared stylesheet for one file. */}
       <style>{'@keyframes cl-spin { to { transform: rotate(360deg); } }'}</style>
 
-      {queued > 0 && <OfflineBanner text={`Offline — ${queued} location${queued === 1 ? '' : 's'} waiting to sync`} />}
+      {/* The browser's own online/offline signal takes priority — it covers
+          every tab, not just active GPS tracking — and falls back to the
+          location-queue-specific message so a tracking worker still gets the
+          detail (how many fixes are waiting) once the connection itself is
+          back. */}
+      {!online ? (
+        <OfflineBanner text="Offline — nothing will sync until you're back online" />
+      ) : (
+        queued > 0 && <OfflineBanner text={`Offline — ${queued} location${queued === 1 ? '' : 's'} waiting to sync`} />
+      )}
 
       {screen === 'photo' && (
         <PhotoScreen me={me} currentSiteId={currentSiteId} defaultSiteId={openJobId} sites={sites} fix={fix} onClose={() => setScreen('tracker')} />
@@ -468,7 +528,7 @@ function Tracker({ me }: { me: WorkerRow }) {
         <SimpleChat
           me={me}
           data={simpleData}
-          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab); setOpenJobId(x.id); setTab('home') }}
+          onOpenJob={(x, jobTab) => { jobTabRef.current = null; openJobOriginTab.current = 'chat'; setOpenJobTab(jobTab); setOpenJobId(x.id); setTab('home') }}
         />
       )}
 
@@ -476,7 +536,7 @@ function Tracker({ me }: { me: WorkerRow }) {
         <SimpleSchedule
           data={simpleData}
           me={me}
-          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'overview'); setOpenJobId(x.id); setTab('home') }}
+          onOpenJob={(x, jobTab) => { jobTabRef.current = null; openJobOriginTab.current = 'schedule'; setOpenJobTab(jobTab ?? 'overview'); setOpenJobId(x.id); setTab('home') }}
         />
       )}
 
@@ -484,7 +544,7 @@ function Tracker({ me }: { me: WorkerRow }) {
         <ProjectsScreen
           me={me}
           data={simpleData}
-          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'overview'); setOpenJobId(x.id); setTab('home') }}
+          onOpenJob={(x, jobTab) => { jobTabRef.current = null; openJobOriginTab.current = 'projects'; setOpenJobTab(jobTab ?? 'overview'); setOpenJobId(x.id); setTab('home') }}
         />
       )}
 
@@ -501,7 +561,8 @@ function Tracker({ me }: { me: WorkerRow }) {
       {screen === 'tracker' && tab === 'home' && !clockOpen && openJob && (
         <JobScreen
           key={openJob.id + openJobTab}
-          initialTab={openJobTab}
+          initialTab={jobTabRef.current ?? openJobTab}
+          onTabChange={(t) => { jobTabRef.current = t }}
           me={me}
           site={openJob}
           floodHoldCount={simpleData.floodHold.get(openJob.id) ?? 0}
@@ -517,7 +578,19 @@ function Tracker({ me }: { me: WorkerRow }) {
           chat={(onClose) => (
             <ChatScreen me={me} currentSiteId={openJob.id} sites={sites} embedded onClose={onClose} />
           )}
-          onBack={() => setOpenJobId(null)}
+          onBack={() => {
+            jobTabRef.current = null
+            setOpenJobId(null)
+            // Return to the list the job was opened from (Chat/Schedule/
+            // Projects), not always Home — a job can be opened from any of
+            // those, and losing the list (and its scroll position) on every
+            // back tap was surprising. Opened straight from Home: nothing to
+            // restore, tab is already 'home'.
+            if (openJobOriginTab.current) {
+              setTab(openJobOriginTab.current)
+              openJobOriginTab.current = null
+            }
+          }}
           onTakePhoto={() => setScreen('photo')}
           onAddInvoice={(mode) => {
             setReceiptManual(mode === 'cost')
@@ -530,7 +603,7 @@ function Tracker({ me }: { me: WorkerRow }) {
         <HomeScreen
           me={me}
           data={simpleData}
-          onOpenJob={(x, jobTab) => { setOpenJobTab(jobTab ?? 'overview'); setOpenJobId(x.id) }}
+          onOpenJob={(x, jobTab) => { jobTabRef.current = null; openJobOriginTab.current = null; setOpenJobTab(jobTab ?? 'overview'); setOpenJobId(x.id) }}
           onOpenSchedule={() => setTab('schedule')}
           onOpenClock={() => setClockOpen(true)}
           onOpenNotifications={() => setTab('projects')}
@@ -574,8 +647,10 @@ function Tracker({ me }: { me: WorkerRow }) {
               site={site}
               since={phase.kind === 'onsite' || phase.kind === 'departing' ? phase.since : tick}
               elapsedMs={elapsed}
+              departing={phase.kind === 'departing'}
               onOpenPanel={(k) => setScreen(k)}
               clockOutConfirm={clockOutConfirm}
+              busy={clockBusy}
               onClockOutTap={() => setClockOutConfirm(true)}
               onClockOutCancel={() => setClockOutConfirm(false)}
               onClockOutNow={() => void manualClockOut()}
@@ -599,6 +674,7 @@ function Tracker({ me }: { me: WorkerRow }) {
               onDismissNote={() => setNote(null)}
               onShowAccount={() => setShowAccount(true)}
               onManualClockIn={() => void manualClockIn()}
+              busy={clockBusy}
               onOpenPanel={(k) => setScreen(k)}
             />
           )}
@@ -776,6 +852,16 @@ function AccountSheet({ me, onClose }: { me: WorkerRow; onClose: () => void }) {
             style={{ fontSize: 12.5, color: design.faint, textAlign: 'center', textDecoration: 'underline', cursor: 'pointer' }}
           >
             What {BRAND} records about you
+          </span>
+          {/* Signed-out SignIn.tsx has always had this link; nothing carried
+              it into the signed-in app, so a worker who needs help once
+              they're actually using the app (rather than before logging in)
+              had nowhere to tap. Same route, same viewFile call. */}
+          <span
+            onClick={() => viewFile({ url: '/support', name: 'Support' })}
+            style={{ fontSize: 12.5, color: design.faint, textAlign: 'center', textDecoration: 'underline', cursor: 'pointer' }}
+          >
+            Support
           </span>
         </div>
       </div>
@@ -1395,6 +1481,7 @@ function ApproachingScreen({
   onDismissNote,
   onShowAccount,
   onManualClockIn,
+  busy,
   onOpenPanel,
 }: {
   me: WorkerRow
@@ -1404,6 +1491,7 @@ function ApproachingScreen({
   onDismissNote: () => void
   onShowAccount: () => void
   onManualClockIn: () => void
+  busy: boolean
   onOpenPanel: (s: PanelScreen) => void
 }) {
   const distanceLabel = nearest ? (nearest.d < 1000 ? `${Math.round(nearest.d)} m away` : `${(nearest.d / 1000).toFixed(1)} km away`) : ''
@@ -1446,8 +1534,8 @@ function ApproachingScreen({
             Tracking is on, so your position is being sent to the office now, including the drive here — you're only
             paid from two minutes after you've settled at the site.
           </span>
-          <button onClick={onManualClockIn} style={ctaWhite(52)}>
-            Clock in manually
+          <button onClick={onManualClockIn} disabled={busy} style={{ ...ctaWhite(52), opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }}>
+            {busy ? 'Clocking in…' : 'Clock in manually'}
           </button>
         </div>
         <PrivacyLine fix={nearest ? { pos: { lat: 0, lng: 0 }, accuracyM: 0 } : null} />
@@ -1661,8 +1749,10 @@ function OnClockScreen({
   site,
   since,
   elapsedMs,
+  departing,
   onOpenPanel,
   clockOutConfirm,
+  busy,
   onClockOutTap,
   onClockOutCancel,
   onClockOutNow,
@@ -1672,8 +1762,16 @@ function OnClockScreen({
   site: ServerSite
   since: number
   elapsedMs: number
+  // phase.kind === 'departing': iOS has already reported this worker left
+  // `site`'s fence and the dwell engine is waiting out its own settle window
+  // before it closes the shift server-side (see api/ping.ts). `site` and
+  // `since` still describe that old, already-left site — there is no "today's
+  // job" to show yet — so this screen must say so rather than repeat "Still
+  // on site", which was never true during this window.
+  departing: boolean
   onOpenPanel: (s: PanelScreen) => void
   clockOutConfirm: boolean
+  busy: boolean
   onClockOutTap: () => void
   onClockOutCancel: () => void
   onClockOutNow: () => void
@@ -1743,9 +1841,11 @@ function OnClockScreen({
               <span style={{ width: 10, height: 10, borderRadius: '50%', border: `2px solid ${theme.accent}`, background: '#fff', marginTop: 4 }} />
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <span style={{ fontSize: 14.5, fontWeight: 600, color: theme.accent }}>Still on site</span>
+              <span style={{ fontSize: 14.5, fontWeight: 600, color: theme.accent }}>
+                {departing ? `Left ${site.name} — closing out` : 'Still on site'}
+              </span>
               <span style={{ fontSize: 13, color: design.faint }}>
-                {site.name} · {hrsSoFar} hrs so far
+                {departing ? 'Wrapping up the old shift, hang on…' : `${site.name} · ${hrsSoFar} hrs so far`}
               </span>
             </div>
           </div>
@@ -1758,8 +1858,8 @@ function OnClockScreen({
                 Normally you don't need this — leaving the site closes the shift a few minutes after you
                 drive off. Use it if you've left and you're still showing as on the clock.
               </span>
-              <button onClick={onClockOutNow} style={ctaRed}>
-                END MY SHIFT NOW
+              <button onClick={onClockOutNow} disabled={busy} style={{ ...ctaRed, opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }}>
+                {busy ? 'ENDING SHIFT…' : 'END MY SHIFT NOW'}
               </button>
               <button onClick={onStopTracking} style={ctaGhost}>
                 Just stop sending my location
@@ -1833,7 +1933,11 @@ function PhotoScreen({
   // The tracker's list is empty until tracking starts; the job-site picker
   // must not be. Same fallback-to-fetch every tab uses (useSites).
   const sites = useSites(fromTracker as never) as unknown as ServerSite[]
-  const [siteId, setSiteId] = useState(currentSiteId ?? defaultSiteId ?? '')
+  // defaultSiteId is the job this screen was actually opened from (Photos
+  // tab Add, or the job header camera icon) — that's the explicit context
+  // and must win. currentSiteId (wherever the geofence has you clocked in)
+  // is only a fallback for the rare case this opens with no job in view.
+  const [siteId, setSiteId] = useState(defaultSiteId ?? currentSiteId ?? '')
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [capturedAt, setCapturedAt] = useState<number | null>(null)
@@ -1843,9 +1947,15 @@ function PhotoScreen({
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Was unconditionally `if (currentSiteId) setSiteId(currentSiteId)`, which
+  // silently overrode the job this screen was opened from with wherever the
+  // geofence had you clocked in — e.g. add a photo from Job B's own Photos
+  // tab while clocked in at Job A, and it uploaded to Job A with no on-screen
+  // sign anything was wrong. Same priority as the initial state above.
   useEffect(() => {
-    if (currentSiteId) setSiteId(currentSiteId)
-  }, [currentSiteId])
+    if (defaultSiteId) setSiteId(defaultSiteId)
+    else if (currentSiteId) setSiteId(currentSiteId)
+  }, [defaultSiteId, currentSiteId])
 
   // Revoke the object URL whenever it's replaced or the screen unmounts.
   useEffect(() => {
@@ -2033,7 +2143,7 @@ function PhotoScreen({
               <MetaRow label="GPS" value={capturedFix ? `±${Math.round(capturedFix.accuracyM)} m` : 'No fix yet'} />
             </div>
 
-            {!currentSiteId && (
+            {!defaultSiteId && (
               <div style={{ padding: '2px 18px 16px' }}>
                 <span style={sectionLabel}>JOB SITE</span>
                 <select value={siteId} onChange={(e) => setSiteId(e.target.value)} style={fieldBox}>

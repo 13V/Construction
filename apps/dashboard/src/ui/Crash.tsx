@@ -24,6 +24,14 @@ interface State {
   error: Error | null
 }
 
+// A failed dynamic `import()` (a lazy-loaded screen chunk, or its CSS) throws
+// an error whose message is a raw build asset URL — a message written for a
+// developer, not the tiler standing in it. It is also almost always just
+// "no signal right now" rather than a real bug, so it gets its own copy
+// below instead of the generic one.
+const isChunkLoadError = (error: Error) =>
+  /dynamically imported module|preload css|importing a module script failed/i.test(error.message)
+
 export class Crash extends Component<Props, State> {
   state: State = { error: null }
 
@@ -36,11 +44,24 @@ export class Crash extends Component<Props, State> {
     // record. Keep the component stack — it is the part that says which screen
     // threw, and it is not in the message.
     console.error('Unhandled error in', this.props.surface, error, info.componentStack)
+    // A chunk failure is a network failure — the fix is "the network comes
+    // back", not "the user notices and taps Reload". Without this the crash
+    // screen sat there verbatim after signal returned, until someone tapped.
+    if (isChunkLoadError(error)) window.addEventListener('online', this.handleOnline)
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('online', this.handleOnline)
+  }
+
+  handleOnline = () => {
+    if (this.state.error && isChunkLoadError(this.state.error)) this.setState({ error: null })
   }
 
   render() {
     const { error } = this.state
     if (!error) return this.props.children
+    const offline = isChunkLoadError(error)
 
     return (
       <div
@@ -56,29 +77,34 @@ export class Crash extends Component<Props, State> {
         }}
       >
         <div style={{ maxWidth: 460, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <strong style={{ fontSize: 17 }}>{this.props.surface} hit a problem</strong>
+          <strong style={{ fontSize: 17 }}>{offline ? "You're offline" : `${this.props.surface} hit a problem`}</strong>
           <p style={{ margin: 0, color: theme.inkSoft }}>
-            Something on this screen failed to load. Nothing you have entered has been lost, and any
-            hours already recorded are safe on the server.
+            {offline
+              ? 'Part of the app could not load over a weak or missing connection. Nothing you have entered has been lost, and any hours already recorded are safe on the server — this comes back on its own once you have signal again.'
+              : 'Something on this screen failed to load. Nothing you have entered has been lost, and any hours already recorded are safe on the server.'}
           </p>
-          <code
-            style={{
-              padding: '9px 11px',
-              borderRadius: 4,
-              background: theme.fill,
-              border: `1px solid ${theme.border}`,
-              fontSize: 12,
-              color: theme.inkSoft,
-              wordBreak: 'break-word',
-            }}
-          >
-            {error.message || String(error)}
-          </code>
+          {!offline && (
+            <code
+              style={{
+                padding: '9px 11px',
+                borderRadius: 4,
+                background: theme.fill,
+                border: `1px solid ${theme.border}`,
+                fontSize: 12,
+                color: theme.inkSoft,
+                wordBreak: 'break-word',
+              }}
+            >
+              {error.message || String(error)}
+            </code>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => this.setState({ error: null })} style={primary}>
-              Try again
-            </button>
-            <button onClick={() => window.location.reload()} style={secondary}>
+            {!offline && (
+              <button onClick={() => this.setState({ error: null })} style={primary}>
+                Try again
+              </button>
+            )}
+            <button onClick={() => window.location.reload()} style={offline ? primary : secondary}>
               Reload
             </button>
           </div>

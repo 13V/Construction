@@ -26,15 +26,22 @@ export const SIGNAL_LOST_MS = 10 * 60_000
 export const EXIT_BUFFER_M = 25
 
 export type DwellPhase =
+  /** `ambiguousWith` is any other site that was an equally-near candidate at
+   *  the moment of entry (e.g. two units sharing one street address) — the
+   *  pick still has to be made, but the fact that it was a coin flip rides
+   *  along so it isn't lost by the time the shift is reviewed. Optional (not
+   *  just empty) so a phase built outside `advance` — e.g. the manual
+   *  clock-in path, which already knows the site and never ran the tie
+   *  check — doesn't have to fake a value. */
   | { kind: 'offsite' }
-  | { kind: 'arriving'; siteId: string; since: number }
+  | { kind: 'arriving'; siteId: string; since: number; ambiguousWith?: string[] }
   /** `lastInside` is the newest ping still within the fence — a clock-out is
    *  backdated to it so nobody is paid for the drive home. */
-  | { kind: 'onsite'; siteId: string; since: number; lastInside: number }
-  | { kind: 'departing'; siteId: string; since: number; lastInside: number }
+  | { kind: 'onsite'; siteId: string; since: number; lastInside: number; ambiguousWith?: string[] }
+  | { kind: 'departing'; siteId: string; since: number; lastInside: number; ambiguousWith?: string[] }
 
 export type DwellEvent =
-  | { kind: 'clock_in'; siteId: string; at: number }
+  | { kind: 'clock_in'; siteId: string; at: number; ambiguousWith?: string[] }
   | { kind: 'clock_out'; siteId: string; at: number; since: number }
   | { kind: 'drive_by_rejected'; siteId: string; at: number; dwelledMs: number }
 
@@ -51,17 +58,39 @@ export function siteContaining(
   sites: JobSite[],
   bufferM = 0,
 ): JobSite | null {
+  return nearestSite(at, sites, bufferM).site
+}
+
+/**
+ * Same search as `siteContaining`, but also reports every other site that
+ * was exactly as close as the winner — e.g. two duplex units sharing one
+ * street address with identical or overlapping fences. Nearest still wins
+ * (someone has to be picked to drive the state machine), but the tie is
+ * surfaced instead of silently falling out to array order, so a clock-in
+ * against the wrong of two active jobs at the same spot can at least be
+ * flagged for review rather than looking like an ordinary, unambiguous one.
+ */
+function nearestSite(
+  at: LatLng,
+  sites: JobSite[],
+  bufferM: number,
+): { site: JobSite | null; tiedWith: string[] } {
   let best: JobSite | null = null
   let bestDistance = Infinity
+  let tiedWith: string[] = []
 
   for (const site of sites) {
     const d = distanceM(at, site.center)
-    if (d <= site.radiusM + bufferM && d < bestDistance) {
+    if (d > site.radiusM + bufferM) continue
+    if (d < bestDistance) {
       best = site
       bestDistance = d
+      tiedWith = []
+    } else if (best && d === bestDistance) {
+      tiedWith.push(site.id)
     }
   }
-  return best
+  return { site: best, tiedWith }
 }
 
 /**
@@ -79,12 +108,18 @@ export function advance(
 
   // Entry uses the plain radius; exit gets a buffer so GPS jitter at the
   // boundary doesn't produce a flapping clock.
-  const inside = siteContaining(here, sites)
+  const insideMatch = nearestSite(here, sites, 0)
+  const inside = insideMatch.site
   const insideBuffered = siteContaining(here, sites, EXIT_BUFFER_M)
 
   switch (phase.kind) {
     case 'offsite': {
-      if (inside) return { phase: { kind: 'arriving', siteId: inside.id, since: at }, events }
+      if (inside) {
+        return {
+          phase: { kind: 'arriving', siteId: inside.id, since: at, ambiguousWith: insideMatch.tiedWith },
+          events,
+        }
+      }
       return { phase, events }
     }
 
@@ -99,15 +134,29 @@ export function advance(
         })
         // They may have driven straight into a different site's fence.
         if (inside) {
-          return { phase: { kind: 'arriving', siteId: inside.id, since: at }, events }
+          return {
+            phase: { kind: 'arriving', siteId: inside.id, since: at, ambiguousWith: insideMatch.tiedWith },
+            events,
+          }
         }
         return { phase: { kind: 'offsite' }, events }
       }
 
       if (at - phase.since >= DWELL_IN_MS) {
-        events.push({ kind: 'clock_in', siteId: phase.siteId, at })
+        events.push({
+          kind: 'clock_in',
+          siteId: phase.siteId,
+          at,
+          ambiguousWith: phase.ambiguousWith,
+        })
         return {
-          phase: { kind: 'onsite', siteId: phase.siteId, since: at, lastInside: at },
+          phase: {
+            kind: 'onsite',
+            siteId: phase.siteId,
+            since: at,
+            lastInside: at,
+            ambiguousWith: phase.ambiguousWith,
+          },
           events,
         }
       }
@@ -127,7 +176,13 @@ export function advance(
       if (insideBuffered && insideBuffered.id === phase.siteId) {
         // Came back — never actually left. Keep the original shift start.
         return {
-          phase: { kind: 'onsite', siteId: phase.siteId, since: phase.since, lastInside: at },
+          phase: {
+            kind: 'onsite',
+            siteId: phase.siteId,
+            since: phase.since,
+            lastInside: at,
+            ambiguousWith: phase.ambiguousWith,
+          },
           events,
         }
       }
@@ -141,7 +196,10 @@ export function advance(
           since: phase.since,
         })
         if (inside) {
-          return { phase: { kind: 'arriving', siteId: inside.id, since: at }, events }
+          return {
+            phase: { kind: 'arriving', siteId: inside.id, since: at, ambiguousWith: insideMatch.tiedWith },
+            events,
+          }
         }
         return { phase: { kind: 'offsite' }, events }
       }

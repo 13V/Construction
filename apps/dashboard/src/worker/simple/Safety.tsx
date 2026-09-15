@@ -530,6 +530,12 @@ function ShelfSheet({
   const [error, setError] = useState<string | null>(null)
   const [issuing, setIssuing] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState(false)
+  // Only the SWMS shelf had a way to set a review date (through "Issue a
+  // SWMS"), so a document dropped straight onto any shelf — including SWMS —
+  // went in with expires_on null and could never read as Expiring or Overdue.
+  // Optional here: an SDS with no re-issue date is common and should stay
+  // "current" rather than be forced to expire.
+  const [expiry, setExpiry] = useState('')
   const office = me.is_office
 
   async function upload(list: FileList) {
@@ -537,7 +543,9 @@ function ShelfSheet({
     setError(null)
     try {
       const client = supabase()
-      for (const file of Array.from(list)) await addDocument(client, me, site, kind, file)
+      const extra = expiry ? { expires_on: expiry } : {}
+      for (const file of Array.from(list)) await addDocument(client, me, site, kind, file, extra)
+      setExpiry('')
       await safety.reload()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not upload that document.')
@@ -617,6 +625,13 @@ function ShelfSheet({
             {docs.map((d) => (
               <DocRow key={d.id} doc={d} me={me} people={safety.people} onRemove={office ? () => void remove(d.id) : undefined} />
             ))}
+
+            {office && (
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={fieldLabel}>EXPIRY / REVIEW DUE (OPTIONAL)</span>
+                <input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} style={field} />
+              </span>
+            )}
 
             {office && (
               <label style={{ ...ghostBtn, opacity: busy ? 0.6 : 1 }}>

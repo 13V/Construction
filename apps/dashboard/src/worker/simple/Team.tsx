@@ -57,9 +57,12 @@ const ROLES: Array<{ key: WorkerRow['role']; label: string; blurb: string }> = [
 const TRADES = ['Tiler', 'Waterproofer', 'Apprentice', 'Labourer']
 
 export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void }) {
+  // Holds active AND inactive rows: the email-reuse check and the restore
+  // list both need to see people who were removed, not just who's showing.
   const [rows, setRows] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
+  const [showRemoved, setShowRemoved] = useState(false)
   const [name, setName] = useState('')
   const [trade, setTrade] = useState('Tiler')
   const [email, setEmail] = useState('')
@@ -68,11 +71,13 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
   const [error, setError] = useState<string | null>(null)
 
   const office = me.is_office
+  const activeRows = rows.filter((w) => w.active)
+  const inactiveRows = rows.filter((w) => !w.active)
 
   const load = useCallback(async () => {
     const { data, error: err } = await supabase().from('workers').select(COLS).order('name')
     if (err) setError(err.message)
-    setRows(((data ?? []) as unknown as Member[]).filter((w) => w.active))
+    setRows((data ?? []) as unknown as Member[])
     setLoading(false)
   }, [])
 
@@ -91,8 +96,11 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
       setError('That email address does not look right — they will sign up with it.')
       return
     }
+    // Checked against every row, not just the active ones: a removed
+    // person's invite_email still holds the unique index in the DB, so an
+    // inactive match would otherwise sail past this check and hit Postgres.
     if (mail && rows.some((w) => w.invite_email?.toLowerCase() === mail)) {
-      setError('Somebody is already waiting to join with that address.')
+      setError('Somebody is already tied to that address on this roster — even someone removed. Use a different email or fix that email instead.')
       return
     }
     setBusy(true)
@@ -114,7 +122,14 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
       .select('id')
     setBusy(false)
     if (err) {
-      setError(err.message)
+      // The client-side check above can still miss a race (two adds for the
+      // same address at once), so translate the raw unique-constraint
+      // violation into the same friendly wording instead of showing Postgres text.
+      setError(
+        err.message.includes('workers_invite_email_idx')
+          ? 'Somebody is already tied to that address on this roster — even someone removed. Use a different email or fix that email instead.'
+          : err.message,
+      )
       return
     }
     if (!data || data.length === 0) {
@@ -134,7 +149,7 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
     // makes a reviewer poking around wipe somebody by accident. Their shifts
     // and signatures survive either way, but a roster that quietly loses a
     // person is not something anybody notices until they go looking.
-    if (!window.confirm(`Take ${name} off the crew? Their timesheets and signatures are kept.`)) return
+    if (!window.confirm(`Take ${name} off the crew? Their timesheets and signatures are kept, and they can be restored from "Show removed" below.`)) return
     // Deactivated, never deleted: their shifts, timesheets and signatures are
     // the company's records and have to survive the person leaving.
     const { data, error: err } = await supabase().from('workers').update({ active: false }).eq('id', id).select('id')
@@ -142,7 +157,20 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
       setError(err?.message ?? 'That was refused — removing people is the office’s to do.')
       return
     }
-    setRows((prev) => prev.filter((w) => w.id !== id))
+    // Kept in `rows` (now inactive) rather than dropped, so they show up
+    // under "Show removed" without a re-fetch.
+    setRows((prev) => prev.map((w) => (w.id === id ? { ...w, active: false } : w)))
+  }
+
+  async function restore(id: string, name: string) {
+    // The screen used to have no way back from Remove at all — the data model
+    // always supported un-deactivating, the app just never offered the button.
+    const { data, error: err } = await supabase().from('workers').update({ active: true }).eq('id', id).select('id')
+    if (err || !data || data.length === 0) {
+      setError(err?.message ?? `Could not restore ${name} — try again.`)
+      return
+    }
+    setRows((prev) => prev.map((w) => (w.id === id ? { ...w, active: true } : w)))
   }
 
   const label = { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' } as const
@@ -183,7 +211,7 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
           <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>Your crew</span>
             <span style={{ fontSize: 12.5, color: '#8B9096' }}>
-              {loading ? 'Loading…' : `${rows.length} ${rows.length === 1 ? 'person' : 'people'} on the books`}
+              {loading ? 'Loading…' : `${activeRows.length} ${activeRows.length === 1 ? 'person' : 'people'} on the books`}
             </span>
           </span>
           <span onClick={onClose} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}>
@@ -198,8 +226,13 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
             {error && <span style={{ padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 13, lineHeight: 1.45, color: '#8E2A31' }}>{error}</span>}
 
             <span style={{ display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 11, overflow: 'hidden' }}>
-              {rows.map((w, i) => {
+              {activeRows.map((w, i) => {
                 const waiting = !w.auth_user_id && w.invite_email
+                // Trade/role still shown alongside the pending-invite line —
+                // it used to disappear the moment invite_email was set, so
+                // there was no way to confirm what a not-yet-signed-up person
+                // was set up as.
+                const roleDesc = [w.trade, w.role === 'captain' ? 'Crew captain' : w.role === 'owner' ? 'Office' : null].filter(Boolean).join(' · ')
                 return (
                   <span key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 62, padding: '10px 13px', borderTop: i === 0 ? 'none' : '1px solid #EDEFF1' }}>
                     <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: '50%', background: avatarGrey(i), color: '#fff', fontSize: 11.5, fontWeight: 700 }}>
@@ -212,8 +245,8 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
                       </span>
                       <span style={{ fontSize: 12.5, color: waiting ? '#8A6100' : '#8B9096', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {waiting
-                          ? `Waiting for ${w.invite_email} to sign up`
-                          : [w.trade, w.role === 'captain' ? 'Crew captain' : w.role === 'owner' ? 'Office' : null].filter(Boolean).join(' · ')}
+                          ? `${roleDesc ? roleDesc + ' · ' : ''}Waiting for ${w.invite_email} to sign up`
+                          : roleDesc}
                       </span>
                     </span>
                     {office && w.id !== me.id && (
@@ -227,10 +260,38 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
                   </span>
                 )
               })}
-              {!loading && rows.length === 0 && (
+              {!loading && activeRows.length === 0 && (
                 <span style={{ padding: '15px', fontSize: 13.5, lineHeight: 1.5, color: '#8B9096' }}>Nobody on the books yet.</span>
               )}
             </span>
+
+            {office && inactiveRows.length > 0 && (
+              <span style={{ display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 11, overflow: 'hidden' }}>
+                <span
+                  onClick={() => setShowRemoved((v) => !v)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px', fontSize: 13, fontWeight: 600, color: '#4A5057', cursor: 'pointer' }}
+                >
+                  {showRemoved ? 'Hide' : 'Show'} removed ({inactiveRows.length})
+                </span>
+                {showRemoved &&
+                  inactiveRows.map((w, i) => (
+                    <span key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 56, padding: '10px 13px', borderTop: '1px solid #EDEFF1' }}>
+                      <span style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: '50%', background: avatarGrey(i), color: '#fff', fontSize: 11.5, fontWeight: 700, opacity: 0.55 }}>
+                        {w.initials}
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 600, color: '#8B9096', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {w.name}
+                      </span>
+                      <span
+                        onClick={() => void restore(w.id, w.name)}
+                        style={{ flex: 'none', display: 'flex', alignItems: 'center', height: 30, padding: '0 11px', border: '1px solid #DCE0E6', borderRadius: 15, fontSize: 12.5, fontWeight: 700, color: s.ink, cursor: 'pointer' }}
+                      >
+                        Restore
+                      </span>
+                    </span>
+                  ))}
+              </span>
+            )}
 
             {office && !adding && (
               <button
@@ -287,6 +348,13 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
                     joins this record — nothing to send, nothing to expire. Leave it blank and they
                     still show on the roster; add it later when you know it.
                   </span>
+                </span>
+
+                {/* Pay rate genuinely lives office-web-only (see the file doc comment),
+                    but the app was silent about where — this is the point an office
+                    running entirely from the phone would go looking for it. */}
+                <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+                  There’s no pay rate field here on purpose — set it for this person from the office web dashboard’s Crew page once they’re added.
                 </span>
 
                 <span style={{ display: 'flex', gap: 9 }}>

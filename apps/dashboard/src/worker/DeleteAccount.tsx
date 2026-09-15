@@ -17,9 +17,11 @@ import { BRAND } from './brand'
  * typing DELETE — and a bare "are you sure?" is not enough either, because
  * nobody can consent to something they haven't been told the shape of. What
  * REVIEW says is not a simplification for the sake of a friendlier dialog:
- * it is the actual, load-bearing distinction schema_v23.sql draws between a
- * login and a wage record. Getting the two lists wrong here would make the
- * screen lie about what the button does.
+ * it is the actual, load-bearing distinction schema_v23.sql (as amended by
+ * schema_v39.sql, which taught delete_worker_account() about the profile
+ * photo/phone schema_v27.sql added later) draws between a login and a wage
+ * record. Getting the two lists wrong here would make the screen lie about
+ * what the button does.
  */
 
 type Step = 'review' | 'confirm' | 'working' | 'done' | 'error'
@@ -268,6 +270,10 @@ export function DeleteAccount({ me, onClose }: { me: WorkerRow; onClose: () => v
                 Your location history — the GPS trail behind your clock-ins. The hours it produced stay; the
                 raw trail doesn't.
               </span>
+            </div>
+            <div style={listItem}>
+              <span style={mark('goes')}>✕</span>
+              <span>Your profile photo and phone number.</span>
             </div>
             <div style={listItem}>
               <span style={mark('goes')}>✕</span>

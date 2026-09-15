@@ -98,7 +98,18 @@ export function HomeScreen({
     }
   }
   const active = data.sites.filter((x) => x.status === 'active')
-  const todayList = todaySites.length > 0 ? todaySites : active
+  // A phone-created job is inserted as 'starting_soon' and nothing promotes
+  // it automatically — Projects has the only status control, and it is
+  // office-only. But this card's own copy promises a job "shows up here the
+  // day it starts", so once a starting_soon job's own starts_on has arrived
+  // it counts as today's, same as an active one, whether or not anyone has
+  // gone and flipped its status yet.
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const arrived = data.sites.filter(
+    (x) => x.status === 'starting_soon' && x.starts_on && new Date(`${x.starts_on}T00:00:00`).getTime() <= todayStart.getTime(),
+  )
+  const todayList = todaySites.length > 0 ? todaySites : [...active, ...arrived]
 
   // One entry per job that needs the owner, exactly as the drawing counts:
   // red for defects, red for a covered membrane with no flood test ("Needs
@@ -296,12 +307,18 @@ export function HomeScreen({
             })}
             {todayList.length === 0 && !data.loading && (
               <span style={{ padding: '22px 19px', fontSize: 13, lineHeight: 1.5, color: '#7B838B' }}>
-                {/* On a phone that belongs to the office, "the office adds
-                    them" points at nobody — the person reading this is the
-                    one who adds them, from the + on Projects. */}
-                {me.is_office
-                  ? 'No jobs yet. Add the first one with the + on Projects, and it shows up here the day it starts.'
-                  : 'No active jobs yet — jobs the office adds show up here.'}
+                {/* "No jobs yet" is a lie once a job exists — data.sites is
+                    every non-archived job, todayList only today's, and a
+                    company can easily have the former with none of the
+                    latter (nothing active, nothing booked, nothing started
+                    yet). On a phone that belongs to the office, "the office
+                    adds them" points at nobody — the person reading this is
+                    the one who adds them, from the + on Projects. */}
+                {data.sites.length === 0
+                  ? me.is_office
+                    ? 'No jobs yet. Add the first one with the + on Projects, and it shows up here the day it starts.'
+                    : 'No active jobs yet — jobs the office adds show up here.'
+                  : 'No active jobs today — jobs show up here once their start date arrives.'}
               </span>
             )}
           </div>

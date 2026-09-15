@@ -7,7 +7,8 @@
  * test, a variation sitting with the builder. Each one is the same fact the
  * counters on Home count — this screen is where they get words and a time.
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { addressLine, avatarGrey, builderOf, railOf, s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
 import type { SimpleData } from './data'
@@ -75,6 +76,7 @@ export function ProjectsScreen({
   const office = me.is_office
   const [defectRows, setDefectRows] = useState<Array<{ site_id: string; location: string | null; created_at: string }>>([])
   const [wpRows, setWpRows] = useState<Array<{ site_id: string; area: string; flood_test_on: string | null }>>([])
+  const [wpFailRows, setWpFailRows] = useState<Array<{ site_id: string; unit: string | null; flood_test_on: string | null }>>([])
   const [varRows, setVarRows] = useState<Array<{ id: string; site_id: string | null; cost_impact: number | null; raised_on: string }>>([])
   const [bookings, setBookings] = useState<AssignmentRow[]>([])
   const [roster, setRoster] = useState<Map<string, { name: string; initials: string }>>(new Map())
@@ -85,6 +87,8 @@ export function ProjectsScreen({
   const [newOpen, setNewOpen] = useState(false)
   const [assignFor, setAssignFor] = useState<JobSiteRow | null>(null)
   const [assignError, setAssignError] = useState<string | null>(null)
+  const [statusBusy, setStatusBusy] = useState<string | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -95,6 +99,11 @@ export function ProjectsScreen({
     void Promise.all([
       client.from('defects').select('site_id, location, created_at').in('status', ['open', 'in_progress']),
       client.from('waterproofing').select('site_id, area, flood_test_on').in('status', ['complete', 'signed_off']).eq('flood_tested', false),
+      // The six-step Waterproofing Certificate screen (schema_v30) records its
+      // flood test on waterproofing_packages, not the older per-wet-area
+      // register above — a fail recorded there was invisible here until this
+      // was added, even though the job's own Waterproofing screen showed it.
+      client.from('waterproofing_packages').select('site_id, unit, flood_test_on').eq('flood_test_result', 'fail'),
       // The office reads change_orders for the dollar figure the notification
       // leads with. A captain reads site_variations_v instead (schema_v24) —
       // the same pending list with cost_impact left off — and the notification
@@ -109,10 +118,11 @@ export function ProjectsScreen({
         .gte('starts_at', t0.toISOString())
         .lt('starts_at', t14.toISOString()),
       client.from('crew_v').select('id, name, initials'),
-    ]).then(([df, wp, co, asg, cv]) => {
+    ]).then(([df, wp, wpf, co, asg, cv]) => {
       if (cancelled) return
       setDefectRows((df.data as Array<{ site_id: string; location: string | null; created_at: string }>) ?? [])
       setWpRows(wp.error ? [] : ((wp.data as Array<{ site_id: string; area: string; flood_test_on: string | null }>) ?? []))
+      setWpFailRows(wpf.error ? [] : ((wpf.data as Array<{ site_id: string; unit: string | null; flood_test_on: string | null }>) ?? []))
       setVarRows(
         co.error
           ? []
@@ -172,6 +182,19 @@ export function ProjectsScreen({
         tab: 'overview',
       })
     }
+    for (const w of wpFailRows) {
+      const site = byId.get(w.site_id)
+      if (!site) continue
+      out.push({
+        key: `wf|${w.site_id}|${w.unit ?? ''}`,
+        text: w.unit ? `Flood test failed on ${w.unit}` : 'Flood test failed',
+        meta: `${site.name} · ${whenLabel(w.flood_test_on ?? new Date().toISOString())}`,
+        tone: 'r',
+        at: w.flood_test_on ?? new Date().toISOString(),
+        site,
+        tab: 'overview',
+      })
+    }
     for (const v of varRows) {
       const site = v.site_id ? byId.get(v.site_id) : undefined
       if (!site) continue
@@ -189,7 +212,7 @@ export function ProjectsScreen({
     }
     out.sort((a, b) => (a.at > b.at ? -1 : 1))
     return out
-  }, [defectRows, wpRows, varRows, byId, office])
+  }, [defectRows, wpRows, wpFailRows, varRows, byId, office])
 
   /** Everyone attached to a job: on the clock there now, or booked ahead. */
   const peopleOf = useCallback(
@@ -222,16 +245,27 @@ export function ProjectsScreen({
     // Unassigning takes their future published bookings off the job — the
     // honest meaning of "remove from this project". Past shifts stay.
     //
+    // The cutoff is start-of-*day*, not this instant: a `gte(now())` cutoff
+    // used to drop today's own booking off the list the moment its 7am start
+    // time ticked past, even though the worker had not clocked on and was
+    // still shown as "Booked today" with a live Remove button — so the row
+    // looked removable and silently never was. Today is still theirs to
+    // unassign right up until midnight; the button only ever shows for
+    // someone not currently on the clock, so this cannot pull a person who
+    // is on site.
+    //
     // The rows come back because a DELETE the office is not allowed to make
     // matches nothing rather than failing, and PostgREST reports that as a
     // success. Without reading them back, a refusal looks exactly like a
     // person who had no bookings left.
+    const t0 = new Date()
+    t0.setHours(0, 0, 0, 0)
     const { data, error: err } = await supabase()
       .from('assignments')
       .delete()
       .eq('site_id', siteId)
       .eq('worker_id', workerId)
-      .gte('starts_at', new Date().toISOString())
+      .gte('starts_at', t0.toISOString())
       .select('id')
     if (err) {
       setAssignError(err.message)
@@ -243,6 +277,31 @@ export function ProjectsScreen({
     }
     setAssignError(null)
     setNonce((n) => n + 1)
+  }
+
+  /**
+   * Promote a job past its starting_soon default, or archive one that is
+   * done. `job_sites_write` is the same office-only RLS rule as everything
+   * else on this screen, so an office user is the only one who can reach
+   * this either.
+   *
+   * This is the whole lifecycle control the office dashboard already has
+   * (JobSites.tsx) but the phone never had — a job created here is inserted
+   * as 'starting_soon' and, before this, nothing on the phone could ever
+   * move it, so a single-operator company working only from a phone had no
+   * way to mark a job active or take a finished one off the board.
+   */
+  const setSiteStatus = async (site: JobSiteRow, status: 'active' | 'archived') => {
+    setStatusBusy(site.id)
+    setStatusError(null)
+    const { error: err } = await supabase().from('job_sites').update({ status }).eq('id', site.id)
+    setStatusBusy(null)
+    if (err) {
+      setStatusError(err.message)
+      return
+    }
+    if (status === 'archived') setOpen('')
+    data.refresh()
   }
 
   /**
@@ -470,6 +529,29 @@ export function ProjectsScreen({
                       </span>
                       <span style={{ flex: 1, fontSize: 14.5, fontWeight: 600, color: '#14171A' }}>Assign personnel</span>
                     </span>
+                    {office && (
+                      <>
+                        {statusError && (
+                          <span style={{ margin: '0 14px 10px 19px', padding: '9px 11px', background: '#FDECEE', borderRadius: 9, fontSize: 12.5, lineHeight: 1.45, color: '#8E2A31' }}>
+                            {statusError}
+                          </span>
+                        )}
+                        {/* Finished job, off the board — the office dashboard's
+                            "Archive" for job_sites.status, now reachable from
+                            the phone too. Archiving drops it from data.sites
+                            entirely (data.ts filters status != 'archived'), so
+                            it disappears from both lists rather than sitting
+                            here disabled. */}
+                        <span
+                          onClick={() => statusBusy !== site.id && void setSiteStatus(site, 'archived')}
+                          style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 48, padding: '7px 14px 9px 19px', borderTop: '1px solid #EDEFF1', cursor: 'pointer', opacity: statusBusy === site.id ? 0.6 : 1 }}
+                        >
+                          <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: '#A3282E' }}>
+                            {statusBusy === site.id ? 'Archiving…' : 'Archive project'}
+                          </span>
+                        </span>
+                      </>
+                    )}
                   </span>
                 )}
               </div>
@@ -479,32 +561,52 @@ export function ProjectsScreen({
 
         {/* FUTURE PROJECTS. */}
         {tab === 'future' && (
-          <div style={{ margin: '0 18px 22px', display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, boxShadow: '0 1px 2px rgba(16,20,24,.05)', overflow: 'hidden' }}>
-            {future.map((site, i) => (
-              <span
-                key={site.id}
-                onClick={() => onOpenJob(site, 'crew')}
-                style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, minHeight: 68, padding: '11px 14px 11px 19px', borderTop: `1px solid ${i === 0 ? 'transparent' : '#EDEFF1'}`, cursor: 'pointer' }}
-              >
-                <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site) }} />
-                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontSize: 15.5, fontWeight: 600, color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {addressLine(site) || site.name}
+          <>
+            {statusError && (
+              <div style={{ margin: '0 18px 12px', padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 12.5, lineHeight: 1.45, color: '#8E2A31' }}>
+                {statusError}
+              </div>
+            )}
+            <div style={{ margin: '0 18px 22px', display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 12, boxShadow: '0 1px 2px rgba(16,20,24,.05)', overflow: 'hidden' }}>
+              {future.map((site, i) => (
+                <span
+                  key={site.id}
+                  onClick={() => onOpenJob(site, 'crew')}
+                  style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, minHeight: 68, padding: '11px 14px 11px 19px', borderTop: `1px solid ${i === 0 ? 'transparent' : '#EDEFF1'}`, cursor: 'pointer' }}
+                >
+                  <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, background: railOf(site) }} />
+                  <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 15.5, fontWeight: 600, color: s.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {addressLine(site) || site.name}
+                    </span>
+                    {builderOf(site) && (
+                      <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{builderOf(site)}</span>
+                    )}
                   </span>
-                  {builderOf(site) && (
-                    <span style={{ fontSize: 13, color: '#7B838B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{builderOf(site)}</span>
+                  {/* The only way a phone-created job ever left 'starting_soon'
+                      before this: nothing did. See setSiteStatus above. */}
+                  {office && (
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (statusBusy !== site.id) void setSiteStatus(site, 'active')
+                      }}
+                      style={{ flex: 'none', display: 'flex', alignItems: 'center', height: 26, padding: '0 10px', borderRadius: 13, fontSize: 11, fontWeight: 700, background: '#14171A', color: '#fff', cursor: 'pointer', opacity: statusBusy === site.id ? 0.6 : 1 }}
+                    >
+                      {statusBusy === site.id ? 'Marking…' : 'Mark active'}
+                    </span>
                   )}
+                  <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 5, height: 23, padding: '0 9px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#FFF6E3', color: '#8A6100' }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#8A6100' }} />
+                    {site.schedule_note || 'Starting soon'}
+                  </span>
+                  <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none' }}>
+                    <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </span>
-                <span style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 5, height: 23, padding: '0 9px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#FFF6E3', color: '#8A6100' }}>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#8A6100' }} />
-                  {site.schedule_note || 'Starting soon'}
-                </span>
-                <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none' }}>
-                  <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* An empty list still has to say so, or the tab looks broken. */}
@@ -548,6 +650,38 @@ export function ProjectsScreen({
 }
 
 // ------------------------------------------------------------- new project
+
+/**
+ * Catches a failed FencePicker chunk load — patchy jobsite signal is exactly
+ * when the map is least likely to fetch — so it costs this one field instead
+ * of the app: without this, the throw from the rejected dynamic import was
+ * uncaught here and unmounted the whole tree up to the top-level Crash
+ * boundary in main.tsx, showing a raw "Unable to preload CSS for
+ * http://.../FencePicker-*.css" message and dumping the user back on Home.
+ *
+ * There is no working "try again" for the map itself: once `import()` has
+ * rejected, React's lazy() caches that rejection on the module-level
+ * FencePicker forever, so re-rendering throws the same error again rather
+ * than re-fetching — only a full reload clears it. Saying so plainly beats a
+ * retry button that looks live but can never succeed.
+ */
+class FenceBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  render() {
+    if (!this.state.failed) return this.props.children
+    return (
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: 240, padding: '0 20px', textAlign: 'center', borderRadius: 12, border: '1px solid #DCE0E6', background: '#fff', fontSize: 13.5, lineHeight: 1.5, color: '#8B9096' }}>
+        <span>You're offline — the map couldn't load. Try again once you have signal.</span>
+        <span onClick={() => window.location.reload()} style={{ fontSize: 13, fontWeight: 700, color: s.accent, cursor: 'pointer' }}>
+          Reload
+        </span>
+      </span>
+    )
+  }
+}
 
 /**
  * The one flow the header's + opens: a name, who it is for, and the fence a
@@ -681,15 +815,17 @@ function NewProjectSheet({
 
               <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 <span style={label}>GEOFENCE</span>
-                <Suspense
-                  fallback={
-                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 240, borderRadius: 12, border: '1px solid #DCE0E6', background: '#fff', fontSize: 13.5, color: '#8B9096' }}>
-                      Loading the map…
-                    </span>
-                  }
-                >
-                  <FencePicker value={fence} address={address} onChange={setFence} />
-                </Suspense>
+                <FenceBoundary>
+                  <Suspense
+                    fallback={
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 240, borderRadius: 12, border: '1px solid #DCE0E6', background: '#fff', fontSize: 13.5, color: '#8B9096' }}>
+                        Loading the map…
+                      </span>
+                    }
+                  >
+                    <FencePicker value={fence} address={address} onChange={setFence} />
+                  </Suspense>
+                </FenceBoundary>
               </span>
 
               <button

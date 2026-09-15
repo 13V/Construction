@@ -111,6 +111,43 @@ describe('dwell geofence engine', () => {
     expect(DWELL_OUT_MS).toBe(3 * MIN)
   })
 
+  it('flags a clock-in as ambiguous when two sites tie for nearest', () => {
+    // Duplex-at-one-address case: two active jobs with identical fences.
+    // Nearest-wins still has to pick one, but the pick should carry the
+    // fact that it was a coin flip, not look like an ordinary unambiguous
+    // clock-in.
+    const MAPLE_TWIN = site('maple-twin', MAPLE.center, MAPLE.radiusM)
+    const { phase, events } = run(
+      [
+        [0, 50],
+        [1 * MIN, 50],
+        [2 * MIN, 50],
+        [3 * MIN, 50],
+      ],
+      [MAPLE, MAPLE_TWIN],
+    )
+
+    const clockIn = events.find((e) => e.kind === 'clock_in')
+    expect(clockIn).toBeDefined()
+    expect(clockIn!.siteId).toBe('maple')
+    expect(clockIn!.kind === 'clock_in' && clockIn!.ambiguousWith).toEqual(['maple-twin'])
+    expect(phase.kind).toBe('onsite')
+    expect(phase.kind === 'onsite' && phase.ambiguousWith).toEqual(['maple-twin'])
+  })
+
+  it('does not flag an ordinary clock-in at a single, unambiguous site', () => {
+    const { events } = run([
+      [0, 50],
+      [1 * MIN, 50],
+      [2 * MIN, 50],
+      [3 * MIN, 50],
+    ])
+
+    const clockIn = events.find((e) => e.kind === 'clock_in')
+    expect(clockIn).toBeDefined()
+    expect(clockIn!.kind === 'clock_in' && clockIn!.ambiguousWith).toEqual([])
+  })
+
   it('never clocks in a worker parked just outside the fence', () => {
     const justOutside = MAPLE.radiusM + 120
     const { phase, events } = run([

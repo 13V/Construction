@@ -58,6 +58,14 @@ const MIGRATIONS = [
   { file: 'schema_v34.sql', proves: ['shifts_read_v34', 'channels_dm_create', 'channel_members_dm_join'] },
   { file: 'schema_v35.sql', proves: ['safety_documents.content'] },
   { file: 'schema_v36.sql', proves: ['lone_worker_sessions', 'lone_worker_events', 'lone_worker_sessions_read'] },
+  // v37-v40 create no new object. Each replaces one that already exists — a
+  // function, a view, an RLS policy — so `proves` can never tell whether the
+  // new definition or the old one is in the database. They are written to be
+  // re-runnable, so they carry `always` and are applied every time instead.
+  { file: 'schema_v37.sql', proves: ['unsigned_safety_docs'], always: true },
+  { file: 'schema_v38.sql', proves: ['job_value_v'], always: true },
+  { file: 'schema_v39.sql', proves: ['delete_worker_account'], always: true },
+  { file: 'schema_v40.sql', proves: ['messages_office_write'], always: true },
 ]
 
 // ------------------------------------------------------------- credentials
@@ -150,11 +158,12 @@ try {
     ).map((r) => r.n),
   )
 
-  const pending = MIGRATIONS.filter((m) => !m.proves.every((t) => present.has(t)))
+  const pending = MIGRATIONS.filter((m) => m.always || !m.proves.every((t) => present.has(t)))
 
   for (const m of MIGRATIONS) {
-    const done = m.proves.every((t) => present.has(t))
-    console.log(` ${done ? '✓' : '·'} ${m.file}${done ? '' : `   missing: ${m.proves.filter((t) => !present.has(t)).join(', ')}`}`)
+    const done = !m.always && m.proves.every((t) => present.has(t))
+    const why = m.always ? '   re-applied every run (replaces an existing object)' : ''
+    console.log(` ${done ? '✓' : '·'} ${m.file}${done ? '' : why || `   missing: ${m.proves.filter((t) => !present.has(t)).join(', ')}`}`)
   }
 
   if (pending.length === 0) {

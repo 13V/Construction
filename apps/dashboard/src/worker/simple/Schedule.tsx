@@ -675,7 +675,9 @@ export function SimpleSchedule({
   } else if (view === 'week') {
     const entries = groupBySite(weekRows, monday.getTime() + dayIx * DAY, monday.getTime() + (dayIx + 1) * DAY)
     const people = entries.reduce((a, [, list]) => a + list.length, 0)
-    const daySub = people > 0 ? `${people} on the clock · ${entries.length} site${entries.length === 1 ? '' : 's'}` : 'Nothing rostered'
+    // "rostered", not "on the clock" -- this counts who's booked onto a job today,
+    // not who has actually geofence-checked in (that's Home's ON SITE tile).
+    const daySub = people > 0 ? `${people} rostered · ${entries.length} site${entries.length === 1 ? '' : 's'}` : 'Nothing rostered'
     const sel = week[dayIx]!
     body = (
       <>
@@ -715,7 +717,8 @@ export function SimpleSchedule({
         {stepper(isToday ? `Today · ${label}` : label, () => setDayDate(new Date(dayDate.getTime() - DAY)), () => setDayDate(new Date(dayDate.getTime() + DAY)))}
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, padding: '2px 18px 11px' }}>
           <span style={{ fontSize: 13, color: '#7B838B' }}>
-            {people > 0 ? `${people} on the clock · ${entries.length} site${entries.length === 1 ? '' : 's'}` : 'Nothing rostered'}
+            {/* "rostered", not "on the clock" -- see week view's daySub above for why */}
+            {people > 0 ? `${people} rostered · ${entries.length} site${entries.length === 1 ? '' : 's'}` : 'Nothing rostered'}
           </span>
         </div>
         {dayCards(entries, dayLoading)}

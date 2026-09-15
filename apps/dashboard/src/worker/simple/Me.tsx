@@ -512,15 +512,22 @@ export function MeScreen({
           onClose={() => {
             setShowBusiness(false)
             // Re-read the count so the row stops saying "3 missing" the moment
-            // they are no longer missing.
+            // they are no longer missing — and refresh the identity card's
+            // company name too, since it was only ever set once on mount and
+            // otherwise keeps showing the pre-edit name until the next sign-in.
             void supabase()
               .from('companies')
               .select('name, abn, licence_no, address, certifier_name')
               .eq('id', me.company_id)
               .maybeSingle()
               .then(({ data }) => {
-                const row = data as Parameters<typeof complianceGaps>[0] | null
-                if (row) setGapCount(complianceGaps(row).length)
+                const row = data as
+                  | (Parameters<typeof complianceGaps>[0] & { name: string })
+                  | null
+                if (row) {
+                  setGapCount(complianceGaps(row).length)
+                  setCompany(row.name ?? '')
+                }
               })
           }}
         />

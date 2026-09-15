@@ -1454,6 +1454,10 @@ function PlansTab({
   const [compareTo, setCompareTo] = useState<string | null>(null)
   const [compareUrl, setCompareUrl] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // The general "Upload" button and the per-sheet "Upload a new revision" button share one
+  // hidden <input>, so the input's onChange alone can't tell which one opened the picker.
+  // Stash the intended supersedes target here right before the click that opens it.
+  const pendingSupersedesRef = useRef<string | null>(null)
 
   const superseded = useMemo(
     () => new Set(rows.map((r) => r.supersedes).filter((x): x is string => Boolean(x))),
@@ -1624,10 +1628,22 @@ function PlansTab({
         <div style={cardHead}>
           <span style={{ fontSize: 15, fontWeight: 600 }}>Plans &amp; documents</span>
           <span style={{ flex: 1 }} />
-          <button onClick={() => fileRef.current?.click()} disabled={busy} style={actionBtnStyle}>
+          <button
+            onClick={() => {
+              pendingSupersedesRef.current = null
+              fileRef.current?.click()
+            }}
+            disabled={busy}
+            style={actionBtnStyle}
+          >
             {busy ? 'Uploading…' : 'Upload'}
           </button>
-          <input ref={fileRef} type="file" hidden onChange={(e) => void upload(e.target.files, null)} />
+          <input
+            ref={fileRef}
+            type="file"
+            hidden
+            onChange={(e) => void upload(e.target.files, pendingSupersedesRef.current)}
+          />
         </div>
 
         <div style={{ overflowX: 'auto' }}>
@@ -1765,7 +1781,13 @@ function PlansTab({
               </select>
             )}
             {me.is_office && (
-              <button onClick={() => fileRef.current?.click()} style={actionBtnStyle}>
+              <button
+                onClick={() => {
+                  pendingSupersedesRef.current = selected.id
+                  fileRef.current?.click()
+                }}
+                style={actionBtnStyle}
+              >
                 Upload a new revision
               </button>
             )}

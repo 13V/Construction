@@ -17,6 +17,13 @@ import { theme } from '../theme'
  * size — which is why they are stored that way rather than in pixels.
  */
 
+// Office already stores version as "Rev A", "Rev B", etc. (see JobSiteFolder.tsx upload()),
+// so prepending "REV " again produced "REV REV A" on every chip. Strip any leading "Rev"
+// before adding our own.
+function revChip(version: string): string {
+  return `REV ${version.replace(/^rev\s*/i, '').toUpperCase()}`
+}
+
 interface Pin {
   id: string
   file_id: string
@@ -341,7 +348,7 @@ function SheetList({
                 whiteSpace: 'nowrap',
               }}
             >
-              {superseded ? 'SUPERSEDED' : s.version ? `REV ${s.version.toUpperCase()}` : 'CURRENT'}
+              {superseded ? 'SUPERSEDED' : s.version ? revChip(s.version) : 'CURRENT'}
             </span>
           </button>
         )
@@ -447,7 +454,7 @@ function SheetViewer({
             fontWeight: 700,
           }}
         >
-          {superseded ? 'SUPERSEDED' : sheet.version ? `REV ${sheet.version.toUpperCase()}` : 'CURRENT'}
+          {superseded ? 'SUPERSEDED' : sheet.version ? revChip(sheet.version) : 'CURRENT'}
         </span>
       </div>
 

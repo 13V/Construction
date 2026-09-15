@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow, type WorkerRow } from '../../data/supabase'
+import { addressLine } from './stheme'
 
 export interface SimpleData {
   loading: boolean
@@ -74,7 +75,10 @@ export function useSimpleData(me: WorkerRow): SimpleData {
     const t2 = dayStart(2).toISOString()
 
     void Promise.all([
-      client.from('job_sites').select('*').neq('status', 'archived').order('name'),
+      // Sorted client-side below by what the list actually shows (the address,
+      // falling back to name) — `name` is mostly invisible on screen, so
+      // ordering the query by it made the visible list look shuffled.
+      client.from('job_sites').select('*').neq('status', 'archived'),
       client.from('site_progress_v').select('site_id, pct_complete'),
       client.from('defects').select('site_id, status').in('status', ['open', 'in_progress']),
       client.from('shifts').select('site_id, worker_id, started_at, ended_at').gte('started_at', t0),
@@ -92,7 +96,11 @@ export function useSimpleData(me: WorkerRow): SimpleData {
       if (cancelled) return
       const firstError = st.error || pr.error || df.error || sh.error || asg.error
       if (firstError) setError(firstError.message)
-      setSites((st.data as JobSiteRow[]) ?? [])
+      const fetchedSites = (st.data as JobSiteRow[]) ?? []
+      fetchedSites.sort((a, b) =>
+        (addressLine(a) || a.name).localeCompare(addressLine(b) || b.name, undefined, { sensitivity: 'base' }),
+      )
+      setSites(fetchedSites)
       setProgressRows(pr.data ?? [])
       setDefectRows(df.data ?? [])
       setShiftRows(sh.data ?? [])
