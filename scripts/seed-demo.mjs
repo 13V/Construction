@@ -94,11 +94,13 @@ if (existsSync(new URL('./.review-hold', import.meta.url)) && !process.env.SEED_
   process.exit(0)
 }
 
-const DEMO_EMAIL = process.env.DEMO_EMAIL ?? 'appreview@crewline.app'
-const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'Crewline-Review-2026!'
-const COMPANY_NAME = process.env.COMPANY_NAME ?? 'Semaphore Tiling & Waterproofing'
-const OWNER_NAME = process.env.OWNER_NAME ?? 'Marnie Sutcliffe'
-const LEGAL_NAME = process.env.LEGAL_NAME ?? 'Semaphore Trades Pty. Ltd.'
+// pick(), not ??: a blank workflow_dispatch input arrives as an empty string,
+// and an empty string is not nullish. See the note above pick().
+const DEMO_EMAIL = pick(process.env.DEMO_EMAIL, 'appreview@crewline.app')
+const DEMO_PASSWORD = pick(process.env.DEMO_PASSWORD, 'Crewline-Review-2026!')
+const COMPANY_NAME = pick(process.env.COMPANY_NAME, 'Semaphore Tiling & Waterproofing')
+const OWNER_NAME = pick(process.env.OWNER_NAME, 'Marnie Sutcliffe')
+const LEGAL_NAME = pick(process.env.LEGAL_NAME, 'Semaphore Trades Pty. Ltd.')
 
 const body = async (r) => {
   const t = await r.text()

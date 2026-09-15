@@ -23,6 +23,31 @@ name: Refresh the demo tenant
 # scripts/.review-hold blocks the seed regardless while a submission is open.
 on:
   workflow_dispatch:
+    # Leave every input blank and this reseeds the public demo (blocked by
+    # scripts/.review-hold while something is in front of App Review). Give
+    # it an email and it builds a brand new company for that person instead —
+    # a populated tenant to test on, pre-confirmed, that touches nobody else's.
+    inputs:
+      email:
+        description: 'Owner login for a NEW test company (blank = reseed the public demo)'
+        required: false
+        default: ''
+      password:
+        description: 'Their password (blank = generate one and show it in the run summary)'
+        required: false
+        default: ''
+      company:
+        description: 'Company name shown in the app'
+        required: false
+        default: 'Test Tiling Co'
+      owner:
+        description: "Owner's name"
+        required: false
+        default: 'Test Owner'
+      legal:
+        description: 'Legal entity name on documents'
+        required: false
+        default: 'Test Tiling Pty Ltd'
 
 concurrency:
   group: demo-refresh
@@ -54,9 +79,52 @@ jobs:
             exit 1
           fi
 
+      # A generated password is masked in the log but written to the step
+      # summary on purpose: the person who dispatched the run is the person
+      # who needs it, and the summary is only visible to people with access
+      # to this repository's Actions.
+      - name: Settle the login
+        id: login
+        if: inputs.email != ''
+        run: |
+          pw='${{ inputs.password }}'
+          if [ -z "$pw" ]; then
+            pw="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-16)-$(shuf -i 10-99 -n 1)"
+          fi
+          echo "::add-mask::$pw"
+          echo "password=$pw" >> "$GITHUB_OUTPUT"
+
       - name: Reseed
         env:
           SUPABASE_PAT: ${{ secrets.SUPABASE_PAT }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          # Only set when an email was given; the script then ignores the
+          # review hold, because it is writing to a company that did not exist
+          # a minute ago and App Review has never seen.
+          SEED_NEW_TENANT: ${{ inputs.email != '' && '1' || '' }}
+          DEMO_EMAIL: ${{ inputs.email }}
+          DEMO_PASSWORD: ${{ steps.login.outputs.password }}
+          COMPANY_NAME: ${{ inputs.email != '' && inputs.company || '' }}
+          OWNER_NAME: ${{ inputs.email != '' && inputs.owner || '' }}
+          LEGAL_NAME: ${{ inputs.email != '' && inputs.legal || '' }}
+          # Blank inputs reach the script as empty strings, which it treats as
+          # unset (pick(), not ??) — so a plain dispatch still reseeds the demo.
         run: node scripts/seed-demo.mjs
+
+      - name: Write the login to the summary
+        if: inputs.email != ''
+        run: |
+          {
+            echo "### Test company ready"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Company | ${{ inputs.company }} |"
+            echo "| Sign in as | \`${{ inputs.email }}\` |"
+            echo "| Password | \`${{ steps.login.outputs.password }}\` |"
+            echo ""
+            echo "Pre-confirmed — no email to click. Sign in on the phone or at"
+            echo "the /worker URL. Change the password from the Me tab if you"
+            echo "want one you chose."
+          } >> "$GITHUB_STEP_SUMMARY"
