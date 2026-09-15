@@ -48,6 +48,14 @@ on:
         description: 'Legal entity name on documents'
         required: false
         default: 'Test Tiling Pty Ltd'
+  # The same button, for the GitHub App that automates this repo: it can push
+  # but cannot fire workflow_dispatch (no actions:write). A push to this branch
+  # builds the test company described in scripts/test-company.json — email,
+  # company, owner, legal name; never a password — and leaves the generated
+  # login in a one-day artifact for whoever pushed. The branch carries no
+  # development; it only ever points at whatever should be seeded next.
+  push:
+    branches: [seed/test-company]
 
 concurrency:
   group: demo-refresh
@@ -85,14 +93,24 @@ jobs:
       # to this repository's Actions.
       - name: Settle the login
         id: login
-        if: inputs.email != ''
         run: |
-          pw='${{ inputs.password }}'
-          if [ -z "$pw" ]; then
+          if [ "${{ github.event_name }}" = "push" ]; then
+            f=scripts/test-company.json
+            [ -f "$f" ] || { echo "::error::$f is missing — a push to seed/test-company needs it"; exit 1; }
+            email=$(jq -r '.email // ""' "$f"); company=$(jq -r '.company // ""' "$f")
+            owner=$(jq -r '.owner // ""' "$f"); legal=$(jq -r '.legal // ""' "$f"); pw=
+          else
+            email='${{ inputs.email }}'; company='${{ inputs.company }}'
+            owner='${{ inputs.owner }}'; legal='${{ inputs.legal }}'; pw='${{ inputs.password }}'
+          fi
+          if [ -n "$email" ] && [ -z "$pw" ]; then
             pw="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-16)-$(shuf -i 10-99 -n 1)"
           fi
-          echo "::add-mask::$pw"
-          echo "password=$pw" >> "$GITHUB_OUTPUT"
+          [ -z "$pw" ] || echo "::add-mask::$pw"
+          {
+            echo "email=$email"; echo "company=$company"; echo "owner=$owner"
+            echo "legal=$legal"; echo "password=$pw"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Reseed
         env:
@@ -102,29 +120,42 @@ jobs:
           # Only set when an email was given; the script then ignores the
           # review hold, because it is writing to a company that did not exist
           # a minute ago and App Review has never seen.
-          SEED_NEW_TENANT: ${{ inputs.email != '' && '1' || '' }}
-          DEMO_EMAIL: ${{ inputs.email }}
+          SEED_NEW_TENANT: ${{ steps.login.outputs.email != '' && '1' || '' }}
+          DEMO_EMAIL: ${{ steps.login.outputs.email }}
           DEMO_PASSWORD: ${{ steps.login.outputs.password }}
-          COMPANY_NAME: ${{ inputs.email != '' && inputs.company || '' }}
-          OWNER_NAME: ${{ inputs.email != '' && inputs.owner || '' }}
-          LEGAL_NAME: ${{ inputs.email != '' && inputs.legal || '' }}
+          COMPANY_NAME: ${{ steps.login.outputs.company }}
+          OWNER_NAME: ${{ steps.login.outputs.owner }}
+          LEGAL_NAME: ${{ steps.login.outputs.legal }}
           # Blank inputs reach the script as empty strings, which it treats as
           # unset (pick(), not ??) — so a plain dispatch still reseeds the demo.
         run: node scripts/seed-demo.mjs
 
-      - name: Write the login to the summary
-        if: inputs.email != ''
+      - name: Write the login to the summary and an artifact
+        if: steps.login.outputs.email != ''
         run: |
+          mkdir -p "$RUNNER_TEMP/login"
+          {
+            echo "Company   ${{ steps.login.outputs.company }}"
+            echo "Email     ${{ steps.login.outputs.email }}"
+            echo "Password  ${{ steps.login.outputs.password }}"
+          } > "$RUNNER_TEMP/login/test-company-login.txt"
           {
             echo "### Test company ready"
             echo ""
             echo "| | |"
             echo "|---|---|"
-            echo "| Company | ${{ inputs.company }} |"
-            echo "| Sign in as | \`${{ inputs.email }}\` |"
+            echo "| Company | ${{ steps.login.outputs.company }} |"
+            echo "| Sign in as | \`${{ steps.login.outputs.email }}\` |"
             echo "| Password | \`${{ steps.login.outputs.password }}\` |"
             echo ""
             echo "Pre-confirmed — no email to click. Sign in on the phone or at"
-            echo "the /worker URL. Change the password from the Me tab if you"
-            echo "want one you chose."
+            echo "the /worker URL. The same three lines are in the run's"
+            echo "\`test-company-login\` artifact for one day."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.login.outputs.email != ''
+        with:
+          name: test-company-login
+          path: ${{ runner.temp }}/login/test-company-login.txt
+          retention-days: 1
