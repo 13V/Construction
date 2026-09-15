@@ -34,9 +34,12 @@
  * a later day re-seeds that day's liveness — by design, a reviewer opening
  * the app weeks after this ran should still see a working day in motion.
  *
- * Users are minted through the admin API with the address pre-confirmed. The
- * PAT is needed to read the service_role key; neither is ever printed. The
- * demo PASSWORD is the one exception — it is meant to be handed to Apple.
+ * Users are minted through the admin API with the address pre-confirmed,
+ * which needs the service_role key. Give it directly as
+ * SUPABASE_SERVICE_ROLE_KEY — that is the narrowest credential that can do
+ * the job — or give a SUPABASE_PAT and the key is read through the management
+ * API instead. Neither is ever printed. The demo PASSWORD is the one
+ * exception — it is meant to be handed to Apple.
  */
 
 import { readFileSync, existsSync } from 'node:fs'
@@ -63,6 +66,7 @@ const SB = pick(process.env.SUPABASE_URL, fromEnvFile('VITE_SUPABASE_URL'), 'htt
 const ANON = pick(process.env.SUPABASE_ANON_KEY, fromEnvFile('VITE_SUPABASE_ANON_KEY'))
 const APP = pick(process.env.APP_URL, 'https://construction-opal-three.vercel.app')
 const PAT = pick(process.env.SUPABASE_PAT, fromEnvFile('SUPABASE_PAT'))
+const SERVICE_KEY = pick(process.env.SUPABASE_SERVICE_ROLE_KEY, fromEnvFile('SUPABASE_SERVICE_ROLE_KEY'))
 const PROJECT = SB.replace(/^https:\/\//, '').split('.')[0]
 
 if (!ANON || !PAT) {
@@ -111,9 +115,10 @@ const body = async (r) => {
   }
 }
 
-let serviceKey = null
+let serviceKey = SERVICE_KEY || null
 async function service() {
   if (serviceKey) return serviceKey
+  if (!PAT) throw new Error('need SUPABASE_SERVICE_ROLE_KEY, or SUPABASE_PAT to read it with')
   const r = await fetch(`https://api.supabase.com/v1/projects/${PROJECT}/api-keys?reveal=true`, {
     headers: { Authorization: `Bearer ${PAT}` },
   })

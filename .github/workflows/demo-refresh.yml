@@ -72,18 +72,23 @@ jobs:
           node-version: '22'
 
       # The script imports nothing but node:fs and uses global fetch, so there
-      # is no install step. Its inputs are three secrets.
+      # is no install step. It needs the anon key — the same secret the iOS
+      # build already uses, under the same name — and the service_role key,
+      # which is what mints pre-confirmed users. A SUPABASE_PAT works instead
+      # of the service key (the script reads the key through the management
+      # API with it) but is a whole-account token for a one-key job; prefer
+      # the key itself.
       - name: Check the secrets are there
         run: |
           missing=
-          [ -n "${{ secrets.SUPABASE_PAT }}" ] || missing="$missing SUPABASE_PAT"
-          [ -n "${{ secrets.SUPABASE_ANON_KEY }}" ] || missing="$missing SUPABASE_ANON_KEY"
+          [ -n "${{ secrets.VITE_SUPABASE_ANON_KEY }}" ] || missing="$missing VITE_SUPABASE_ANON_KEY"
+          [ -n "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}${{ secrets.SUPABASE_PAT }}" ] || missing="$missing SUPABASE_SERVICE_ROLE_KEY"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secret(s):$missing"
             echo "Add them under Settings → Secrets and variables → Actions."
-            echo "SUPABASE_PAT is a Supabase personal access token (the seed reads"
-            echo "the service_role key with it). SUPABASE_ANON_KEY is the project's"
-            echo "anon key — the same one the web build already uses."
+            echo "SUPABASE_SERVICE_ROLE_KEY is the project's service_role key"
+            echo "(Supabase → Project Settings → API). VITE_SUPABASE_ANON_KEY is"
+            echo "the anon key the iOS build already uses."
             exit 1
           fi
 
@@ -114,9 +119,10 @@ jobs:
 
       - name: Reseed
         env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_PAT: ${{ secrets.SUPABASE_PAT }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           # Only set when an email was given; the script then ignores the
           # review hold, because it is writing to a company that did not exist
           # a minute ago and App Review has never seen.
