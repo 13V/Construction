@@ -1,26 +1,38 @@
 /**
- * Who may see the workspace. A STUB: a plain email-and-password sign-in, so
- * the website can be driven before its real front door exists. WP04 replaces
- * this file with the full gate (sign-up, password reset, finish setup) and
- * keeps its contract:
+ * Who may see the workspace: the website's front door, rebuilt from the old
+ * dashboard's App.tsx in the phone's Simple design, on the same useSession
+ * the phone uses (which this never changes).
  *
  *   <AuthGate>{({ me, reload }) => <the workspace />}</AuthGate>
  *
- * children is called only for a signed-in owner or office login with a
- * workers row. In order, before that: Supabase not configured, loading,
- * signed out, the account failed to load, no workers row, not the office.
+ * children is called only for an owner login with a workers row. Before that,
+ * in this order:
+ *
+ *  1. Supabase not configured: SetupNotice.
+ *  2. A password-reset link was just opened: NewPasswordPage, before anything
+ *     else, whoever the account belongs to.
+ *  3. Loading.
+ *  4. Signed out: SignUpPage at /signup, ResetPage at /reset, and SignInPage
+ *     at '/' and every other address (which stays put, so a link to a job
+ *     opens that job once the person is in).
+ *  5. The account failed to load: AccountError (Try again, Sign out).
+ *  6. No workers row: FinishSetup (create the company, or wait to be added).
+ *  7. Not the office: NotOffice (the crew app, Sign out).
  *
  * There is no "Try the demo" here, and there must never be: the demo is App
  * Review's tenant, and nothing on a desk should be able to touch it.
  */
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { readableAuthError, supabase, supabaseConfigured, useSession, type WorkerRow } from '../phone'
-import { paths } from '../router'
-import { color, radius, shadow, space, text } from '../tokens'
-import { BrandLockup, signOutHere } from '../shell/Rail'
-import { Banner } from '../ui/Banner'
-import { Button } from '../ui/Button'
-import { Field } from '../ui/Field'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { supabase, supabaseConfigured, useSession, type WorkerRow } from '../phone'
+import { navigate, paths, useRoute } from '../router'
+import { color, space, text } from '../tokens'
+import { AccountError } from './AccountError'
+import { FinishSetup } from './FinishSetup'
+import { NotOffice } from './NotOffice'
+import { NewPasswordPage, ResetPage } from './ResetPage'
+import { SetupNotice } from './SetupNotice'
+import { SignInPage } from './SignInPage'
+import { SignUpPage } from './SignUpPage'
 
 /** What the workspace is given once someone is let in. */
 export interface SignedIn {
@@ -29,100 +41,144 @@ export interface SignedIn {
   reload: () => void
 }
 
+/**
+ * True when this page was opened from a password-reset link. Read before
+ * supabase-js sees the address: it swaps the fragment's tokens for a session
+ * and then wipes the fragment. Any path counts, not only /reset: if the
+ * project's redirect allow-list lacks <site>/reset, Supabase sends the link
+ * to the Site URL instead, and the reset must still work from there.
+ */
+function openedFromRecoveryLink(): boolean {
+  try {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    return params.get('type') === 'recovery' && Boolean(params.get('access_token'))
+  } catch {
+    return false
+  }
+}
+
 export function AuthGate({ children }: { children: (signedIn: SignedIn) => ReactNode }) {
   const { loading, session, me, error, reload } = useSession()
-
-  if (!supabaseConfigured) {
-    return (
-      <Card title="Not connected">
-        This copy of the website was built without its database address (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY).
-      </Card>
-    )
-  }
-  // useSession reloads the workers row whenever the token refreshes; keep
-  // the workspace on screen through that rather than flashing Loading.
-  if (loading && !me) return <Card title="Loading…" />
-  if (!session) return <StubSignIn />
-  if (error) {
-    return (
-      <Card title="Could not load your account" actions={<><Button variant="primary" onClick={reload}>Try again</Button><Button onClick={() => void signOutHere()}>Sign out</Button></>}>
-        {error}
-      </Card>
-    )
-  }
-  if (!me) {
-    return (
-      <Card title="This login is not linked to a company" actions={<Button onClick={() => void signOutHere()}>Sign out</Button>}>
-        Ask your office to add you to the crew with this email address.
-      </Card>
-    )
-  }
-  if (!me.is_office) {
-    return (
-      <Card
-        title="Setting up jobs is done by the office"
-        actions={
-          <>
-            <Button variant="primary" href={paths.worker}>Open the crew app</Button>
-            <Button onClick={() => void signOutHere()}>Sign out</Button>
-          </>
-        }
-      >
-        Your jobs are in the app.
-      </Card>
-    )
-  }
-  return <>{children({ me, reload })}</>
-}
-
-function Card({ title, children, actions }: { title: ReactNode; children?: ReactNode; actions?: ReactNode }) {
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: space.lg, boxSizing: 'border-box' }}>
-      <div style={{ width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', gap: space.md, padding: space.xl - 4, background: color.panel, border: `1px solid ${color.borderSoft}`, borderRadius: radius.lg, boxShadow: shadow.card }}>
-        <BrandLockup onDark={false} />
-        <h1 style={{ margin: `${space.xs}px 0 0`, ...text.title, color: color.ink }}>{title}</h1>
-        {children && <div style={{ ...text.base, color: color.body }}>{children}</div>}
-        {actions && <div style={{ display: 'flex', gap: space.xs }}>{actions}</div>}
-      </div>
-    </div>
-  )
-}
-
-function StubSignIn() {
+  const route = useRoute()
+  const [recovering, setRecovering] = useState(openedFromRecoveryLink)
+  // The email typed on sign-in, sign-up or reset, kept between them.
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
+  // The last answer useSession finished reading, and for which login.
+  //
+  // Only a read seen to finish counts: loading true, then false, both under
+  // the SAME login. useSession reports "signed in, not loading, no row" (what
+  // an account with no company looks like) before it has begun reading a
+  // session's workers row: for one render after a sign-in, and on every load
+  // with a stored session, where getSession() answers from storage in the
+  // same tick as useSession's first "signed out, done", so React renders the
+  // two together, straight after a loading that belonged to no login. Taking
+  // either at its word showed FinishSetup, live and focused, for the whole
+  // of the real read on every reload, new tab and opened link, and all
+  // through useSession's bootstrap on a founder's first load.
+  //
+  // It also lets FinishSetup stay up while useSession reads again from it
+  // (Check again, or after the company was made) and say it is checking,
+  // rather than blinking to Loading and losing what was typed.
+  //
+  // reading: the login (null for none) whose read was seen under way, or
+  // undefined when none is. Any stop clears it, matched or not: if a read
+  // ends in the same tick as a sign-out, React renders both at once, and a
+  // leftover mark would let that login's next sign-in count as already read.
+  //
+  // settled: no answer outlives its session. Most sign-outs happen with no
+  // read under way, so no read is seen to finish them: the Rail's Sign out
+  // in another tab (heard here by broadcast), or this tab's refresh token
+  // revoked, which the phone's Me > Sign out does (its scope is global).
+  // An answer left standing would be taken as current when the same login
+  // signs in again in this tab, for the one render before useSession starts
+  // its read ("signed in, not loading, no row": FinishSetup). So whenever
+  // there is no session, it is dropped, read or no read.
+  const reading = useRef<string | null | undefined>(undefined)
+  const [settled, setSettled] = useState<{ user: string; unlinked: boolean } | null>(null)
+  useEffect(() => {
+    const who = session?.user.id ?? null
+    if (!session) setSettled(null)
+    if (loading) {
+      reading.current = who
+      return
+    }
+    const finished = reading.current === who
+    reading.current = undefined
+    if (session && finished) setSettled({ user: session.user.id, unlinked: !me && !error })
+  }, [loading, session, me, error])
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
-    setBusy(true)
-    setErr(null)
-    const { error } = await supabase().auth.signInWithPassword({ email: email.trim(), password })
-    // On success useSession hears the new session and this screen goes away.
-    if (error) {
-      setErr(readableAuthError(error))
-      setBusy(false)
+  // Whether supabase-js has a session, heard from it directly. useSession
+  // says "signed out, not loading" from its first render until its
+  // getSession() resolves (which, with an expired access token, waits for a
+  // refresh over the network), so on its word alone every signed-in reload
+  // would show the sign-in form first. Every subscriber is told the stored
+  // session (INITIAL_SESSION) once supabase-js has read it, so until then,
+  // and until useSession has caught up with it, this shows Loading.
+  const [heard, setHeard] = useState<'unknown' | 'in' | 'out'>('unknown')
+
+  useEffect(() => {
+    if (!supabaseConfigured) return
+    const { data } = supabase().auth.onAuthStateChange((event, next) => {
+      setHeard(next ? 'in' : 'out')
+      // The other way a recovery arrives (a PKCE link, or one opened after
+      // the fragment was already consumed): supabase-js says so here.
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true)
+      // Signed out here or in another tab: there is nobody to set a password for.
+      if (event === 'SIGNED_OUT') setRecovering(false)
+    })
+    return () => data.subscription.unsubscribe()
+  }, [])
+
+  if (!supabaseConfigured) return <SetupNotice />
+
+  if (recovering && session) {
+    return (
+      <NewPasswordPage
+        email={session.user.email ?? null}
+        onDone={() => {
+          setRecovering(false)
+          navigate(paths.jobs, { replace: true })
+        }}
+      />
+    )
+  }
+
+  if (session && !me) {
+    const current = settled?.user === session.user.id
+    if (loading || !current) {
+      if (current && settled.unlinked) return <FinishSetup session={session} reload={reload} checking />
+      return <Loading />
+    }
+  }
+  if (!session && heard !== 'out') return <Loading />
+
+  if (!session) {
+    switch (route.name) {
+      case 'signup':
+        return <SignUpPage email={email} onEmail={setEmail} />
+      case 'reset':
+        return <ResetPage email={email} onEmail={setEmail} />
+      default:
+        return <SignInPage email={email} onEmail={setEmail} />
     }
   }
 
+  if (error) return <AccountError error={error} />
+  if (!me) return <FinishSetup session={session} reload={reload} checking={false} />
+  if (!me.is_office) return <NotOffice me={me} />
+  return <>{children({ me, reload })}</>
+}
+
+/**
+ * While the session and its workers row are read. Blank for a beat, then a
+ * quiet word, so a fast load shows nothing at all.
+ */
+function Loading() {
   return (
-    <form onSubmit={(e) => void submit(e)}>
-      <Card
-        title="Sign in"
-        actions={
-          <Button type="submit" variant="primary" block loading={busy}>
-            Sign in
-          </Button>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: space.md }}>
-          <span>Set jobs up here. Your crew run them on the phone.</span>
-          {err && <Banner tone="error">{err}</Banner>}
-          <Field label="Email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          <Field label="Password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-        </div>
-      </Card>
-    </form>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: color.appBg }}>
+      <span role="status" className="wb-anim-fade" style={{ padding: space.lg, ...text.sm, color: color.faint, animationDelay: '.3s', animationFillMode: 'backwards' }}>
+        Loading…
+      </span>
+    </div>
   )
 }
