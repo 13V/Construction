@@ -1,41 +1,50 @@
 /**
- * One job, /jobs/:id and /jobs/:id/<tab>. A working SKELETON from the
- * website's foundation: it loads the job, shows a plain header and the tab
- * row, and lazy-loads the open tab. The package that builds the real job
- * page (header, Overview) replaces this file and keeps the tab routing.
+ * One job, /jobs/:id and /jobs/:id/<tab>.
  *
- * The job is read by id with no status filter, so an archived job opens
- * too: the board links to archived jobs, and Restore lives on this page.
- * Each tab is its own chunk, given { me, site, reloadJob } (job/types.ts).
+ * The job is read by id with no status filter (useJob), so an archived job
+ * opens too: the board links to archived jobs, and Restore lives here. The
+ * same load brings the builder record and the builder's people the way the
+ * phone's Project details picks them, and refreshes when the window regains
+ * focus, when the tab is shown again and every 60 s, so a change made on a
+ * phone shows here without a reload. A refresh that fails keeps the job on
+ * screen and says so.
+ *
+ * Above the tabs: the charcoal header (title, builder, status, dates, fence,
+ * and the lifecycle actions) and, after a job was made with something that
+ * did not save, the banner that names it and retries it. Each tab is its
+ * own chunk, given { me, site, reloadJob } (job/types.ts); Overview is also
+ * handed the loaded job and its dates, so it does not load them twice and
+ * the header and the Project card cannot disagree.
+ *
+ * A Retry on that banner can write rows the job row does not carry (a crew
+ * booking is assignments, not job_sites), so reloading the job alone would
+ * leave the cards that read those rows saying the opposite of the toast
+ * until the next focus or minute. `saved` counts the retries that saved
+ * something: Overview's People and Ready to start read again when it moves,
+ * and the Crew tab, which takes no such prop, is mounted afresh.
  */
-import { lazy, Suspense, useCallback, useEffect, useState, type ComponentType, type LazyExoticComponent } from 'react'
-import { useFresh } from '../data/useFresh'
+import { lazy, Suspense, useCallback, useState, type ComponentType, type LazyExoticComponent } from 'react'
+import { useJob } from '../data/useJob'
+import { CreateIssuesBanner } from '../job/CreateIssuesBanner'
+import { JobHeader, useJobDates } from '../job/JobHeader'
 import type { JobTabProps } from '../job/types'
-import { addressLine, builderOf, railOf, supabase, type JobSiteRow } from '../phone'
 import { PageLoading, type PageProps } from '../routes'
 import { JOB_TABS, linkProps, paths, type JobTab } from '../router'
 import { Page } from '../shell/PageHeader'
-import { color, radius, space, text } from '../tokens'
+import { color, space, text } from '../tokens'
 import { Banner } from '../ui/Banner'
 import { Button } from '../ui/Button'
-import { Chip, type ChipTone } from '../ui/Chip'
 import { Empty } from '../ui/Empty'
 import { Tabs } from '../ui/Tabs'
 
-const TAB_VIEWS: Record<JobTab, LazyExoticComponent<ComponentType<JobTabProps>>> = {
-  overview: lazy(() => import('../job/tabs/OverviewTab')),
+const OverviewView = lazy(() => import('../job/tabs/OverviewTab'))
+
+const TAB_VIEWS: Record<Exclude<JobTab, 'overview'>, LazyExoticComponent<ComponentType<JobTabProps>>> = {
   scope: lazy(() => import('../job/tabs/ScopeTab')),
   drawings: lazy(() => import('../job/tabs/DrawingsTab')),
   waterproofing: lazy(() => import('../job/tabs/WaterproofingTab')),
   safety: lazy(() => import('../job/tabs/SafetyTab')),
   crew: lazy(() => import('../job/tabs/CrewTab')),
-}
-
-/** The phone's words for a job's status. Outlined, because a grey fill vanishes on the page's grey. */
-const STATUS: Record<JobSiteRow['status'], { label: string; tone: ChipTone }> = {
-  active: { label: 'Active', tone: 'green' },
-  starting_soon: { label: 'Starting soon', tone: 'outline' },
-  archived: { label: 'Archived', tone: 'outline' },
 }
 
 export interface JobPageProps extends PageProps {
@@ -44,102 +53,81 @@ export interface JobPageProps extends PageProps {
 }
 
 export default function JobPage({ me, id, tab }: JobPageProps) {
-  const [site, setSite] = useState<JobSiteRow | null>(null)
-  const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'failed'>('loading')
-  const [error, setError] = useState<string | null>(null)
+  const job = useJob(id)
+  const dates = useJobDates(job.site)
+  const { reload } = job
+  const reloadJob = useCallback(() => void reload(), [reload])
+  const [saved, setSaved] = useState(0)
+  const onIssuesSaved = useCallback(() => {
+    setSaved((n) => n + 1)
+    void reload()
+  }, [reload])
 
-  const load = useCallback(async () => {
-    const { data, error: err } = await supabase().from('job_sites').select('*').eq('id', id).maybeSingle()
-    if (err) {
-      // A refresh that fails keeps the job on screen and says so; a first load has nothing to keep.
-      setError(err.message)
-      setState((s) => (s === 'ready' ? 'ready' : 'failed'))
-      return
-    }
-    setError(null)
-    if (!data) {
-      setSite(null)
-      setState('missing')
-      return
-    }
-    setSite(data as JobSiteRow)
-    setState('ready')
-  }, [id])
-
-  useEffect(() => {
-    void load()
-  }, [load])
-  useFresh(() => void load())
-
-  const reloadJob = useCallback(() => void load(), [load])
-
-  if (state === 'loading') return <PageLoading />
-  if (state === 'missing' || (state === 'failed' && !site)) {
+  if (job.state === 'loading') return <PageLoading />
+  const site = job.site
+  if (job.state === 'missing' || !site) {
     return (
       <Page>
         <div style={{ paddingTop: space.xl }}>
           <Empty
-            title={state === 'missing' ? 'This job is not here' : 'Could not open this job'}
+            title={job.state === 'missing' ? 'This job is not here' : 'Could not open this job'}
             action={
-              state === 'missing' ? (
-                <Button variant="primary" href={paths.jobs}>All jobs</Button>
+              job.state === 'missing' ? (
+                <Button variant="primary" href={paths.jobs}>
+                  All jobs
+                </Button>
               ) : (
-                <Button variant="primary" onClick={reloadJob}>Try again</Button>
+                <Button variant="primary" onClick={reloadJob}>
+                  Try again
+                </Button>
               )
             }
           >
-            {state === 'missing' ? 'It may have been deleted, or the link is for another company.' : error}
+            {job.state === 'missing' ? 'It may have been deleted, or the link is for another company.' : job.error}
           </Empty>
         </div>
       </Page>
     )
   }
-  if (!site) return null
 
-  const View = TAB_VIEWS[tab]
-  const title = addressLine(site) || site.name
-  const builder = builderOf(site)
-  const status = STATUS[site.status] ?? STATUS.starting_soon
+  const tabProps: JobTabProps = { me, site, reloadJob }
+  const View = tab === 'overview' ? null : TAB_VIEWS[tab]
 
   return (
     <Page>
-      <header data-job-header="" style={{ display: 'flex', alignItems: 'stretch', gap: space.md, paddingTop: space.lg }}>
-        <span aria-hidden="true" style={{ flex: 'none', width: 4, borderRadius: radius.pill, background: railOf(site) }} />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <a {...linkProps(paths.jobs)} className="wb-link" style={{ alignSelf: 'flex-start', ...text.sm, color: color.muted }}>
-            ← Jobs
-          </a>
-          <h1 data-job-title="" style={{ margin: 0, ...text.title, color: color.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {title}
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: space.xs, ...text.sm, color: color.muted }}>
-            {title !== site.name && <span data-job-name="">{site.name}</span>}
-            {builder && <span>{builder}</span>}
-            <Chip size="sm" tone={status.tone}>
-              {status.label}
-            </Chip>
-          </div>
-        </div>
-        <div style={{ flex: 'none', alignSelf: 'center' }}>
-          <Button href={paths.jobEdit(site.id)}>Edit job</Button>
-        </div>
-      </header>
+      <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', height: 48 }}>
+        <a {...linkProps(paths.jobs)} className="wb-link" style={{ ...text.sm, color: color.muted }}>
+          ← Jobs
+        </a>
+      </nav>
 
-      {error && (
+      <JobHeader site={site} dates={dates} onChanged={reloadJob} />
+
+      {job.error && (
         <div style={{ marginTop: space.md }}>
-          <Banner tone="warn" title="Showing the job as last loaded" action={<Button size="sm" onClick={reloadJob}>Try again</Button>}>
-            {error}
+          <Banner
+            tone="warn"
+            title="Showing the job as last loaded"
+            action={
+              <Button size="sm" onClick={reloadJob}>
+                Try again
+              </Button>
+            }
+          >
+            {job.error}
           </Banner>
         </div>
       )}
 
-      <div style={{ marginTop: space.md, borderBottom: `1px solid ${color.border}` }}>
+      <CreateIssuesBanner me={me} site={site} onSaved={onIssuesSaved} />
+
+      <div style={{ marginTop: space.sm, borderBottom: `1px solid ${color.border}` }}>
         <Tabs label="Job" panelId="wb-job-panel" value={tab} items={JOB_TABS.map((t) => ({ key: t.key, label: t.label, href: paths.job(site.id, t.key) }))} />
       </div>
 
       <div id="wb-job-panel" role="tabpanel" aria-label={JOB_TABS.find((t) => t.key === tab)?.label} style={{ paddingTop: space.lg }}>
         <Suspense fallback={<PageLoading />}>
-          <View me={me} site={site} reloadJob={reloadJob} />
+          {View ? <View key={tab === 'crew' ? `crew-${saved}` : tab} {...tabProps} /> : <OverviewView {...tabProps} job={job} dates={dates} refresh={saved} />}
         </Suspense>
       </div>
     </Page>
