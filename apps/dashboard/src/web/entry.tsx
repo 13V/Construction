@@ -1,31 +1,17 @@
 /**
- * The website's one way in (main.tsx imports it only as '@web/entry', inside
- * officeSurface(), so a phone build never reaches it). For now a placeholder:
- * the new website is previewed at /?web=new while it is built, and the old
- * office dashboard stays at / until it replaces it.
+ * The website's only way in. main.tsx's officeSurface() lazy-loads this as
+ * '@web/entry' (vite.config.ts, tsconfig.app.json); nothing else outside
+ * src/web may import anything in it (boundary.test.ts).
+ *
+ * The phone build never reaches this file: VITE_SURFACE=worker folds the
+ * branch that imports it away, and its typecheck (tsconfig.phone.json) maps
+ * '@web/entry' to a null stub. The phone-fingerprint gate proves the iOS
+ * bundle is byte-identical with or without everything under src/web.
+ *
+ * main.tsx renders the default export with no props.
  */
+import { WebApp } from './WebApp'
+
 export default function WebEntry() {
-  return (
-    <div
-      data-web-root="crewline-web-surface"
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-        background: '#F5F6F7',
-        color: '#1A1D21',
-        font: '15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        textAlign: 'center',
-      }}
-    >
-      <div style={{ maxWidth: 380 }}>
-        <div style={{ fontSize: 21, fontWeight: 600, marginBottom: 8 }}>Proven</div>
-        <p style={{ margin: 0, color: '#4A5057' }}>
-          The new website is being built. Open <a href="/?web=old">the current dashboard</a> in the meantime.
-        </p>
-      </div>
-    </div>
-  )
+  return <WebApp />
 }
