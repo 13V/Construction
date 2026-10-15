@@ -1,0 +1,30 @@
+// The typecheck for the phone build (npm run build:phone), which is what
+// ios-testflight.yml and apps/mobile build:web run.
+//
+// It checks exactly what ships inside the iOS app: src/main.tsx and
+// everything it imports, with the website swapped for a null component. The
+// full typecheck (tsconfig.app.json, `tsc -b`) includes all of src, so a type
+// error or an unused local in website-only code would otherwise fail a
+// TestFlight build over code the phone bundle never contains. The website
+// keeps the full typecheck on Vercel and in the phone-fingerprint workflow.
+//
+// '@web/entry' is the only name main.tsx imports the website by. Pointing it
+// at src/office-stub.tsx here keeps src/web out of this program entirely.
+// Everything else comes from tsconfig.app.json; `paths` replaces its mapping,
+// and the build info file is this program's own so the two never overwrite
+// each other's incremental state.
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.phone.tsbuildinfo",
+    "paths": {
+      "@web/entry": [
+        "./src/office-stub.tsx"
+      ]
+    }
+  },
+  "include": [],
+  "files": [
+    "src/main.tsx"
+  ]
+}

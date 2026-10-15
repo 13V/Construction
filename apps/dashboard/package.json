@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:phone": "tsc -b tsconfig.phone.json && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",

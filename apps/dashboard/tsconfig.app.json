@@ -22,7 +22,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@web/entry": [
+        "./src/web/entry.tsx"
+      ]
+    }
   },
   "include": [
     "src"

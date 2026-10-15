@@ -106,12 +106,16 @@ jobs:
           npm ci --prefix apps/dashboard
           npm ci --prefix apps/mobile
 
+      # build:phone, not build. It typechecks only what ships in the app
+      # (tsconfig.phone.json: src/main.tsx and its imports, with the website
+      # swapped for a stub), so an error in website-only code cannot fail a
+      # TestFlight build. Vercel and phone-fingerprint.yml keep the full check.
       - name: Build the worker web bundle
         run: |
           set -euo pipefail
           export VITE_SUPABASE_URL="$(printf '%s' "$RAW_SUPABASE_URL" | tr -d '[:space:]')"
           export VITE_SUPABASE_ANON_KEY="$(printf '%s' "$RAW_SUPABASE_ANON_KEY" | tr -d '[:space:]')"
-          npm run build --prefix apps/dashboard
+          npm run build:phone --prefix apps/dashboard
 
       # Fail here rather than in review. A bundle built without VITE_API_BASE
       # calls /api/... relative to capacitor://localhost, which Capacitor's own
@@ -126,6 +130,29 @@ jobs:
             exit 1
           fi
           echo "Backend URL present in the bundle."
+
+      # App Review was told a company is created on the website and nowhere
+      # else, and that this binary carries no company sign-up. The build
+      # already leaves both the sign-up and the website out; this checks the
+      # files that actually ship. crewline-web-surface is the marker every
+      # website build carries.
+      - name: Verify no company sign-up or website code was bundled
+        run: |
+          set -euo pipefail
+          for text in 'Create a company account' 'crewline-web-surface'; do
+            # grep exits 0 on a match, 1 on none, and 2 when it could not
+            # read, which must fail too rather than pass as "no match".
+            found=0
+            grep -rqF -- "$text" apps/dashboard/dist || found=$?
+            if [ "$found" -eq 0 ]; then
+              echo "::error::The bundle contains '$text'. It must never ship in the iOS app."
+              exit 1
+            elif [ "$found" -ne 1 ]; then
+              echo "::error::Could not search apps/dashboard/dist for '$text'."
+              exit 1
+            fi
+          done
+          echo "No company sign-up or website code in the bundle."
 
       # ios/App/App/public/ is gitignored, so the checkout has no web assets in
       # the native project at all. Without this the archive succeeds and ships a

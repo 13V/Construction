@@ -1,0 +1,146 @@
+name: Phone fingerprint
+
+# Would this change alter what ships inside the iOS app?
+#
+# The App Store binary carries the phone bundle: apps/dashboard built with
+# VITE_SURFACE=worker. The website shares that codebase, so web work can reach
+# installed phones by accident through any module the two share, and nothing
+# else would notice until the next TestFlight. This builds the phone bundle at
+# base and at head and compares the sha256 of every file. The build is
+# deterministic, so the same source gives the same bytes and any real phone
+# change shows up. scripts/phone-fingerprint.sh has the details.
+#
+# A difference fails this check unless the change is meant to reach phones:
+#   - pull request: label it ships-to-ios. Adding or removing the label reruns
+#     this, and the run that is left reflects the current label.
+#   - direct push: put [ships-to-ios] in the message of a commit in the push.
+# That only excuses the difference. The phone bundle must never carry company
+# sign-up or the website's marker, labelled or not.
+#
+# The same job runs the full typecheck, the website build and the unit tests,
+# so one run shows everything that would break.
+#
+# No secrets. Both phone builds use fixed dummy env, and so does the web build.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  # The default branch. This repository has no main: every push here is what
+  # Vercel deploys, so it is where a phone change would otherwise land unseen.
+  push:
+    branches: [claude/construction-tracking-app-qo6os9]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phone-fingerprint-${{ github.event.pull_request.number || github.sha }}
+  # A newer run on a pull request supersedes the older one. A push never
+  # cancels: each push run measures only its own before..after, so a
+  # cancelled one would leave that range unchecked.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fingerprint:
+    name: Phone fingerprint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, so the base commit can be checked out next to head.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          # The same major as ios-testflight.yml builds the real bundle with.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/dashboard/package-lock.json
+
+      - name: Install dependencies
+        id: deps
+        run: npm ci --prefix apps/dashboard --no-audit --no-fund
+
+      - name: Work out the base, and whether a phone change is intended
+        id: range
+        env:
+          EVENT: ${{ github.event_name }}
+          # Passed through env, never pasted into the script: label names
+          # are free text that anyone who can label a PR controls.
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          label=""
+          if [ "$EVENT" = "pull_request" ]; then
+            # actions/checkout puts a pull request on GitHub's trial merge,
+            # whose first parent is the base branch as it stands now. So the
+            # comparison is exactly what merging would change, even when the
+            # base has moved on since the branch was cut.
+            base="$(git rev-parse HEAD^1)"
+            label="$(printf '%s' "$PR_LABELS" | tr -d '\r\n')"
+          else
+            # The tip before this push, so a push of several commits is
+            # measured as a whole. It is all zeros for a new branch and can be
+            # gone after a force-push; then the parent commit stands in.
+            base=""
+            if [ -n "$PUSH_BEFORE" ] && [ -n "${PUSH_BEFORE//0/}" ]; then
+              if git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null \
+                || git fetch --quiet --no-tags origin "$PUSH_BEFORE" 2>/dev/null; then
+                base="$PUSH_BEFORE"
+              fi
+            fi
+            if [ -z "$base" ]; then
+              base="$(git rev-parse HEAD^1)"
+              echo "::warning::The tip before this push (${PUSH_BEFORE:-none}) is not available, so this compares with the parent commit only."
+            fi
+            # Matched in bash, not with grep -q on a pipe: under pipefail,
+            # grep exiting early can SIGPIPE git log and turn a match into a
+            # failure.
+            messages="$(git log --format=%B "$base..$head")"
+            if [[ "$messages" == *"[ships-to-ios]"* ]]; then
+              label="ships-to-ios"
+            fi
+          fi
+          echo "Base:   $base"
+          echo "Head:   $head"
+          echo "Labels: ${label:-none}"
+          {
+            echo "base=$base"
+            echo "label=$label"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out the base and install its dependencies
+        env:
+          BASE: ${{ steps.range.outputs.base }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE"
+          npm ci --prefix "$RUNNER_TEMP/base/apps/dashboard" --no-audit --no-fund
+
+      - name: Compare the phone bundle at base and head
+        env:
+          LABEL: ${{ steps.range.outputs.label }}
+        run: bash scripts/phone-fingerprint.sh compare "$RUNNER_TEMP/base" "$GITHUB_WORKSPACE" "$RUNNER_TEMP/fingerprint"
+
+      # The checks below run whatever the fingerprint said, so one run shows
+      # every problem at once. They need only the head's dependencies.
+      - name: Typecheck everything (tsc -b)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        working-directory: apps/dashboard
+        run: npx tsc -b
+
+      - name: Build the website
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        working-directory: apps/dashboard
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: dummy
+        run: npm run build
+
+      - name: Unit tests (vitest)
+        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
+        working-directory: apps/dashboard
+        run: npx vitest run

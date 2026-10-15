@@ -83,12 +83,31 @@ function Booting() {
 }
 
 /**
- * The office dashboard, reached only in a build that can show it. Referencing
- * it inside the dead branch below is what lets Rollup drop it from a phone
- * build; naming it at the top level would keep the import alive in both.
+ * The website, reached only in a build that can show it. Referencing it inside
+ * the dead branch below is what lets Rollup drop it from a phone build; naming
+ * it at the top level would keep the import alive in both. Everything this
+ * needs, both imports and the preview switch, stays inside this function for
+ * the same reason.
+ *
+ * Two websites live here until the new one replaces the old. The old office
+ * dashboard (./App.tsx) stays at / because it is where a business signs up,
+ * and App Review was told that is the only place a company is created. The
+ * new one (src/web, reached only as '@web/entry') is previewed by opening
+ * /?web=new; this browser remembers that, and /?web=old switches back. If
+ * storage cannot be read or written the old dashboard shows: the preview is
+ * something you opt into, never what you fall back to.
  */
 function officeSurface() {
-  const App = lazy(() => import('./App.tsx'))
+  let preview = false
+  try {
+    const asked = new URLSearchParams(window.location.search).get('web')
+    if (asked === 'new') localStorage.setItem('crewline.web', 'new')
+    else if (asked === 'old') localStorage.removeItem('crewline.web')
+    preview = localStorage.getItem('crewline.web') === 'new'
+  } catch {
+    preview = false
+  }
+  const App = preview ? lazy(() => import('@web/entry')) : lazy(() => import('./App.tsx'))
   return <App />
 }
 
