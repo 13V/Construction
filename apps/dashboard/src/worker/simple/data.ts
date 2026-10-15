@@ -9,8 +9,12 @@
  * count came back zero. This reads `site_variations_v` instead (schema_v24):
  * the office's whole company or a captain's own jobs, with no cost_impact on
  * it, which this hook never wanted anyway.
+ *
+ * Coming back to the app asks again (see the resume effect in the hook): a
+ * job the office makes or changes on the website shows on a phone that was
+ * already open, without anyone having to close the app and reopen it.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, type AssignmentRow, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { addressLine } from './stheme'
 
@@ -52,6 +56,36 @@ const dayStart = (offset: number) => {
   return d
 }
 
+/**
+ * Coming back to the app asks again only if the last load started at least
+ * this long ago. Hopping out to read a text and straight back costs nothing,
+ * and a phone on one bar is not sent eight requests every time a
+ * notification pulls it away for a second.
+ */
+const RESUME_REFETCH_AFTER_MS = 30_000
+
+/**
+ * How long a return to the app settles before this hook decides to ask. On
+ * every return supabase-js announces the stored session again (SIGNED_IN),
+ * and today the phone's sign-in gate answers that by re-reading the worker
+ * and mounting the whole shell afresh, this hook included, whose new mount
+ * loads everything anyway. Waiting lets that happen first: the old mount and
+ * its timer are gone before it fires, so the same eight requests are never
+ * sent twice. Where nothing remounts (a lone focus, the website), a list
+ * that refreshes a second and a half after the person is back is no loss.
+ */
+const RESUME_SETTLE_MS = 1_500
+
+/**
+ * `next`, unless it holds exactly what `prev` already does; then `prev`
+ * itself, so React sees the same object and re-renders nothing. Coming back
+ * to a list nobody changed is then invisible, open screens included.
+ */
+function unlessSame<T>(prev: T, next: T): T {
+  return JSON.stringify(prev) === JSON.stringify(next) ? prev : next
+}
+const takeNext = <T>(_prev: T, next: T): T => next
+
 export function useSimpleData(me: WorkerRow): SimpleData {
   const [nonce, setNonce] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -66,58 +100,159 @@ export function useSimpleData(me: WorkerRow): SimpleData {
   const [variationRows, setVariationRows] = useState<Array<{ id: string; site_id: string | null }>>([])
   const [wpRows, setWpRows] = useState<Array<{ site_id: string; area: string; status: string; flood_tested: boolean }>>([])
 
+  /**
+   * Why the next load runs: refresh() asked for it, or the app came back
+   * (the resume effect below). Null for the first load and for a change of
+   * company. The load reads it and clears it.
+   */
+  const reason = useRef<'refresh' | 'resume' | null>(null)
+  /** When the latest load started, and whether it is still out. */
+  const startedAt = useRef(0)
+  const inFlight = useRef(false)
+
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(null)
+    /*
+     * A load because the app came back is QUIET. It says nothing while it
+     * runs (no loading, so no screen blinks), and if it does not get
+     * through it changes nothing at all: the lists stay as they were. Every
+     * other load empties the lists when it fails, as it always has. Those
+     * loads are rare (opening the app, or straight after a change made on
+     * this phone), but coming back to the app happens all day, often on one
+     * bar in a stairwell, and an open job is looked up in these lists
+     * (WorkerApp's openJob): emptied, it would shut under the person's thumb.
+     */
+    const quiet = reason.current === 'resume'
+    reason.current = null
+    startedAt.current = Date.now()
+    inFlight.current = true
+    if (!quiet) {
+      setLoading(true)
+      setError(null)
+    }
     const client = supabase()
     const t0 = dayStart(0).toISOString()
     const t2 = dayStart(2).toISOString()
 
-    void Promise.all([
-      // Sorted client-side below by what the list actually shows (the address,
-      // falling back to name) — `name` is mostly invisible on screen, so
-      // ordering the query by it made the visible list look shuffled.
-      client.from('job_sites').select('*').neq('status', 'archived'),
-      client.from('site_progress_v').select('site_id, pct_complete'),
-      client.from('defects').select('site_id, status').in('status', ['open', 'in_progress']),
-      client.from('shifts').select('site_id, worker_id, started_at, ended_at').gte('started_at', t0),
-      client
-        .from('assignments')
-        .select('*')
-        .eq('published', true)
-        .lt('starts_at', t2)
-        .gte('ends_at', t0)
-        .order('starts_at'),
-      client.from('site_variations_v').select('id, site_id').eq('status', 'pending_client'),
-      client.from('crew_v').select('id, name, initials'),
-      client.from('waterproofing').select('site_id, area, status, flood_tested').in('status', ['complete', 'signed_off']).eq('flood_tested', false),
-    ]).then(([st, pr, df, sh, asg, vr, cv, wp]) => {
+    const fetchAll = () =>
+      Promise.all([
+        // Sorted client-side below by what the list actually shows (the address,
+        // falling back to name) — `name` is mostly invisible on screen, so
+        // ordering the query by it made the visible list look shuffled.
+        client.from('job_sites').select('*').neq('status', 'archived'),
+        client.from('site_progress_v').select('site_id, pct_complete'),
+        client.from('defects').select('site_id, status').in('status', ['open', 'in_progress']),
+        client.from('shifts').select('site_id, worker_id, started_at, ended_at').gte('started_at', t0),
+        client
+          .from('assignments')
+          .select('*')
+          .eq('published', true)
+          .lt('starts_at', t2)
+          .gte('ends_at', t0)
+          .order('starts_at'),
+        client.from('site_variations_v').select('id, site_id').eq('status', 'pending_client'),
+        client.from('crew_v').select('id, name, initials'),
+        client.from('waterproofing').select('site_id, area, status, flood_tested').in('status', ['complete', 'signed_off']).eq('flood_tested', false),
+      ])
+    /*
+     * After hours in the background the access token has expired, and if
+     * refreshing it fails (that one bar again) supabase-js sends the anon
+     * key instead. RLS answers the anon key with no rows and no error: an
+     * empty job list that looks exactly like a good answer. So a quiet load
+     * first makes sure there is a session to send, and otherwise stays home.
+     */
+    const fetched: Promise<Awaited<ReturnType<typeof fetchAll>> | null> = quiet
+      ? Promise.resolve()
+          .then(() => client.auth.getSession())
+          .then(({ data }) => (data.session ? fetchAll() : null))
+          .catch(() => null)
+      : fetchAll()
+
+    void fetched.then((res) => {
       if (cancelled) return
+      inFlight.current = false
+      if (!res) return
+      const [st, pr, df, sh, asg, vr, cv, wp] = res
       const firstError = st.error || pr.error || df.error || sh.error || asg.error
-      if (firstError) setError(firstError.message)
+      if (quiet && firstError) return
+      // A quiet load that got through also clears an error an earlier load left.
+      setError(firstError ? firstError.message : null)
+      const put = quiet ? unlessSame : takeNext
       const fetchedSites = (st.data as JobSiteRow[]) ?? []
       fetchedSites.sort((a, b) =>
         (addressLine(a) || a.name).localeCompare(addressLine(b) || b.name, undefined, { sensitivity: 'base' }),
       )
-      setSites(fetchedSites)
-      setProgressRows(pr.data ?? [])
-      setDefectRows(df.data ?? [])
-      setShiftRows(sh.data ?? [])
-      setBookings((asg.data as AssignmentRow[]) ?? [])
+      setSites((prev) => put(prev, fetchedSites))
+      setProgressRows((prev) => put(prev, pr.data ?? []))
+      setDefectRows((prev) => put(prev, df.data ?? []))
+      setShiftRows((prev) => put(prev, sh.data ?? []))
+      setBookings((prev) => put(prev, (asg.data as AssignmentRow[]) ?? []))
       // site_variations_v has no RLS to reject with — its own where clause is
       // the security boundary (schema_v24) — but the guard stays so a renamed
       // or dropped view fails soft instead of taking the whole hook down.
-      setPendingVariations(vr.error ? 0 : (vr.data?.length ?? 0))
-      setVariationRows(vr.error ? [] : ((vr.data as Array<{ id: string; site_id: string | null }>) ?? []))
-      setRoster((cv.data as Array<{ id: string; name: string; initials: string }>) ?? [])
-      setWpRows(wp.error ? [] : ((wp.data as Array<{ site_id: string; area: string; status: string; flood_tested: boolean }>) ?? []))
+      // These three fail soft, and a quiet load that could not read one of
+      // them keeps what it had rather than zeroing a count that was right.
+      if (!quiet || !vr.error) {
+        setPendingVariations(vr.error ? 0 : (vr.data?.length ?? 0))
+        setVariationRows((prev) => put(prev, vr.error ? [] : ((vr.data as Array<{ id: string; site_id: string | null }>) ?? [])))
+      }
+      if (!quiet || !cv.error) setRoster((prev) => put(prev, (cv.data as Array<{ id: string; name: string; initials: string }>) ?? []))
+      if (!quiet || !wp.error) {
+        setWpRows((prev) => put(prev, wp.error ? [] : ((wp.data as Array<{ site_id: string; area: string; status: string; flood_tested: boolean }>) ?? [])))
+      }
       setLoading(false)
     })
     return () => {
       cancelled = true
     }
   }, [me.company_id, nonce])
+
+  /*
+   * Coming back to the app. WKWebView reports the app returning to the
+   * foreground as visibilitychange to visible; a browser tab does the same,
+   * and a browser window coming back to the front fires focus. Either one
+   * asks again, quietly, if the last load started RESUME_REFETCH_AFTER_MS
+   * ago or more. There is no realtime on these tables: this is how a job
+   * the office made on the website reaches a phone that was already open,
+   * in place, with the person still where they were.
+   */
+  useEffect(() => {
+    let timer: number | undefined
+    const check = () => {
+      timer = undefined
+      if (document.visibilityState !== 'visible') return
+      // No network at all: asking would only fail. The next return asks.
+      if (navigator.onLine === false) return
+      // A load is on its way already, one refresh() just asked for or one
+      // still out on a slow connection. Another would only cancel it and
+      // start the same eight requests again.
+      if (reason.current !== null || inFlight.current) return
+      if (Date.now() - startedAt.current < RESUME_REFETCH_AFTER_MS) return
+      reason.current = 'resume'
+      setNonce((n) => n + 1)
+    }
+    // Not at once (RESUME_SETTLE_MS): a remount on the way takes this timer
+    // with it, and a screen that refreshes on focus itself (the website's
+    // pages do) gets in first, so this finds that load under way instead of
+    // starting a second one beside it.
+    const soon = () => {
+      if (document.visibilityState !== 'visible') {
+        // Leaving. A timer left pending here would be frozen with the app
+        // and fire the instant it is back, before the return has settled.
+        if (timer !== undefined) window.clearTimeout(timer)
+        timer = undefined
+        return
+      }
+      if (timer === undefined) timer = window.setTimeout(check, RESUME_SETTLE_MS)
+    }
+    window.addEventListener('focus', soon)
+    document.addEventListener('visibilitychange', soon)
+    return () => {
+      window.removeEventListener('focus', soon)
+      document.removeEventListener('visibilitychange', soon)
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [])
 
   const progress = useMemo(() => {
     const m = new Map<string, number>()
@@ -201,7 +336,11 @@ export function useSimpleData(me: WorkerRow): SimpleData {
     crewOnSite,
     floodHold,
     floodAreas,
-    refresh: useCallback(() => setNonce((n) => n + 1), []),
+    refresh: useCallback(() => {
+      // Asked for, so a full load, even if a quiet one was about to start.
+      reason.current = 'refresh'
+      setNonce((n) => n + 1)
+    }, []),
   }
 }
 
