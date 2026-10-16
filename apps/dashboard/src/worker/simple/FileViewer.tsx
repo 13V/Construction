@@ -85,6 +85,18 @@ export function FileViewerHost() {
     return undefined
   }, [file])
 
+  // On the website the viewer is closed from a keyboard too: Esc, as any
+  // full-screen view closes. A phone has no Esc, so nothing changes there.
+  const open = file !== null
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFile(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
   if (!file) return null
 
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
@@ -121,23 +133,26 @@ export function FileViewerHost() {
           {file.name}
         </span>
         {canShare && (
-          <span
+          <button
+            type="button"
             onClick={() => void share()}
-            style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', borderRadius: 16, background: 'rgba(255,255,255,.12)', fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', opacity: sharing ? 0.55 : 1 }}
+            style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', border: 0, borderRadius: 16, background: 'rgba(255,255,255,.12)', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', opacity: sharing ? 0.55 : 1 }}
           >
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10 12.5V3.4M6.8 6.2L10 3l3.2 3.2" />
               <path d="M4.5 10.5v5.3h11v-5.3" />
             </svg>
             {sharing ? 'Sharing…' : 'Share'}
-          </span>
+          </button>
         )}
-        <span
+        {/* Buttons, so a keyboard on the website can reach them (Tab) and press them. */}
+        <button
+          type="button"
           onClick={() => setFile(null)}
-          style={{ flex: 'none', display: 'flex', alignItems: 'center', height: 32, padding: '0 13px', borderRadius: 16, background: 'rgba(255,255,255,.12)', fontSize: 13.5, fontWeight: 700, color: '#fff', cursor: 'pointer' }}
+          style={{ flex: 'none', display: 'flex', alignItems: 'center', height: 32, padding: '0 13px', border: 0, borderRadius: 16, background: 'rgba(255,255,255,.12)', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, color: '#fff', cursor: 'pointer' }}
         >
           Done
-        </span>
+        </button>
       </div>
       {shareError && (
         <span style={{ flex: 'none', margin: '0 16px 10px', padding: '9px 12px', borderRadius: 9, background: 'rgba(220,80,80,.18)', fontSize: 12.5, color: '#FFB4B4' }}>

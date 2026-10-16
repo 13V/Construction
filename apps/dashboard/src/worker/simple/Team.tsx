@@ -350,13 +350,6 @@ export function TeamSheet({ me, onClose }: { me: WorkerRow; onClose: () => void 
                   </span>
                 </span>
 
-                {/* Pay rate genuinely lives office-web-only (see the file doc comment),
-                    but the app was silent about where — this is the point an office
-                    running entirely from the phone would go looking for it. */}
-                <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
-                  There’s no pay rate field here on purpose — set it for this person from the office web dashboard’s Crew page once they’re added.
-                </span>
-
                 <span style={{ display: 'flex', gap: 9 }}>
                   <button
                     onClick={() => {

@@ -117,6 +117,13 @@ const NAV = [
   { key: 'company', label: 'Company', href: paths.company },
 ] as const
 
+const COMPANY_NAME_EVENT = 'wb:company-name'
+
+/** The Company page read the company's name after a save: the rail shows it at once. */
+export function announceCompanyName(name: string) {
+  window.dispatchEvent(new CustomEvent(COMPANY_NAME_EVENT, { detail: name }))
+}
+
 export function Rail({ me, route }: { me: WorkerRow; route: Route }) {
   const pathname = usePathname()
   const [company, setCompany] = useState<string | null>(null)
@@ -124,20 +131,26 @@ export function Rail({ me, route }: { me: WorkerRow; route: Route }) {
   const [asking, setAsking] = useState(false)
   const [leaving, setLeaving] = useState(false)
 
-  useEffect(() => {
-    let gone = false
+  // The name under the person. Read again after every navigation and on
+  // coming back to the tab, since the phone's Business screen can rename the
+  // company too, and straight away when the Company page saves one.
+  const readCompany = useCallback(() => {
     void supabase()
       .from('companies')
       .select('name')
       .eq('id', me.company_id)
       .maybeSingle()
-      .then(({ data }) => {
-        if (!gone) setCompany((data as { name: string } | null)?.name ?? null)
+      .then(({ data, error }) => {
+        if (!error && data) setCompany((data as { name: string }).name)
       })
-    return () => {
-      gone = true
-    }
   }, [me.company_id])
+  useEffect(readCompany, [readCompany, pathname])
+  useFresh(readCompany)
+  useEffect(() => {
+    const heard = (e: Event) => setCompany((e as CustomEvent<string>).detail)
+    window.addEventListener(COMPANY_NAME_EVENT, heard)
+    return () => window.removeEventListener(COMPANY_NAME_EVENT, heard)
+  }, [])
 
   // Active plus Future: the jobs a crew can be sent to. A plain select of
   // ids, not a count query, so it is a GET like every other read here.

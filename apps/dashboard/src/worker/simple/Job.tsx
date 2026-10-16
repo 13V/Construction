@@ -536,8 +536,7 @@ function MoneyTab({
   if (!row) {
     return (
       <div style={{ padding: '36px 24px', textAlign: 'center', fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
-        No contract entered for this job yet — margin only works once it is. Enter the
-        contract on the office dashboard and this tab comes alive.
+        No contract value has been entered for this job, so there is no margin to show.
       </div>
     )
   }

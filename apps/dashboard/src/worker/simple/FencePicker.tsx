@@ -364,7 +364,7 @@ export function FencePicker({
           <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#7B838B' }}>
             {placed
               ? 'Searching the address is enough on its own — it gives the exact spot. Widen the radius below if you are not certain of it.'
-              : 'Use “Find the address” or the target button to set the fence — neither one needs the map. You can adjust it later from the office dashboard.'}
+              : 'Use “Find the address” or the target button to set the fence — neither one needs the map. You can move it later from the job’s Edit page on the website.'}
           </span>
           {placed && (
             <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12.5, color: '#4A5057' }}>

@@ -39,6 +39,7 @@ import { BusinessSheet, complianceGaps } from '../phone-features'
 import type { PageProps } from '../routes'
 import { navigate, paths } from '../router'
 import { Page } from '../shell/PageHeader'
+import { announceCompanyName } from '../shell/Rail'
 import { color } from '../tokens'
 import { HostedSheet, type SheetForm } from './TeamPage'
 
@@ -86,7 +87,10 @@ export default function CompanyPage({ me }: PageProps) {
       <HostedSheet
         label="Business details, as the app shows them"
         read={read}
-        onRead={setRow}
+        onRead={(next) => {
+          setRow(next)
+          announceCompanyName(next.name)
+        }}
         writes={COMPANY_WRITES}
         form={BUSINESS_FORM}
         check={blankCard}
