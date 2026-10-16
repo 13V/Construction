@@ -31,7 +31,7 @@ import type { JobTabProps } from '../types'
 
 export interface OverviewTabProps extends JobTabProps {
   /** The job as the job page loaded it. Without it, the tab loads its own. */
-  job?: Pick<JobData, 'contacts' | 'drift'>
+  job?: Pick<JobData, 'contacts' | 'drift' | 'contract'>
   dates?: JobDates
   /**
    * Moves when something was saved on the job page that the job row does not

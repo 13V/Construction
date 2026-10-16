@@ -57,6 +57,7 @@ import {
   type LinkSkip,
 } from '../../data/builders'
 import { CONTACT_LABEL, CONTACT_ROLES, ONE_PER_BUILDER, PHONE_NEW_STATUS, type ContactRole } from '../../data/contract'
+import { contractValueProblem, moneyInput, parseMoney, saveContractValue, type ContractValue } from '../../data/contractValue'
 import {
   buildJobInsert,
   createJob,
@@ -112,6 +113,10 @@ export interface JobFormValues {
   /** New jobs only: book a crew as the job is made. */
   bookCrew: boolean
   crew: CrewPick
+  /** Dollars as typed (contractValue.ts parseMoney), or '' for none. */
+  contractValue: string
+  /** Whether that figure includes GST. */
+  contractGstInclusive: boolean
 }
 
 /** The job being edited, as useJob loaded it. Taken once, when the form opens. */
@@ -121,6 +126,8 @@ export interface EditSource {
   contacts: Record<ContactRole, ContactRow | null>
   allContacts: ContactRow[]
   drift: { onJob: string; record: string } | null
+  /** The contract value on file (contractValue.ts), or null. */
+  contract: ContractValue | null
 }
 
 /** Somebody who can captain a job, or be booked. */
@@ -148,6 +155,7 @@ export type FieldKey =
   | 'status'
   | 'captain'
   | 'crew'
+  | 'contractValue'
   | `contact.${ContactRole}`
 
 export type FieldErrors = Partial<Record<FieldKey, string>>
@@ -327,6 +335,8 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
         linkOthers: true,
         bookCrew: false,
         crew: { ...defaultPick(null), workerIds: [] },
+        contractValue: '',
+        contractGstInclusive: false,
       }
     }
     const s = src.site
@@ -347,6 +357,8 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
       linkOthers: true,
       bookCrew: false,
       crew: blankCrew,
+      contractValue: src.contract ? moneyInput(src.contract.contract_sum) : '',
+      contractGstInclusive: src.contract?.gst_inclusive ?? false,
     }
   }, [src])
 
@@ -492,6 +504,9 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
     [values.contacts, onFile],
   )
 
+  /** The contract value to save: the amount typed, when it differs from what is on file. */
+  const contractEdit = useMemo(() => contractEditOf(values, initial), [values, initial])
+
   const dirty = useMemo(() => {
     const v = values
     const i = initial
@@ -505,10 +520,12 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
       v.startsOn !== i.startsOn ||
       v.endsOn !== i.endsOn ||
       v.captainId !== i.captainId ||
-      contacts
+      contacts ||
+      contractEdit !== null ||
+      trimmed(v.contractValue) !== trimmed(i.contractValue)
     if (mode === 'create') return common || !!v.fence || v.status !== i.status || colourPicked || (v.bookCrew && v.crew.workerIds.length > 0)
     return common || fenceChanged || v.colour !== i.colour
-  }, [values, initial, builderChanged, addressChanged, fenceChanged, mode, colourPicked])
+  }, [values, initial, builderChanged, addressChanged, fenceChanged, mode, colourPicked, contractEdit])
 
   // ---------------------------------------------------------------- checking
 
@@ -526,14 +543,16 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
   const [tried, setTried] = useState(false)
 
   const errors = useMemo<FieldErrors>(() => {
-    const all = checkValues(values, { mode, changedRoles, builderName: resolved.name })
+    const all = checkValues(values, { mode, changedRoles, builderName: resolved.name, contractOnFile: !!src?.contract })
     if (tried) return all
-    // Before the first Save, only what is wrong whatever comes next: an end before the start.
+    // Before the first Save, only what is wrong whatever comes next: an end
+    // before the start, or a contract value that is not an amount.
     const out: FieldErrors = {}
     if (all.startsOn) out.startsOn = all.startsOn
     if (all.endsOn) out.endsOn = all.endsOn
+    if (all.contractValue) out.contractValue = all.contractValue
     return out
-  }, [values, tried, changedRoles, resolved.name, mode])
+  }, [values, tried, changedRoles, resolved.name, mode, src])
 
   // ---------------------------------------------------------------- saving
 
@@ -568,7 +587,7 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
    */
   const validate = useCallback((): FieldErrors => {
     setTried(true)
-    const out = checkValues(values, { mode, changedRoles, builderName: resolved.name })
+    const out = checkValues(values, { mode, changedRoles, builderName: resolved.name, contractOnFile: !!src?.contract })
     if (Object.keys(out).length) return out
     // The rules the writes themselves apply (data/jobs.ts), run now so nothing half-saves on them.
     try {
@@ -581,7 +600,7 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
       return { [field]: e.message }
     }
     return {}
-  }, [values, changedRoles, resolved.name, mode, me.company_id, site, initial])
+  }, [values, changedRoles, resolved.name, mode, me.company_id, site, initial, src])
 
   /**
    * Save. Run after validate() and the questions. Resolves to where to go
@@ -620,6 +639,7 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
         contacts,
         crew,
         linkJobs: v.linkOthers ? candidates.map((j) => ({ id: j.id })) : [],
+        contract: contractEdit,
       })
       if (!res.site) {
         // Nothing was made (a builder found or added on the way is harmless: it is only a name).
@@ -672,6 +692,15 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
       const supOff = changedRoles.includes('supervisor') && !trimmed(v.contacts.supervisor.name) && !!site.supervisor_contact_id && builder === undefined
       if (supOff) edit.supervisor_contact_id = null
       const { site: row, written } = await updateJob(site, edit)
+
+      // 2b. The contract value, when it changed: only its two figures (contractValue.ts).
+      if (contractEdit) {
+        try {
+          await saveContractValue(row, contractEdit)
+        } catch (e) {
+          issues.push({ step: 'contract', ...contractEdit, message: e instanceof Error ? e.message : String(e) })
+        }
+      }
 
       // 3. The builder's people, against the builder the job now has.
       let supervisor: ContactRow | null = null
@@ -729,9 +758,10 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
           builder: builder !== undefined,
           roles: changedRoles,
           supervisor: changedRoles.includes('supervisor') || written.includes('supervisor_contact_id') || switched,
+          contract: contractEdit !== null,
         }),
       )
-      const what = savedWhat(written, { pinMoved, radiusChanged, addressChanged }, changedRoles.length > 0)
+      const what = savedWhat(written, { pinMoved, radiusChanged, addressChanged }, changedRoles.length > 0 || contractEdit !== null)
       return {
         siteId: site.id,
         message: [issues.length ? 'Saved, but not all of it: the job page says what did not save, with Retry.' : what, ...notes].join(' '),
@@ -739,7 +769,7 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
       }
     }
     // values and friends are read through the closure; the deps list them.
-  }, [saving, mode, values, changedRoles, onFile, me, candidates, resolved, site, initial, builderChanged, pinMoved, radiusChanged, addressChanged])
+  }, [saving, mode, values, changedRoles, onFile, me, candidates, resolved, site, initial, builderChanged, pinMoved, radiusChanged, addressChanged, contractEdit])
 
   return {
     mode,
@@ -801,7 +831,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * job's own columns again (buildJobInsert, jobPatch); this is what a person
  * can fix before anything is sent.
  */
-export function checkValues(v: JobFormValues, ctx: { mode: FormMode; changedRoles: ContactRole[]; builderName: string }): FieldErrors {
+export function checkValues(v: JobFormValues, ctx: { mode: FormMode; changedRoles: ContactRole[]; builderName: string; contractOnFile?: boolean }): FieldErrors {
   const out: FieldErrors = {}
   if (!v.name.trim()) out.name = 'The job needs a name.'
   if (!v.fence) out.fence = 'Place the fence on the map: search the address, or click where the job is.'
@@ -819,7 +849,25 @@ export function checkValues(v: JobFormValues, ctx: { mode: FormMode; changedRole
     const p = pickProblem(v.crew)
     if (p) out.crew = p
   }
+  const money = contractValueProblem(v.contractValue)
+  if (money) out.contractValue = money
+  // A value on file is changed here, not taken off: the contract row holds more than this form shows.
+  else if (ctx.mode === 'edit' && !trimmed(v.contractValue) && ctx.contractOnFile) out.contractValue = 'Type 0 to show the job has no contract value.'
   return out
+}
+
+/**
+ * The contract value to save, when the box says something other than what
+ * is on file: a different amount, or the same amount with GST the other
+ * way. Null when there is nothing to save (blank, unchanged, or not an
+ * amount, which checkValues reports).
+ */
+export function contractEditOf(v: JobFormValues, initial: JobFormValues): { sum: number; gstInclusive: boolean } | null {
+  const sum = parseMoney(v.contractValue)
+  if (sum === null || Number.isNaN(sum) || contractValueProblem(v.contractValue)) return null
+  const was = parseMoney(initial.contractValue)
+  if (was === sum && v.contractGstInclusive === initial.contractGstInclusive) return null
+  return { sum, gstInclusive: v.contractGstInclusive }
 }
 
 /**
@@ -903,6 +951,8 @@ export interface Settled {
   roles: ContactRole[]
   /** The edit set or took off the job's site supervisor, or moved it to a builder whose supervisor the old one cannot be. */
   supervisor: boolean
+  /** The edit saved the contract value, or now reports it as not saved. */
+  contract?: boolean
 }
 
 /** createJob's wording for columns that read back other than entered (data/jobs.ts). */
@@ -949,6 +999,9 @@ export function mergeIssues(before: CreateIssue[], mine: CreateIssue[], settled:
         break
       case 'supervisor':
         if (!settled.supervisor) kept.push(issue)
+        break
+      case 'contract':
+        if (!settled.contract) kept.push(issue)
         break
       default:
         kept.push(issue)

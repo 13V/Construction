@@ -15,6 +15,8 @@
  *    phone's way (useJob → contactsOf), with tel: and mailto: links. The
  *    tel: link is the phone's: the mobile with its spaces taken out.
  *  - The captain.
+ *  - The contract value (data/contractValue.ts), the figure the phone's
+ *    Money tab measures the margin against.
  *
  * Nothing here writes. Every fact is changed on Edit job (or its tab), so
  * the one form that sets what the phone shows stays the one place it is set.
@@ -22,6 +24,7 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 import type { ContactRow } from '../data/builders'
 import { CONTACT_LABEL, CONTACT_ROLES, type ContactRole } from '../data/contract'
+import { moneyWords } from '../data/contractValue'
 import { fencePlaced } from '../data/readiness'
 import { useFresh } from '../data/useFresh'
 import type { JobData } from '../data/useJob'
@@ -71,7 +74,7 @@ export function Card({
 
 export interface ProjectCardProps {
   site: JobSiteRow
-  job: Pick<JobData, 'contacts' | 'drift'>
+  job: Pick<JobData, 'contacts' | 'drift' | 'contract'>
   dates: JobDates
   /** Null until the crew list has loaded. */
   roster: Map<string, CrewLite> | null
@@ -203,6 +206,20 @@ export function ProjectCard({ site, job, dates, roster }: ProjectCardProps) {
 
       <Row label="Captain" data="captain">
         {site.captain_id ? (captain?.name ?? quiet(roster ? 'No longer on the crew list' : ' ')) : quiet('No captain')}
+      </Row>
+
+      <Row label="Contract value" data="contract" action={edit(job.contract ? 'Change' : 'Add')}>
+        {job.contract ? (
+          <>
+            {moneyWords(job.contract.contract_sum)} {job.contract.gst_inclusive ? 'inc GST' : 'ex GST'}
+            {note("The phone's Money tab measures the margin against it, with any approved variations.")}
+          </>
+        ) : (
+          <>
+            {quiet('Not entered')}
+            {note("Add it on Edit job, and the phone's Money tab can work out the margin.")}
+          </>
+        )}
       </Row>
     </Card>
   )

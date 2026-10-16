@@ -41,6 +41,7 @@ import {
   type LinkSkip,
 } from './builders'
 import { CONTACT_LABEL, CONTACT_ROLES, PHONE_NEW_STATUS, RADIUS_MAX, RADIUS_MIN, type ContactRole } from './contract'
+import { saveContractValue } from './contractValue'
 
 /** The Supabase client. Every write takes an optional one, so tests can pass a fake. */
 export type Db = ReturnType<typeof supabase>
@@ -197,6 +198,7 @@ export type CreateIssue =
   | { step: 'supervisor'; message: string; contactId: string }
   | { step: 'crew'; message: string; workerIds: string[]; from: string; to: string }
   | { step: 'link'; message: string; builder: BuilderRef; jobIds: string[] }
+  | { step: 'contract'; message: string; sum: number; gstInclusive: boolean }
 
 /** What an issue is about, in the words the job page uses. */
 export function issueLabel(issue: CreateIssue): string {
@@ -213,6 +215,8 @@ export function issueLabel(issue: CreateIssue): string {
       return 'Crew booking'
     case 'link':
       return 'Other jobs for this builder'
+    case 'contract':
+      return 'Contract value'
   }
 }
 
@@ -235,6 +239,8 @@ const isIssue = (x: unknown): x is CreateIssue => {
       return Array.isArray(i.workerIds) && typeof i.from === 'string' && typeof i.to === 'string'
     case 'link':
       return !!i.builder && Array.isArray(i.jobIds)
+    case 'contract':
+      return typeof i.sum === 'number' && typeof i.gstInclusive === 'boolean'
     default:
       return false
   }
@@ -289,6 +295,8 @@ export interface CreateJobInput extends JobDraft {
    * whose builder changed after it was offered is left alone (notLinked).
    */
   linkJobs?: Array<Pick<JobSiteRow, 'id'>>
+  /** The contract value (contractValue.ts), saved once the job exists. */
+  contract?: { sum: number; gstInclusive: boolean } | null
 }
 
 export interface CreateJobResult {
@@ -313,6 +321,7 @@ export interface CreateJobResult {
  *   5. book the crew
  *   6. link other jobs with the builder's name, if asked and if, read
  *      again, they still go by it (the rest come back in notLinked)
+ *   7. save the contract value (contractValue.ts), if one was typed
  * A failure at 1 still makes the job, with the builder name as typed. A
  * failure at 2 stops (nothing else is attempted, and the result has no
  * site). A failure after 2 is an issue; the job stays. Input errors throw
@@ -406,6 +415,15 @@ export async function createJob(me: { company_id: string }, input: CreateJobInpu
       result.linked = partial.linked ?? []
       result.notLinked = partial.skipped ?? []
       issues.push({ step: 'link', builder, jobIds: partial.failed ?? jobs.map((j) => j.id), message: messageOf(e) })
+    }
+  }
+
+  // 7. The contract value, on the job as it now stands (its builder included).
+  if (input.contract) {
+    try {
+      await saveContractValue(site, input.contract, opts?.client)
+    } catch (e) {
+      issues.push({ step: 'contract', ...input.contract, message: messageOf(e) })
     }
   }
 
@@ -539,6 +557,9 @@ export async function retryIssue(me: { company_id: string }, site: JobSiteRow, i
           return still({ ...issue, ...(failed && { jobIds: failed }), message: messageOf(e) })
         }
       }
+      case 'contract':
+        await saveContractValue(site, { sum: issue.sum, gstInclusive: issue.gstInclusive }, opts?.client)
+        return done()
     }
   } catch (e) {
     return still({ ...issue, message: messageOf(e) })

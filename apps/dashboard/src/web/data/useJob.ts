@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, type JobSiteRow } from '../phone'
 import { CONTACT_COLS, contactsOf, driftOf, type BuilderRecord, type ContactRow } from './builders'
 import type { ContactRole } from './contract'
+import { loadContractValue, type ContractValue } from './contractValue'
 import { useFresh } from './useFresh'
 
 export interface JobData {
@@ -31,6 +32,8 @@ export interface JobData {
   allContacts: ContactRow[]
   /** client_name no longer says what the linked record is called (a phone edit). */
   drift: { onJob: string; record: string } | null
+  /** The contract value (contractValue.ts), or null when none has been entered. */
+  contract: ContractValue | null
   error: string | null
   reload: () => Promise<void>
 }
@@ -42,6 +45,7 @@ interface Loaded {
   builder: BuilderRecord | null
   contacts: Record<ContactRole, ContactRow | null>
   allContacts: ContactRow[]
+  contract: ContractValue | null
 }
 
 /** Read a job and its builder's people. Null when there is no such job (or it is not yours to see). */
@@ -57,16 +61,19 @@ export async function loadJob(id: string): Promise<Loaded | null> {
   if (sup.error) throw new Error(sup.error.message)
   const supRow = (sup.data as ContactRow | null) ?? null
   const builderId = site.builder_id ?? supRow?.builder_id ?? null
-  const [b, all] = builderId
-    ? await Promise.all([
-        c.from('builders').select('id, name, created_at, active').eq('id', builderId).maybeSingle(),
-        c.from('builder_contacts').select(CONTACT_COLS).eq('builder_id', builderId).order('created_at').order('id'),
-      ])
-    : [{ data: null, error: null }, { data: [], error: null }]
+  const [[b, all], contract] = await Promise.all([
+    builderId
+      ? Promise.all([
+          c.from('builders').select('id, name, created_at, active').eq('id', builderId).maybeSingle(),
+          c.from('builder_contacts').select(CONTACT_COLS).eq('builder_id', builderId).order('created_at').order('id'),
+        ])
+      : Promise.resolve([{ data: null, error: null }, { data: [], error: null }] as const),
+    loadContractValue(site.id, c),
+  ])
   if (b.error) throw new Error(b.error.message)
   if (all.error) throw new Error(all.error.message)
   const { byRole, all: allContacts } = contactsOf(site, supRow, (all.data ?? []) as ContactRow[])
-  return { site, builder: (b.data as BuilderRecord | null) ?? null, contacts: byRole, allContacts }
+  return { site, builder: (b.data as BuilderRecord | null) ?? null, contacts: byRole, allContacts, contract }
 }
 
 export function useJob(id: string, { fresh = true }: { fresh?: boolean } = {}): JobData {
@@ -119,6 +126,7 @@ export function useJob(id: string, { fresh = true }: { fresh?: boolean } = {}): 
     contacts: loaded?.contacts ?? NO_CONTACTS,
     allContacts: loaded?.allContacts ?? [],
     drift: loaded ? driftOf(loaded.site, loaded.builder) : null,
+    contract: loaded?.contract ?? null,
     error,
     reload,
   }

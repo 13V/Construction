@@ -37,6 +37,7 @@ import { Banner } from '../../ui/Banner'
 import { Button } from '../../ui/Button'
 import { Dialog } from '../../ui/Dialog'
 import { Field } from '../../ui/Field'
+import { Segmented } from '../../ui/Segmented'
 import { TextArea } from '../../ui/TextArea'
 import { BuilderField } from './BuilderField'
 import { ColourField } from './ColourField'
@@ -80,6 +81,7 @@ function useNarrower(px: number): boolean {
 const FIELD_SELECTOR: Partial<Record<FieldKey, string>> = {
   name: '[name="name"]',
   workType: '[name="workType"]',
+  contractValue: '[name="contractValue"]',
   builder: '[name="builder"]',
   address: '[name="address"]',
   fence: '[data-fence-address]',
@@ -428,6 +430,32 @@ export function JobForm({ me, source }: JobFormProps) {
               error={f.errors.workType}
               hint="Heads the job on the schedule, and is the job description on every SWMS."
             />
+            <div data-contract-value="" style={{ display: 'flex', alignItems: 'flex-start', gap: space.sm }}>
+              <Field
+                label="Contract value"
+                name="contractValue"
+                optional
+                inputMode="decimal"
+                value={values.contractValue}
+                onChange={(e) => set('contractValue', e.target.value)}
+                placeholder="e.g. 48,500"
+                autoComplete="off"
+                error={f.errors.contractValue}
+                hint="What the job is worth. The phone’s Money tab measures the margin against it, and only owners see it."
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <div style={{ flex: 'none', paddingTop: 23 }}>
+                <Segmented
+                  label="Whether the contract value includes GST"
+                  value={values.contractGstInclusive ? 'inc' : 'ex'}
+                  onChange={(v) => set('contractGstInclusive', v === 'inc')}
+                  options={[
+                    { value: 'ex', label: 'ex GST' },
+                    { value: 'inc', label: 'inc GST' },
+                  ]}
+                />
+              </div>
+            </div>
             <ColourField value={values.colour} onChange={f.pickColour} automatic={site && !site.colour ? railOf({ id: site.id }) : null} counts={f.counts} error={f.errors.colour} />
           </Section>
 

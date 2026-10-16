@@ -38,11 +38,11 @@ export default function JobFormPage({ me, id }: JobFormPageProps) {
 
 function EditJob({ me, id }: PageProps & { id: string }) {
   const job = useJob(id, { fresh: false })
-  const { site, builder, contacts, allContacts } = job
+  const { site, builder, contacts, allContacts, contract } = job
   // One snapshot of the job for the form, taken when it has loaded.
   const source = useMemo<EditSource | null>(
-    () => (site ? { site, builder, contacts, allContacts, drift: driftOf(site, builder) } : null),
-    [site, builder, contacts, allContacts],
+    () => (site ? { site, builder, contacts, allContacts, drift: driftOf(site, builder), contract } : null),
+    [site, builder, contacts, allContacts, contract],
   )
 
   if (job.state === 'loading') return <PageLoading />
