@@ -398,6 +398,8 @@ const vFlagBtn = {
 // ------------------------------------------------------------------- money
 
 interface ProfitRow {
+  /** Null when no contract value has been entered for the job. */
+  contract_id: string | null
   contract_sum_ex: number | null
   approved_variations: number | null
   job_value_ex: number | null
@@ -533,10 +535,11 @@ function MoneyTab({
   }, [site.id])
 
   if (loading) return <div style={{ height: '100%' }} />
-  if (!row) {
+  // No contract value means no margin to measure: say where it goes, rather than a job worth $0.
+  if (!row || !row.contract_id) {
     return (
       <div style={{ padding: '36px 24px', textAlign: 'center', fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
-        No contract value has been entered for this job, so there is no margin to show.
+        No contract value for this job yet. Add it on the website: open the job, then Edit details, Contract value.
       </div>
     )
   }

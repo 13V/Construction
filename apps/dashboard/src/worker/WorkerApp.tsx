@@ -37,6 +37,7 @@ import { SafetyScreen } from './SafetyScreen'
 import { theme } from '../theme'
 import type { LatLng } from '../types'
 import { BRAND } from './brand'
+import { STAFF_REQUESTS } from './requests'
 
 /**
  * The worker's phone — ported screen-for-screen from
@@ -1017,19 +1018,23 @@ function OffClockActions({ onOpen }: { onOpen: (screen: PanelScreen) => void }) 
     cursor: 'pointer',
   }
   return (
-    <div style={{ flex: 'none', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 9 }}>
+    <div style={{ flex: 'none', display: 'grid', gridTemplateColumns: STAFF_REQUESTS ? '1fr 1fr 1fr' : '1fr', gap: 9 }}>
       <button style={tile} onClick={() => onOpen('schedule')}>
         <CalendarIcon />
         <span style={{ fontSize: 12.5, fontWeight: 600 }}>My Jobs</span>
       </button>
-      <button style={tile} onClick={() => onOpen('correction')}>
-        <FixIcon />
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Fix a Punch</span>
-      </button>
-      <button style={tile} onClick={() => onOpen('timeoff')}>
-        <LeaveIcon />
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Time Off</span>
-      </button>
+      {STAFF_REQUESTS && (
+        <button style={tile} onClick={() => onOpen('correction')}>
+          <FixIcon />
+          <span style={{ fontSize: 12.5, fontWeight: 600 }}>Fix a Punch</span>
+        </button>
+      )}
+      {STAFF_REQUESTS && (
+        <button style={tile} onClick={() => onOpen('timeoff')}>
+          <LeaveIcon />
+          <span style={{ fontSize: 12.5, fontWeight: 600 }}>Time Off</span>
+        </button>
+      )}
     </div>
   )
 }
@@ -1120,8 +1125,8 @@ function ShieldIcon({ color = theme.ink, size = 24 }: { color?: string; size?: n
  */
 const NOTICE_SCREEN: Record<string, PanelScreen> = {
   Schedule: 'schedule',
-  Crew: 'timeoff',
-  Timesheets: 'correction',
+  // Off with the requests themselves (requests.ts): an old notice opens My Jobs instead.
+  ...(STAFF_REQUESTS ? { Crew: 'timeoff', Timesheets: 'correction' } : {}),
 }
 
 /** Unread notices, shown wherever the worker is. */
@@ -1729,12 +1734,14 @@ function CelebrationScreen({
 
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={onFixPunch}
-            style={{ border: 'none', background: 'none', font: 'inherit', fontSize: 14, fontWeight: 500, color: theme.ink, cursor: 'pointer' }}
-          >
-            Not right? Fix this
-          </button>
+          {STAFF_REQUESTS && (
+            <button
+              onClick={onFixPunch}
+              style={{ border: 'none', background: 'none', font: 'inherit', fontSize: 14, fontWeight: 500, color: theme.ink, cursor: 'pointer' }}
+            >
+              Not right? Fix this
+            </button>
+          )}
           <button onClick={onDismiss} style={ctaWhite(54)}>
             View today
           </button>

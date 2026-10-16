@@ -3,6 +3,7 @@ import { supabase, type ShiftRow, type WorkerRow } from '../data/supabase'
 import { useSites } from './useSites'
 import { clockTime, dayDate } from '../format'
 import { theme } from '../theme'
+import { STAFF_REQUESTS } from './requests'
 
 /**
  * My hours — the payday screen. Crewline Mobile, screen 6.
@@ -16,7 +17,8 @@ import { theme } from '../theme'
  *
  * Fix a Punch and Time off live here too — both are things a worker does about
  * their hours, and neither had a home before. Time off is a segment rather than
- * a child of one shift, because it is a peer of your hours.
+ * a child of one shift, because it is a peer of your hours. Both are off for
+ * now (requests.ts): nothing answers them since the old office dashboard went.
  */
 
 const REASONS: Array<{ code: string; label: string }> = [
@@ -151,27 +153,30 @@ export function HoursTab({ me, sites: fromTracker }: { me: WorkerRow; sites: Sit
         )}
       </div>
 
-      <div style={{ flex: 'none', display: 'flex', margin: '0 18px 12px', border: `1px solid ${theme.border}`, borderRadius: 6, overflow: 'hidden' }}>
-        {(['hours', 'leave'] as const).map((k) => (
-          <button
-            key={k}
-            onClick={() => setSeg(k)}
-            style={{
-              flex: 1,
-              height: 44,
-              border: 'none',
-              background: seg === k ? theme.panel : theme.appBg,
-              color: theme.ink,
-              font: 'inherit',
-              fontSize: 13.5,
-              fontWeight: seg === k ? 700 : 500,
-              cursor: 'pointer',
-            }}
-          >
-            {k === 'hours' ? 'Hours' : 'Time off'}
-          </button>
-        ))}
-      </div>
+      {/* Time off is off with the other requests (requests.ts), and Hours alone needs no switch. */}
+      {STAFF_REQUESTS && (
+        <div style={{ flex: 'none', display: 'flex', margin: '0 18px 12px', border: `1px solid ${theme.border}`, borderRadius: 6, overflow: 'hidden' }}>
+          {(['hours', 'leave'] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setSeg(k)}
+              style={{
+                flex: 1,
+                height: 44,
+                border: 'none',
+                background: seg === k ? theme.panel : theme.appBg,
+                color: theme.ink,
+                font: 'inherit',
+                fontSize: 13.5,
+                fontWeight: seg === k ? 700 : 500,
+                cursor: 'pointer',
+              }}
+            >
+              {k === 'hours' ? 'Hours' : 'Time off'}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {error && (
@@ -299,12 +304,14 @@ export function HoursTab({ me, sites: fromTracker }: { me: WorkerRow; sites: Sit
                           {Number(s.break_minutes) > 0 ? `Unpaid break ${s.break_minutes} min` : 'No unpaid break'}
                         </span>
                         <span style={{ flex: 1 }} />
-                        <button
-                          onClick={() => setFixing(s)}
-                          style={{ border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 13.5, fontWeight: 600, color: theme.accent, cursor: 'pointer' }}
-                        >
-                          Not right? Fix this
-                        </button>
+                        {STAFF_REQUESTS && (
+                          <button
+                            onClick={() => setFixing(s)}
+                            style={{ border: 'none', background: 'none', padding: 0, font: 'inherit', fontSize: 13.5, fontWeight: 600, color: theme.accent, cursor: 'pointer' }}
+                          >
+                            Not right? Fix this
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
