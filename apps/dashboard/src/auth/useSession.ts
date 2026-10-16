@@ -93,6 +93,10 @@ export function useSession(): SessionState {
 
       let { data, error: err } = await found()
       if (cancelled) return
+      // A login that had a row and now has none: a new answer, not a renewal,
+      // so it is read out loud. The website's AuthGate counts a read as
+      // finished only when it saw it load.
+      if (sameLogin && !data && !err) setLoading(true)
 
       /*
        * Signed in, confirmed, and attached to nothing — finish what signing up

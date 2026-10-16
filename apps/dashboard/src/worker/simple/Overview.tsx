@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase, type JobSiteRow, type WorkerRow } from '../../data/supabase'
 import { BUCKET_FILES, objectPath, signedUrl, uploadFile } from '../../data/storage'
-import { siteSpan, type SpanRows } from './data'
+import { siteSpan, type SitePatch, type SpanRows } from './data'
 import { DrawingsPanel } from './Drawings'
 import { ProgrammeSheet, programmeLine, useProgrammes } from './Programme'
 import { WaterproofingPanel } from './Waterproofing'
@@ -344,10 +344,9 @@ export function OverviewTab({
 }: {
   me: WorkerRow
   site: JobSiteRow
-  /** Bubbles a builder/address edit up to Job.tsx's header, which holds its
-      own copy of `site` from when the screen was opened and otherwise stays
-      stale until the job is reopened. */
-  onSiteChange?: (patch: { client_name?: string; address?: string }) => void
+  /** A builder or address saved here, for the job list to carry
+      (useSimpleData's patchSite), so the header and every screen show it. */
+  onSiteChange?: (patch: SitePatch) => void
 }) {
   const office = me.is_office
   const [rows, setRows] = useState<SelectionRow[]>([])
@@ -969,7 +968,7 @@ function ProjectDetails({
   office: boolean
   notes: NoteRow[]
   onOpenNotes: () => void
-  onSiteChange?: (patch: { client_name?: string; address?: string }) => void
+  onSiteChange?: (patch: SitePatch) => void
 }) {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [dates, setDates] = useState<{ start: string | null; end: string | null }>({ start: null, end: null })
@@ -980,11 +979,15 @@ function ProjectDetails({
   // The job itself changed: the list caught up after the app came back, with
   // an edit made in the office or on another phone. Without this the card,
   // and its Directions, kept the address from when the job was opened.
+  // Each field on its own: the office changing the builder says nothing about the address.
   useEffect(() => {
     const client = site.client_name ?? ''
+    setShown((prev) => (prev.client === client ? prev : { ...prev, client }))
+  }, [site.client_name])
+  useEffect(() => {
     const address = site.address ?? ''
-    setShown((prev) => (prev.client === client && prev.address === address ? prev : { client, address }))
-  }, [site.client_name, site.address])
+    setShown((prev) => (prev.address === address ? prev : { ...prev, address }))
+  }, [site.address])
 
   const reloadDetails = useCallback(() => {
     let cancelled = false
@@ -1293,14 +1296,13 @@ function ProjectDetails({
           onSaved={(patch) => {
             if (patch) {
               setShown((prev) => ({ ...prev, ...patch }))
-              // The job header (Job.tsx) renders from the `site` object it was
-              // opened with, not from this card's own state — without this it
-              // stayed on the old address until the job was closed and reopened.
-              // Only the key that actually changed: onSaved supplies one of
-              // client/address, and passing the other as an explicit undefined
-              // would spread over the real value in Job.tsx's header merge.
+              // Into the job list itself (useSimpleData's patchSite), so the
+              // header, this card when it mounts again, Directions and every
+              // list show the save, not the job as it was opened. Only the key
+              // that actually changed: passing the other as an explicit
+              // undefined would spread over the real value.
               onSiteChange?.({
-                ...(patch.client !== undefined ? { client_name: patch.client } : {}),
+                ...(patch.client !== undefined ? { client_name: patch.client || null } : {}),
                 ...(patch.address !== undefined ? { address: patch.address } : {}),
               })
             }

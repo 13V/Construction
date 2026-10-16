@@ -47,7 +47,17 @@ export interface SimpleData {
   /** site_id → the held areas' names, for notes like "Flood test on B305…". */
   floodAreas: Map<string, string[]>
   refresh: () => void
+  /**
+   * A builder or address this phone has just saved (Overview's Project
+   * details), put straight into `sites`, so the open job, its header and
+   * card, its Directions, and every list show it at once, not after the
+   * next load.
+   */
+  patchSite: (id: string, patch: SitePatch) => void
 }
+
+/** The job fields Overview's Project details saves from the phone. */
+export type SitePatch = { client_name?: string | null; address?: string }
 
 const dayStart = (offset: number) => {
   const d = new Date()
@@ -65,14 +75,11 @@ const dayStart = (offset: number) => {
 const RESUME_REFETCH_AFTER_MS = 30_000
 
 /**
- * How long a return to the app settles before this hook decides to ask. On
- * every return supabase-js announces the stored session again (SIGNED_IN),
- * and today the phone's sign-in gate answers that by re-reading the worker
- * and mounting the whole shell afresh, this hook included, whose new mount
- * loads everything anyway. Waiting lets that happen first: the old mount and
- * its timer are gone before it fires, so the same eight requests are never
- * sent twice. Where nothing remounts (a lone focus, the website), a list
- * that refreshes a second and a half after the person is back is no loss.
+ * How long a return to the app settles before this hook decides to ask. A
+ * return can renew the login too (supabase-js, when the token has run out),
+ * and the request is better sent with the new token than raced against it.
+ * A list that refreshes a second and a half after the person is back is no
+ * loss.
  */
 const RESUME_SETTLE_MS = 1_500
 
@@ -81,6 +88,11 @@ const RESUME_SETTLE_MS = 1_500
  * itself, so React sees the same object and re-renders nothing. Coming back
  * to a list nobody changed is then invisible, open screens included.
  */
+/** The order the lists show jobs in: by what they show, the address, falling back to the name. */
+function byShown(a: JobSiteRow, b: JobSiteRow): number {
+  return (addressLine(a) || a.name).localeCompare(addressLine(b) || b.name, undefined, { sensitivity: 'base' })
+}
+
 function unlessSame<T>(prev: T, next: T): T {
   return JSON.stringify(prev) === JSON.stringify(next) ? prev : next
 }
@@ -109,6 +121,15 @@ export function useSimpleData(me: WorkerRow): SimpleData {
   /** When the latest load started, and whether it is still out. */
   const startedAt = useRef(0)
   const inFlight = useRef(false)
+  /*
+   * Fields saved on this phone, by site and field, with when the save came
+   * back. A load that started before a save read the row before it (or
+   * cannot be shown to have read it after), so its copy of that field is
+   * older than what is on screen and the save is put back over it. Once a
+   * load that started after the save gets through, it has read the saved
+   * row itself, and the note is dropped.
+   */
+  const saved = useRef(new Map<string, { id: string; field: keyof SitePatch; value: string | null; at: number }>())
 
   useEffect(() => {
     let cancelled = false
@@ -124,7 +145,8 @@ export function useSimpleData(me: WorkerRow): SimpleData {
      */
     const quiet = reason.current === 'resume'
     reason.current = null
-    startedAt.current = Date.now()
+    const began = Date.now()
+    startedAt.current = began
     inFlight.current = true
     if (!quiet) {
       setLoading(true)
@@ -178,10 +200,15 @@ export function useSimpleData(me: WorkerRow): SimpleData {
       // A quiet load that got through also clears an error an earlier load left.
       setError(firstError ? firstError.message : null)
       const put = quiet ? unlessSame : takeNext
-      const fetchedSites = (st.data as JobSiteRow[]) ?? []
-      fetchedSites.sort((a, b) =>
-        (addressLine(a) || a.name).localeCompare(addressLine(b) || b.name, undefined, { sensitivity: 'base' }),
-      )
+      let fetchedSites = (st.data as JobSiteRow[]) ?? []
+      for (const [key, edit] of saved.current) {
+        if (edit.at < began) {
+          saved.current.delete(key)
+          continue
+        }
+        fetchedSites = fetchedSites.map((x) => (x.id === edit.id ? { ...x, [edit.field]: edit.value } : x))
+      }
+      fetchedSites.sort(byShown)
       setSites((prev) => put(prev, fetchedSites))
       setProgressRows((prev) => put(prev, pr.data ?? []))
       setDefectRows((prev) => put(prev, df.data ?? []))
@@ -340,6 +367,14 @@ export function useSimpleData(me: WorkerRow): SimpleData {
       // Asked for, so a full load, even if a quiet one was about to start.
       reason.current = 'refresh'
       setNonce((n) => n + 1)
+    }, []),
+    patchSite: useCallback((id: string, patch: SitePatch) => {
+      const at = Date.now()
+      for (const field of ['client_name', 'address'] as const) {
+        if (patch[field] === undefined) continue
+        saved.current.set(`${id}:${field}`, { id, field, value: patch[field] ?? null, at })
+      }
+      setSites((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)).sort(byShown))
     }, []),
   }
 }

@@ -563,6 +563,7 @@ function Tracker({ me }: { me: WorkerRow }) {
           key={openJob.id + openJobTab}
           initialTab={jobTabRef.current ?? openJobTab}
           onTabChange={(t) => { jobTabRef.current = t }}
+          onSiteChange={(patch) => simpleData.patchSite(openJob.id, patch)}
           me={me}
           site={openJob}
           floodHoldCount={simpleData.floodHold.get(openJob.id) ?? 0}

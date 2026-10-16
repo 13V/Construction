@@ -13,6 +13,7 @@ import { BUCKET_FILES, signedUrl } from '../../data/storage'
 import { distanceM } from '../../geofence/geo'
 import { SafetyTab } from './Safety'
 import { OverviewTab } from './Overview'
+import type { SitePatch } from './data'
 import { addressLine, avatarGrey, builderOf, s, SAFE_BOTTOM, SAFE_TOP, ticketTone, TICKET_MISSING } from './stheme'
 import { BRAND } from '../brand'
 
@@ -981,6 +982,7 @@ export function JobScreen({
   onAddInvoice,
   initialTab,
   onTabChange,
+  onSiteChange,
 }: {
   me: WorkerRow
   site: JobSiteRow
@@ -1003,20 +1005,11 @@ export function JobScreen({
    * opened to.
    */
   onTabChange?: (tab: JobTab) => void
+  /** A builder or address saved in Overview, for the job list to carry (useSimpleData's patchSite). */
+  onSiteChange?: (patch: SitePatch) => void
 }) {
   const office = me.is_office
   const [tab, setTab] = useState<JobTab>(initialTab ?? 'overview')
-  // The header below reads from `site`, which is this screen's own prop from
-  // when the job was opened — Overview.tsx edits the DB row directly and
-  // reloads only its own local state, so without this the header kept
-  // showing the old builder/address until the job was closed and reopened.
-  const [siteEdits, setSiteEdits] = useState<{ client_name?: string; address?: string }>({})
-  // Until the job itself changes: the list catching up brings this same edit
-  // or a later one from the office, and either way `site` is now the truth.
-  useEffect(() => {
-    setSiteEdits((prev) => (Object.keys(prev).length === 0 ? prev : {}))
-  }, [site.client_name, site.address])
-  const headerSite = { ...site, ...siteEdits }
 
   // The client's order. Waterproofing is not here because it moved inside
   // Overview, under the drawings — a job's wet areas are part of what the job
@@ -1033,8 +1026,8 @@ export function JobScreen({
     return office ? all : all.filter((t) => t.key !== 'money')
   }, [office])
 
-  const where = addressLine(headerSite)
-  const builder = builderOf(headerSite)
+  const where = addressLine(site)
+  const builder = builderOf(site)
   /**
    * The state line that used to sit under the header is gone: every one of
    * its facts — who is on site, how far through, what is overdue — is already
@@ -1129,7 +1122,7 @@ export function JobScreen({
       <div style={{ flex: 1, minHeight: 0, background: '#F5F6F7', paddingBottom: SAFE_BOTTOM }}>
         {tab === 'photos' && <PhotoGrid me={me} site={site} onTakePhoto={onTakePhoto} />}
         {tab === 'overview' && (
-          <OverviewTab me={me} site={site} onSiteChange={(patch) => setSiteEdits((prev) => ({ ...prev, ...patch }))} />
+          <OverviewTab me={me} site={site} onSiteChange={onSiteChange} />
         )}
         {tab === 'safety' && <SafetyTab me={me} site={site} />}
         {tab === 'chat' && chat(() => setTab('overview'))}
