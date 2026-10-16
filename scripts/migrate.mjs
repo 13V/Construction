@@ -66,6 +66,7 @@ const MIGRATIONS = [
   { file: 'schema_v38.sql', proves: ['job_value_v'], always: true },
   { file: 'schema_v39.sql', proves: ['delete_worker_account'], always: true },
   { file: 'schema_v40.sql', proves: ['messages_office_write'], always: true },
+  { file: 'schema_v41.sql', proves: ['notify_roster_booked'] },
 ]
 
 // ------------------------------------------------------------- credentials
