@@ -85,7 +85,9 @@ export function useSession(): SessionState {
      * So the row already held stays up until a real answer replaces it.
      */
     const sameLogin = held.current !== null && held.current.auth_user_id === session.user.id
-    if (!sameLogin) setLoading(true)
+    // Whether this read is out loud, so it always brings loading back down.
+    let loud = !sameLogin
+    if (loud) setLoading(true)
 
     void (async () => {
       const found = async () =>
@@ -96,7 +98,10 @@ export function useSession(): SessionState {
       // A login that had a row and now has none: a new answer, not a renewal,
       // so it is read out loud. The website's AuthGate counts a read as
       // finished only when it saw it load.
-      if (sameLogin && !data && !err) setLoading(true)
+      if (sameLogin && !data && !err) {
+        loud = true
+        setLoading(true)
+      }
 
       /*
        * Signed in, confirmed, and attached to nothing — finish what signing up
@@ -135,7 +140,12 @@ export function useSession(): SessionState {
       }
 
       if (cancelled) return
-      if (err && sameLogin) return
+      // A quiet read that failed keeps the row held. Loading comes down
+      // anyway: a read this one replaced may have raised it.
+      if (err && !loud) {
+        setLoading(false)
+        return
+      }
       if (err) setError(err.message)
       held.current = (data as WorkerRow) ?? null
       setMe(held.current)

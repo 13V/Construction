@@ -122,14 +122,16 @@ export function useSimpleData(me: WorkerRow): SimpleData {
   const startedAt = useRef(0)
   const inFlight = useRef(false)
   /*
-   * Fields saved on this phone, by site and field, with when the save came
-   * back. A load that started before a save read the row before it (or
-   * cannot be shown to have read it after), so its copy of that field is
-   * older than what is on screen and the save is put back over it. Once a
-   * load that started after the save gets through, it has read the saved
-   * row itself, and the note is dropped.
+   * Fields saved on this phone, by site and field, with the last load that
+   * had started when the save came back. A load that started before a save
+   * read the row before it (or cannot be shown to have read it after), so
+   * its copy of that field is older than what is on screen and the save is
+   * put back over it. Once a load that started after the save gets through,
+   * it has read the saved row itself, and the note is dropped.
    */
-  const saved = useRef(new Map<string, { id: string; field: keyof SitePatch; value: string | null; at: number }>())
+  const saved = useRef(new Map<string, { id: string; field: keyof SitePatch; value: string | null; after: number }>())
+  /** Loads in the order they started: the device clock can step back, this cannot. */
+  const loads = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -145,8 +147,8 @@ export function useSimpleData(me: WorkerRow): SimpleData {
      */
     const quiet = reason.current === 'resume'
     reason.current = null
-    const began = Date.now()
-    startedAt.current = began
+    const load = ++loads.current
+    startedAt.current = Date.now()
     inFlight.current = true
     if (!quiet) {
       setLoading(true)
@@ -202,7 +204,7 @@ export function useSimpleData(me: WorkerRow): SimpleData {
       const put = quiet ? unlessSame : takeNext
       let fetchedSites = (st.data as JobSiteRow[]) ?? []
       for (const [key, edit] of saved.current) {
-        if (edit.at < began) {
+        if (load > edit.after) {
           saved.current.delete(key)
           continue
         }
@@ -369,10 +371,11 @@ export function useSimpleData(me: WorkerRow): SimpleData {
       setNonce((n) => n + 1)
     }, []),
     patchSite: useCallback((id: string, patch: SitePatch) => {
-      const at = Date.now()
+      // The latest load to have started is the last that may have read the row before this save.
+      const after = loads.current
       for (const field of ['client_name', 'address'] as const) {
         if (patch[field] === undefined) continue
-        saved.current.set(`${id}:${field}`, { id, field, value: patch[field] ?? null, at })
+        saved.current.set(`${id}:${field}`, { id, field, value: patch[field] ?? null, after })
       }
       setSites((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)).sort(byShown))
     }, []),
