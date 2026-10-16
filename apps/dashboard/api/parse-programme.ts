@@ -6,8 +6,9 @@ import { applyCors } from './_cors.js'
  * Reads a builder's construction programme out of a PDF and hands back dated
  * tasks for a human to confirm.
  *
- * Spreadsheets never reach here: .xlsx and .csv are structured data and are
- * read in the browser by src/data/sheet.ts, for free and offline. This endpoint
+ * Spreadsheets never reach here: the apps upload a programme as a PDF or a
+ * photo, and only the first office dashboard (since removed) read .xlsx and
+ * .csv, in the browser. This endpoint
  * is only for the PDF case — a Gantt chart rendered to paper, where the dates
  * exist as bars on a timeline and there is no grid to read.
  *

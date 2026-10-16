@@ -45,9 +45,9 @@ vi.mock('../phone', async (importOriginal) => ({
  * comments. Rules that live inside a phone component are cut out of the
  * source, compiled, and run beside the copy on the same inputs.
  *
- * bumpVersion and the upload row come from the old office dashboard
- * (ui/JobSiteFolder.tsx), which is being deleted. While it exists they are
- * compared with it; after, the pinned cases below keep them as they were.
+ * bumpVersion and the upload row came from the first office dashboard
+ * (ui/JobSiteFolder.tsx), compared with it until it was removed. The pinned
+ * cases below keep them as they were.
  */
 
 // ------------------------------------------------------------------ helpers
@@ -58,11 +58,6 @@ const parse = (file: string, src: string) =>
 const PLANS = parse('PlansScreen.tsx', plansSrc)
 const BUTTON = parse('Drawings.tsx', drawingsBtnSrc)
 const WEB = parse('drawings.ts', drawingsSrc)
-
-// Read lazily, so the test still runs once the old dashboard is deleted.
-const OLD = import.meta.glob<string>('../../ui/JobSiteFolder.tsx', { query: '?raw', import: 'default', eager: true })
-const oldSrc = Object.values(OLD)[0]
-const FOLDER = oldSrc ? parse('JobSiteFolder.tsx', oldSrc) : null
 
 function all<T extends ts.Node>(root: ts.Node, test: (n: ts.Node) => n is T): T[] {
   const out: T[] = []
@@ -375,35 +370,6 @@ describe('bumpVersion and the upload row (the old dashboard writer)', () => {
     expect(bumpVersion('Rev 2')).toBe('Rev 3')
     expect(bumpVersion(null)).toBe('Rev B')
     expect(bumpVersion('')).toBe('Rev B')
-  })
-
-  it.runIf(FOLDER)("bumpVersion is the old dashboard's, verbatim", () => {
-    expect(code(decl(WEB, 'bumpVersion'), WEB)).toBe(code(decl(FOLDER!, 'bumpVersion'), FOLDER!))
-  })
-
-  it.runIf(FOLDER)("the upload row is the old dashboard's, key for key and value for value", () => {
-    const inserts = all(FOLDER!, (n): n is ts.CallExpression =>
-      ts.isCallExpression(n) &&
-      ts.isPropertyAccessExpression(n.expression) &&
-      n.expression.name.text === 'insert' &&
-      !!n.arguments[0] &&
-      ts.isObjectLiteralExpression(n.arguments[0]) &&
-      n.arguments[0].getText(FOLDER!).includes("category: 'plan'"),
-    )
-    expect(inserts).toHaveLength(1)
-    const literal = inserts[0]!.arguments[0]!.getText(FOLDER!)
-    const nextVersion = decl(FOLDER!, 'nextVersion') as ts.VariableDeclaration
-    const me = { id: 'w-1', company_id: 'co-1' }
-    const file = { name: 'A-201.pdf', type: 'application/pdf', size: 1234 }
-    const bare = { name: 'notes', type: '', size: 9 }
-    for (const [f, prior] of [[file, null], [file, { id: 'old', version: 'Rev B' }], [bare, { id: 'old', version: 'Rev Y' }]] as const) {
-      const old = run<Record<string, unknown>>(
-        `const nextVersion = ${nextVersion.initializer!.getText(FOLDER!)}`,
-        { me, siteId: 'site-1', path: 'co-1/site-1/x', file: f, prior, supersedesId: prior?.id ?? null, bumpVersion },
-        literal,
-      )
-      expect(drawingInsert({ me, siteId: 'site-1', file: f, path: 'co-1/site-1/x', prior })).toEqual(old)
-    }
   })
 
   it('a new sheet is Rev A, a plan, with nothing that would keep it off the register', () => {

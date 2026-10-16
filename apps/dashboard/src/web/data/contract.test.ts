@@ -432,15 +432,8 @@ describe("the phone's drawing register", () => {
 
 // --------------------------------------------------------------- bumpVersion
 
-describe('bumpVersion, kept from the old dashboard', () => {
-  // The old dashboard is being deleted; while its file is here, the copy must match it.
-  const old = Object.values(import.meta.glob<string>('/src/ui/JobSiteFolder.tsx', { query: '?raw', import: 'default', eager: true }))[0]
-
-  it.runIf(Boolean(old))("is the old dashboard's, verbatim", () => {
-    const sf = parse('JobSiteFolder.tsx', old!)
-    expect(code(decl(WEB, 'bumpVersion'), WEB)).toBe(code(decl(sf, 'bumpVersion'), sf))
-  })
-
+describe('bumpVersion, kept from the first office dashboard', () => {
+  // Compared with ui/JobSiteFolder.tsx until that was removed; the cases below keep it as it was.
   it('bumps the way it always has', () => {
     expect(web.bumpVersion('Rev A')).toBe('Rev B')
     expect(web.bumpVersion(' Rev C ')).toBe('Rev D')

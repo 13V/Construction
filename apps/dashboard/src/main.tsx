@@ -6,7 +6,7 @@ import { apiConfigError } from './data/api.ts'
 import './index.css'
 
 /*
- * Two surfaces, one codebase: the office dashboard and the worker's phone.
+ * Two surfaces, one codebase: the office's website and the worker's phone.
  * Vercel rewrites every path to index.html (see vercel.json), so this is all
  * the routing the MVP needs.
  *
@@ -14,11 +14,11 @@ import './index.css'
  *  - /worker in a browser
  *  - a build made for the native shell (VITE_SURFACE=worker)
  *  - running inside Capacitor at all, where the path is always '/' and a
- *    phone app is never the office dashboard
+ *    phone app is never the website
  *
  * Both are loaded dynamically so only the one being shown is fetched and
  * parsed. Importing them statically meant a worker's phone downloaded and
- * parsed the entire office dashboard — MapLibre GL included, roughly 800 kB of
+ * parsed the entire office website — MapLibre GL included, roughly 800 kB of
  * a mapping library the worker surface never once references — before it could
  * show a clock-in button. That is the wrong tax to put on an old Android on
  * site signal, and it applied to the native build too.
@@ -29,10 +29,10 @@ const isNativeShell = Boolean(
 
 /**
  * True only in a build made for the phone. Vite replaces `import.meta.env` with
- * a literal at build time, so this folds to a constant and the office dashboard
- * is dropped from the output entirely rather than merely never loaded — the APK
- * would otherwise carry the dashboard chunk, MapLibre's worker and all fourteen
- * feature screens as dead files, about 1.7 MB the phone can never reach.
+ * a literal at build time, so this folds to a constant and the website is
+ * dropped from the output entirely rather than merely never loaded — the app
+ * would otherwise carry the website's chunks and MapLibre's worker as dead
+ * files the phone can never reach.
  */
 const workerOnlyBuild = import.meta.env.VITE_SURFACE === 'worker'
 
@@ -85,30 +85,16 @@ function Booting() {
 /**
  * The website, reached only in a build that can show it. Referencing it inside
  * the dead branch below is what lets Rollup drop it from a phone build; naming
- * it at the top level would keep the import alive in both. Everything this
- * needs, both imports and the preview switch, stays inside this function for
- * the same reason.
+ * it at the top level would keep the import alive in both.
  *
- * Two websites live here until the new one replaces the old. The old office
- * dashboard (./App.tsx) stays at / because it is where a business signs up,
- * and App Review was told that is the only place a company is created. The
- * new one (src/web, reached only as '@web/entry') is previewed by opening
- * /?web=new; this browser remembers that, and /?web=old switches back. If
- * storage cannot be read or written the old dashboard shows: the preview is
- * something you opt into, never what you fall back to.
+ * '@web/entry' is src/web/entry.tsx: sign in, company sign-up (the one place a
+ * business is created, as App Review was told), and the office's jobs,
+ * schedule, team and company pages. It replaced the first office dashboard,
+ * which was removed.
  */
 function officeSurface() {
-  let preview = false
-  try {
-    const asked = new URLSearchParams(window.location.search).get('web')
-    if (asked === 'new') localStorage.setItem('crewline.web', 'new')
-    else if (asked === 'old') localStorage.removeItem('crewline.web')
-    preview = localStorage.getItem('crewline.web') === 'new'
-  } catch {
-    preview = false
-  }
-  const App = preview ? lazy(() => import('@web/entry')) : lazy(() => import('./App.tsx'))
-  return <App />
+  const Website = lazy(() => import('@web/entry'))
+  return <Website />
 }
 
 /**

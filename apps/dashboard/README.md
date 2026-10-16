@@ -1,7 +1,7 @@
 # Crewline
 
-Owner dashboard and worker app. React + Vite + TypeScript, Supabase for data and auth,
-Google Maps for the map, Vercel serverless functions for location ingest.
+The office website and the worker app. React + Vite + TypeScript, Supabase for data and
+auth, MapLibre for maps, Vercel serverless functions for location ingest.
 
 **There is no demo or simulated mode.** The app runs on real crew, real job sites and real
 GPS, or it tells you what's missing.
@@ -26,8 +26,8 @@ npm run build   # typechecks src and api, then builds
 
 | Route | Who | What |
 |---|---|---|
-| `/` | Office | Live map, job sites and geofences, crew, timesheets |
-| `/worker` | Field | Start tracking, live clock-in state |
+| `/` | Office (owners) | The website: sign in and company sign-up, jobs (new, edit, fence, crew, scope, drawings, waterproofing, safety), schedule, team, company |
+| `/worker` | Field | The phone app in a browser; the iOS app is the same code (`VITE_SURFACE=worker`) |
 
 Both gate on Supabase auth. A login with no `workers` row can see nothing — every RLS
 policy keys off it — so the app says so rather than rendering an empty dashboard.
@@ -55,30 +55,21 @@ is something a worker could tamper with, and timesheets have to be produced whet
 anyone has the dashboard open. The phone renders the phase the server returns rather than
 running a second, drifting copy.
 
-## Maps cost
+## Maps
 
-Google retired the universal $200/month credit in March 2025. The free tier is **10,000
-Dynamic Maps loads per month**, then $7 per 1,000, billed **per mount** — not per user.
-
-- `<Map>` is mounted once and never unmounted. Other sections render over or beside it.
-- Placing a job site reuses that same map rather than opening a second one.
-- Worker positions move existing markers, which costs nothing.
-
-Full breakdown in [MAPS.md](../../MAPS.md).
+Both apps draw maps with MapLibre and OpenFreeMap tiles (`src/data/mapconfig.ts`): no key
+and no per-load billing.
 
 ## Layout
 
 ```
-api/         ping.ts (location ingest + engine), bootstrap.ts (first run + invites)
+api/         ping.ts (location ingest + engine), bootstrap.ts (first run + invites), ...
 src/
-  auth/      useSession.ts, AuthScreen.tsx
+  main.tsx   which surface: /privacy, /support, the phone app, or the website
+  auth/      useSession.ts (shared by both surfaces)
   geofence/  dwell.ts (engine + tests), geo.ts (haversine, paths)
-  data/      supabase.ts (client + row types), useLive.ts (realtime), seed.ts (cost codes)
-  map/       LiveMap.tsx, markers.tsx, mapStyle.json (paste into Cloud Console)
-  ui/        Chrome, Overlays, Timesheets, JobSites, Crew, SetupNotice
-  worker/    WorkerApp.tsx
+  data/      supabase.ts (client + row types), api.ts, storage.ts, mapconfig.ts, ...
+  web/       the website (src/web/entry.tsx, reached only as '@web/entry')
+  worker/    the phone app (WorkerApp.tsx, simple/ for its screens)
+  ui/        Crash.tsx, kit.tsx (shared by both)
 ```
-
-`mapStyle.json` has to be applied to a Map ID in the Cloud Console rather than passed in
-code — once a `mapId` is set (required by Advanced Markers), the JS `styles` option is
-ignored.
