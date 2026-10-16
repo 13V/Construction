@@ -1011,6 +1011,11 @@ export function JobScreen({
   // reloads only its own local state, so without this the header kept
   // showing the old builder/address until the job was closed and reopened.
   const [siteEdits, setSiteEdits] = useState<{ client_name?: string; address?: string }>({})
+  // Until the job itself changes: the list catching up brings this same edit
+  // or a later one from the office, and either way `site` is now the truth.
+  useEffect(() => {
+    setSiteEdits((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+  }, [site.client_name, site.address])
   const headerSite = { ...site, ...siteEdits }
 
   // The client's order. Waterproofing is not here because it moved inside

@@ -977,6 +977,14 @@ function ProjectDetails({
   const [programmeOpen, setProgrammeOpen] = useState(false)
   const { current: programme, loading: programmeLoading } = useProgrammes(site.id)
   const [shown, setShown] = useState({ client: site.client_name ?? '', address: site.address ?? '' })
+  // The job itself changed: the list caught up after the app came back, with
+  // an edit made in the office or on another phone. Without this the card,
+  // and its Directions, kept the address from when the job was opened.
+  useEffect(() => {
+    const client = site.client_name ?? ''
+    const address = site.address ?? ''
+    setShown((prev) => (prev.client === client && prev.address === address ? prev : { client, address }))
+  }, [site.client_name, site.address])
 
   const reloadDetails = useCallback(() => {
     let cancelled = false
@@ -1276,7 +1284,8 @@ function ProjectDetails({
       {editRow && (
         <DetailEditor
           row={editRow}
-          site={site}
+          // What this card shows, so editing again starts from the last save, not from the job as opened.
+          site={{ ...site, client_name: shown.client || null, address: shown.address }}
           office={office}
           contact={editRow === 'builder' || editRow === 'address' || editRow === 'dates' ? null : byRole(editRow)}
           mapsHref={mapsHref}

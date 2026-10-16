@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, supabaseConfigured, type WorkerRow } from '../data/supabase'
 import { DEMO_EMAIL, DEMO_PASSWORD, demoMode } from '../data/demo'
@@ -24,6 +24,8 @@ export function useSession(): SessionState {
   const [me, setMe] = useState<WorkerRow | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
+  // The row `me` holds, readable inside the effect below without re-running it.
+  const held = useRef<WorkerRow | null>(null)
 
   useEffect(() => {
     if (!supabaseConfigured) {
@@ -66,13 +68,24 @@ export function useSession(): SessionState {
   useEffect(() => {
     if (!supabaseConfigured) return
     if (!session) {
+      held.current = null
       setMe(null)
       setLoading(false)
       return
     }
 
     let cancelled = false
-    setLoading(true)
+    /*
+     * The same login again. supabase-js hands over a new session object every
+     * time it renews the token: about hourly while the app is open, and on
+     * coming back to it after that. The row is read again, but quietly. A
+     * Loading here unmounted the whole phone app, dropping the person on Home
+     * without the job, tab or draft they had open; and a read that failed on
+     * a patchy connection called a crew member "not linked to a company".
+     * So the row already held stays up until a real answer replaces it.
+     */
+    const sameLogin = held.current !== null && held.current.auth_user_id === session.user.id
+    if (!sameLogin) setLoading(true)
 
     void (async () => {
       const found = async () =>
@@ -118,8 +131,10 @@ export function useSession(): SessionState {
       }
 
       if (cancelled) return
+      if (err && sameLogin) return
       if (err) setError(err.message)
-      setMe((data as WorkerRow) ?? null)
+      held.current = (data as WorkerRow) ?? null
+      setMe(held.current)
       setLoading(false)
     })()
 
