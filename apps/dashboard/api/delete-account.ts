@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { serviceClient } from './_supabase.js'
 import { applyCors } from './_cors.js'
+import { isDemoAccount } from './_demo.js'
 
 /**
  * Account deletion — App Store Guideline 5.1.1(v): an app that lets someone
@@ -60,6 +61,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     error: authError,
   } = await scoped.auth.getUser()
   if (authError || !user) return res.status(401).json({ error: 'Not authenticated' })
+
+  // "Try the demo" (api/demo.ts) signs anybody into this one account. Deleting
+  // it — and, as its only owner, the company with it — would take the demo
+  // away from everyone who taps the button after them.
+  if (isDemoAccount(user.email)) {
+    return res.status(403).json({ error: "The demo company can't be deleted." })
+  }
 
   const db = serviceClient()
 

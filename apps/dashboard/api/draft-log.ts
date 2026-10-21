@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { callerWorker, serviceClient } from './_supabase.js'
 import { applyCors } from './_cors.js'
+import { siteDay } from './_siteTime.js'
 
 /**
  * Drafts a daily log from data we already have — nobody types a form at 4pm.
@@ -38,19 +39,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  let worker
+  let caller
   try {
-    worker = await callerWorker(req.headers.authorization)
+    caller = await callerWorker(req.headers.authorization)
   } catch (err) {
     console.error('[draft-log] auth misconfigured', err)
     return res.status(500).json({ error: 'Server not configured' })
   }
-  if (!worker) return res.status(401).json({ error: 'Not authenticated' })
+  if (!caller.ok) return res.status(caller.status).json(caller.body)
+  const worker = caller.worker
 
   const body = req.body as Body
   const siteId = String(body?.siteId ?? '')
   const date = String(body?.date ?? '')
-  if (!siteId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  // The phone sends the day it is where the crew is (localDay()), so the
+  // shifts and photos counted are the ones from that day's Adelaide midnight
+  // to the next. Midnight UTC to midnight UTC — what this used to read — runs
+  // 10:30 am to 10:30 am in daylight time, so a crew that started at 7 was
+  // filed under the day before and the log said nobody had worked.
+  const day = siteDay(date)
+  if (!siteId || !day) {
     return res.status(400).json({ error: 'siteId and date (YYYY-MM-DD) are required' })
   }
 
@@ -68,8 +76,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (!site) return res.status(404).json({ error: 'Job site not found' })
 
-  const dayStart = new Date(`${date}T00:00:00Z`)
-  const dayEnd = new Date(dayStart.getTime() + 24 * 3_600_000)
+  const dayStart = day.start
+  const dayEnd = day.end
   const now = new Date()
 
   const [{ data: shiftRows, error: shiftsError }, { data: fileRows, error: filesError },

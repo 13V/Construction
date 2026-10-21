@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { serviceClient } from './_supabase.js'
+import { REMOVED_FROM_CREW, serviceClient } from './_supabase.js'
 import { applyCors } from './_cors.js'
 
 /**
@@ -80,21 +80,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (user.email) {
-    const { data: invited } = await db
+    /*
+     * The address must be the invited one exactly, letter case aside.
+     *
+     * This used to be `.ilike('invite_email', user.email)`, and in a LIKE
+     * pattern `_` is any one character and `%` any run of them (PostgREST
+     * reads `*` as `%` too). So jane_doe@… claimed the invite for jane.doe@…,
+     * and an address with a `%` in it could claim whichever invite came back
+     * first — an Office invite included, which is the whole company's pay
+     * rates and invoices.
+     *
+     * The pattern below can only widen the search, never narrow it: every
+     * wildcard character in the address is turned into `_`, which matches
+     * exactly one character, itself included, so the invited row is always
+     * among what comes back without relying on how escapes are read. The
+     * decision is the comparison after it, in plain code.
+     */
+    const wanted = user.email.toLowerCase()
+    const { data: candidates, error: inviteError } = await db
       .from('workers')
-      .select('id, company_id')
-      .ilike('invite_email', user.email)
+      .select('id, company_id, invite_email, active')
+      .ilike('invite_email', user.email.replace(/[%_*\\]/g, '_'))
       .is('auth_user_id', null)
-      .maybeSingle()
+      .limit(50)
+    if (inviteError) {
+      console.error('[bootstrap] invite lookup failed', inviteError)
+      return res.status(500).json({ error: 'Could not check for an invitation' })
+    }
+    const matches = (candidates ?? []).filter(
+      (row) => typeof row.invite_email === 'string' && row.invite_email.toLowerCase() === wanted,
+    )
+    if (matches.length > 1) {
+      // The unique index on lower(invite_email) should make this impossible.
+      console.error('[bootstrap] more than one invitation matches', { count: matches.length })
+      return res.status(409).json({ error: 'More than one invitation matches your email. Ask the office to check it.' })
+    }
+    const invited = matches[0]
 
     if (invited) {
-      const { error: linkError } = await db
+      // Taken off the crew before they ever signed in. Linking the login
+      // would hand a removed person the company's data through RLS.
+      if (!invited.active) {
+        return res.status(403).json({ error: REMOVED_FROM_CREW, removed: true })
+      }
+      const { data: linked, error: linkError } = await db
         .from('workers')
         .update({ auth_user_id: user.id, invite_email: null })
         .eq('id', invited.id)
+        // Only while it is still an active, unclaimed invite — the office can
+        // take someone off the crew between the read above and this write.
+        .eq('active', true)
+        .is('auth_user_id', null)
+        .select('id')
       if (linkError) {
         console.error('[bootstrap] invite link failed', linkError)
         return res.status(500).json({ error: 'Could not link your invitation' })
+      }
+      if (!linked || linked.length === 0) {
+        return res.status(409).json({ error: 'Your invitation changed while you were signing in. Try again.' })
       }
       return res.status(200).json({ ok: true, workerId: invited.id, joined: true })
     }

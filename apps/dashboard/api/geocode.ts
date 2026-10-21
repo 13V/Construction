@@ -43,14 +43,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Authenticated, because an open geocoding proxy on a public domain is an
   // invitation to have someone else's crawler spend our Nominatim goodwill.
-  let worker
+  let caller
   try {
-    worker = await callerWorker(req.headers.authorization)
+    caller = await callerWorker(req.headers.authorization)
   } catch (err) {
     console.error('[geocode] auth misconfigured', err)
     return res.status(500).json({ error: 'Server not configured' })
   }
-  if (!worker) return res.status(401).json({ error: 'Not authenticated' })
+  if (!caller.ok) return res.status(caller.status).json(caller.body)
 
   const q = String(req.query.q ?? '').trim()
   if (q.length < 3) return res.status(400).json({ error: 'Type a bit more of the address' })

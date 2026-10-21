@@ -65,14 +65,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  let worker
+  let caller
   try {
-    worker = await callerWorker(req.headers.authorization)
+    caller = await callerWorker(req.headers.authorization)
   } catch (err) {
     console.error('[parse-programme] auth misconfigured', err)
     return res.status(500).json({ error: 'Server not configured' })
   }
-  if (!worker) return res.status(401).json({ error: 'Not authenticated' })
+  if (!caller.ok) return res.status(caller.status).json(caller.body)
+  const worker = caller.worker
   // A programme is not commercial, but importing one supersedes the revision the
   // whole crew is working to, so it is an office action.
   if (!worker.is_office) return res.status(403).json({ error: 'Office only' })

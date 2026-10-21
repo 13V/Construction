@@ -70,14 +70,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  let worker
+  let caller
   try {
-    worker = await callerWorker(req.headers.authorization)
+    caller = await callerWorker(req.headers.authorization)
   } catch (err) {
     console.error('[parse-receipt] auth misconfigured', err)
     return res.status(500).json({ error: 'Server not configured' })
   }
-  if (!worker) return res.status(401).json({ error: 'Not authenticated' })
+  if (!caller.ok) return res.status(caller.status).json(caller.body)
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {

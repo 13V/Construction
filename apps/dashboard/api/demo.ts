@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { serviceClient } from './_supabase.js'
 import { applyCors } from './_cors.js'
+import { DEMO_EMAIL } from './_demo.js'
 
 /**
  * One-tap demo sign-in.
@@ -16,9 +17,10 @@ import { applyCors } from './_cors.js'
  * (Semaphore Tiling & Waterproofing) whose every row is stage dressing, seeded
  * and re-seedable by scripts/seed-demo.mjs. The token is single-use and
  * short-lived, minted per request by GoTrue.
+ *
+ * The account is named in _demo.ts, which api/delete-account.ts reads too:
+ * an account anybody can open is not one anybody may delete.
  */
-
-const DEMO_EMAIL = process.env.DEMO_EMAIL ?? 'appreview@crewline.app'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (applyCors(req, res)) return
