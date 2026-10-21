@@ -37,6 +37,7 @@ import { SafetyScreen } from './SafetyScreen'
 import { theme } from '../theme'
 import type { LatLng } from '../types'
 import { BRAND } from './brand'
+import { localDay } from '../data/localDay'
 import { STAFF_REQUESTS } from './requests'
 
 /**
@@ -2217,7 +2218,7 @@ function blankReceiptForm(siteId: string): ReceiptForm {
   return {
     siteId,
     vendor: '',
-    spentOn: new Date().toISOString().slice(0, 10),
+    spentOn: localDay(),
     amount: '',
     tax: '',
     category: '',
@@ -3358,7 +3359,7 @@ function CorrectionScreen({ me, onClose }: { me: WorkerRow; onClose: () => void 
 // ========================================================== time off (7)
 
 function TimeOffScreen({ me, onClose }: { me: WorkerRow; onClose: () => void }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDay()
   const [mine, setMine] = useState<TimeOffRow[]>([])
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)

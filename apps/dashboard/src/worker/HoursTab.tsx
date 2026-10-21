@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, type ShiftRow, type WorkerRow } from '../data/supabase'
 import { useSites } from './useSites'
 import { clockTime, dayDate } from '../format'
+import { localDay } from '../data/localDay'
 import { theme } from '../theme'
 import { STAFF_REQUESTS } from './requests'
 
@@ -544,7 +545,7 @@ function FixPunch({
 }
 
 function AskTimeOff({ me, onClose, onDone }: { me: WorkerRow; onClose: () => void; onDone: () => void }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDay()
   const [kind, setKind] = useState('annual')
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)

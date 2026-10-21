@@ -2,6 +2,7 @@ import ts from 'typescript'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import jobSrc from '../../worker/simple/Job.tsx?raw'
 import workerAppSrc from '../../worker/WorkerApp.tsx?raw'
+import { localDay as phoneLocalDay } from '../../data/localDay'
 import { distanceM, objectPath, offset, removeFile, uploadFile } from '../phone'
 import {
   dayHeading,
@@ -270,7 +271,7 @@ describe('days and times', () => {
   const phoneGroups = (files: Photo[]) => {
     const groups = decl(JOB, 'groups', PHOTO_GRID) as ts.VariableDeclaration
     const memo = groups.initializer as ts.CallExpression
-    return run<Array<[string, Photo[]]>>('', { files }, `(${memo.arguments[0]!.getText(JOB)})()`)
+    return run<Array<[string, Photo[]]>>('', { files, localDay: phoneLocalDay }, `(${memo.arguments[0]!.getText(JOB)})()`)
   }
 
   // Taken (UTC) → Adelaide:
@@ -292,19 +293,11 @@ describe('days and times', () => {
     ])
   })
 
-  it('agrees with the phone for photos taken after 10:30 am', () => {
-    const afternoon = [B, C]
-    expect(groupByDay(afternoon).map((d) => [d.day, d.photos.map((p) => p.id)])).toEqual(phoneGroups(afternoon).map(([k, rows]) => [k, rows.map((p) => p.id)]))
-  })
-
-  it("and differs where the phone's UTC day is the day before, or a photo has no time taken", () => {
-    // If the phone starts filing by the local day, this fails: the website
-    // already does, so delete this case and keep the one above.
-    expect(phoneGroups(newestMade).map(([k, rows]) => [k, rows.map((p) => p.id).join('')])).toEqual([
-      ['unknown', 'D'], // the phone's UNDATED, above today
-      ['2026-10-21', 'B'],
-      ['2026-10-20', 'AFEC'], // 7:32 am and 12:01 am on Wednesday, under Tuesday
-    ])
+  it('agrees with the phone on every photo: mornings, just after midnight, and one with no time taken', () => {
+    expect(groupByDay(newestMade).map((d) => [d.day, d.photos.map((p) => p.id).join('')])).toEqual(
+      phoneGroups(newestMade).map(([k, rows]) => [k, rows.map((p) => p.id).join('')]),
+    )
+    expect(phoneGroups(newestMade).map(([k]) => k)).toEqual(['2026-10-21', '2026-10-20', '2026-10-19'])
   })
 
   it('a photo with no time taken (a waterproofing step photo) goes by when it was filed', () => {

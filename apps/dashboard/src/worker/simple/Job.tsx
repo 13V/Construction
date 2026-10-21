@@ -24,6 +24,7 @@ import {
   type ContractField,
   type JobContract,
 } from '../../data/jobContract'
+import { localDay } from '../../data/localDay'
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
 import { distanceM } from '../../geofence/geo'
 import { SafetyTab } from './Safety'
@@ -51,8 +52,9 @@ const CameraGlyph = ({ size, opacity = 1, stroke = '#fff' }: { size: number; opa
 
 // ------------------------------------------------------------------ photos
 
-const dayLabel = (iso: string) => {
-  const d = new Date(iso)
+/** A day's heading, from its YYYY-MM-DD key (read as a local day, not UTC midnight). */
+const dayLabel = (day: string) => {
+  const d = new Date(`${day}T00:00:00`)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const upper = d
@@ -123,7 +125,9 @@ function PhotoGrid({ me, site, onTakePhoto }: { me: WorkerRow; site: JobSiteRow;
   const groups = useMemo(() => {
     const by = new Map<string, SiteFileRow[]>()
     for (const f of files) {
-      const key = (f.taken_at ?? '').slice(0, 10) || 'unknown'
+      // The day it was taken here, not in UTC (data/localDay.ts). One filed
+      // with no time taken, a waterproofing step's photo, goes by when it was filed.
+      const key = localDay(f.taken_at ?? f.created_at)
       by.set(key, [...(by.get(key) ?? []), f])
     }
     return [...by.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1))
@@ -151,7 +155,7 @@ function PhotoGrid({ me, site, onTakePhoto }: { me: WorkerRow; site: JobSiteRow;
       {groups.map(([day, rows]) => (
         <div key={day} style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 8, padding: '14px 16px 4px' }}>
           <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.11em', color: '#7B838B' }}>
-            {day === 'unknown' ? 'UNDATED' : dayLabel(day)}
+            {dayLabel(day)}
           </span>
           <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {rows.map((f, i) => (

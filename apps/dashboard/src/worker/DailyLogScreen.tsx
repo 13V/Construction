@@ -3,6 +3,7 @@ import { api } from '../data/api'
 import { supabase, type DailyLogRow, type WorkerRow } from '../data/supabase'
 import { useSites } from './useSites'
 import { dayDate } from '../format'
+import { localDay } from '../data/localDay'
 import { theme } from '../theme'
 
 /**
@@ -58,7 +59,7 @@ export function DailyLogScreen({
     if (!siteId && all.length > 0) setSiteId(standingIn ?? all[0]!.id)
   }, [all, standingIn, siteId])
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDay()
   const [row, setRow] = useState<DailyLogRow | null>(null)
   const [weather, setWeather] = useState('')
   const [work, setWork] = useState('')
