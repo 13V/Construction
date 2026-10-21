@@ -21,6 +21,7 @@ const jobInit = (name: string) => {
   return words.map((w) => (/^\d/.test(w) ? w : w[0]?.toUpperCase() ?? '')).join('')
 }
 
+/** When a conversation last moved: the time today, "Yesterday", the day and time this week, and the date before that ("15 Jan", with the year if it was not this one). */
 const timeLabel = (iso: string) => {
   const d = new Date(iso)
   const now = new Date()
@@ -29,7 +30,10 @@ const timeLabel = (iso: string) => {
   const clock = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
   if (d.getTime() >= t0.getTime()) return clock
   if (d.getTime() >= t0.getTime() - 86_400_000) return 'Yesterday'
-  return `${d.toLocaleDateString('en-AU', { weekday: 'short' })} ${clock}`
+  // A weekday names one day only within the week; a quiet conversation from
+  // months ago (chat_last_v brings those in) said "Thu" as if it were this one.
+  if (d.getTime() >= t0.getTime() - 6 * 86_400_000) return `${d.toLocaleDateString('en-AU', { weekday: 'short' })} ${clock}`
+  return d.toLocaleDateString('en-AU', d.getFullYear() === now.getFullYear() ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 /** A DM channel is found or created under this name, the two ids sorted so

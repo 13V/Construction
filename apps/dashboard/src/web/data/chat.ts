@@ -200,7 +200,7 @@ export const jobInit = (name: string) => {
   return words.map((w) => (/^\d/.test(w) ? w : w[0]?.toUpperCase() ?? '')).join('')
 }
 
-/** When a conversation last moved: the time today, "Yesterday", or the day and time (timeLabel). */
+/** When a conversation last moved: the time today, "Yesterday", the day and time this week, or the date before that (timeLabel). */
 export const timeLabel = (iso: string) => {
   const d = new Date(iso)
   const now = new Date()
@@ -209,7 +209,8 @@ export const timeLabel = (iso: string) => {
   const clock = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
   if (d.getTime() >= t0.getTime()) return clock
   if (d.getTime() >= t0.getTime() - 86_400_000) return 'Yesterday'
-  return `${d.toLocaleDateString('en-AU', { weekday: 'short' })} ${clock}`
+  if (d.getTime() >= t0.getTime() - 6 * 86_400_000) return `${d.toLocaleDateString('en-AU', { weekday: 'short' })} ${clock}`
+  return d.toLocaleDateString('en-AU', d.getFullYear() === now.getFullYear() ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 /** A thread's day separator: Today, Yesterday, or "Tue 14 Oct" (chatDayLabel). */

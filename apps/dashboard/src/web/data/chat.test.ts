@@ -569,11 +569,18 @@ describe("the phone's names and labels", () => {
     '2026-10-20T03:00:00.000Z', // yesterday
     '2026-10-19T23:00:00.000Z',
     '2026-10-16T22:15:00.000Z', // last week
+    '2026-10-14T01:00:00.000Z', // more than six days ago
+    '2026-01-15T01:00:00.000Z', // months ago, this year
     '2025-12-25T01:00:00.000Z', // last year
   ]
 
   it('timeLabel', () => {
     for (const iso of instants) expect(timeLabel(iso)).toBe(phone.timeLabel(iso))
+    // A quiet conversation (chat_last_v brings those in) says its date, not a weekday that reads as this week's.
+    expect(timeLabel('2026-10-18T03:00:00.000Z')).toMatch(/^Sun \d/)
+    expect(timeLabel('2026-10-14T01:00:00.000Z')).toBe('14 Oct')
+    expect(timeLabel('2026-01-15T01:00:00.000Z')).toBe('15 Jan')
+    expect(timeLabel('2025-12-25T01:00:00.000Z')).toBe('25 Dec 2025')
   })
 
   it("dayLabel, the same in the job thread and the DM thread", () => {
