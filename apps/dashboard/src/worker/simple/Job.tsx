@@ -4,11 +4,26 @@
  * underline bars, then the tabs in the order the job gets asked about:
  * Overview · Waterproofing · Safety · Money · Crew · Photos · Chat. Money
  * renders only for the office — absent, not disabled, which is the drawing's
- * own caption and what RLS answers anyway.
+ * own caption and what RLS answers anyway. The office adds and changes the
+ * job's contract there too (ContractSheet), through the same code the
+ * website's New job and Edit job use (data/jobContract.ts).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase, type JobSiteRow, type SiteFileRow, type WorkerRow } from '../../data/supabase'
+import {
+  contractDraftOf,
+  contractEditOf,
+  contractProblems,
+  loadContract,
+  moneyWords,
+  retentionWords,
+  saveContract,
+  termsWords,
+  type ContractDraft,
+  type ContractField,
+  type JobContract,
+} from '../../data/jobContract'
 import { BUCKET_FILES, signedUrl } from '../../data/storage'
 import { distanceM } from '../../geofence/geo'
 import { SafetyTab } from './Safety'
@@ -465,6 +480,14 @@ function MoneyTab({
   const [wageLines, setWageLines] = useState<MoneyLine[]>([])
   const [open, setOpen] = useState('')
   const [loading, setLoading] = useState(true)
+  /** The job's row in contracts: its value and details, or null when none has been entered. */
+  const [contract, setContract] = useState<JobContract | null>(null)
+  const [contractErr, setContractErr] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  /** Moves when the contract is saved here, to read the job's money again. */
+  const [nonce, setNonce] = useState(0)
+  /** The save that asked for that read, told when it has landed. */
+  const reloaded = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -480,8 +503,15 @@ function MoneyTab({
       client.from('shifts').select('worker_id, started_at, ended_at, break_minutes').eq('site_id', site.id).not('ended_at', 'is', null),
       client.from('crew_v').select('id, name, trade, role'),
       client.from('worker_pay').select('worker_id, rate'),
-    ]).then(([p, pr, inv, co, mt, ex, sw, sh, cv, pay]) => {
+      // A read that fails is not "no contract": the tab says so instead of offering to add one.
+      loadContract(site.id, client).then(
+        (c) => ({ c, err: null }),
+        (e: unknown) => ({ c: null, err: e instanceof Error ? e.message : String(e) }),
+      ),
+    ]).then(([p, pr, inv, co, mt, ex, sw, sh, cv, pay, k]) => {
       if (cancelled) return
+      setContract(k.c)
+      setContractErr(k.err)
       setRow((p.data as ProfitRow) ?? null)
       setDonePct(pr.data?.pct_complete === undefined || pr.data?.pct_complete === null ? null : Number(pr.data.pct_complete))
       setClaims(
@@ -528,18 +558,48 @@ function MoneyTab({
       wl.sort((a, b) => b.cost - a.cost)
       setWageLines(wl.map((l) => ({ k: l.k, v: money(Math.round(l.cost)) })))
       setLoading(false)
+      reloaded.current?.()
+      reloaded.current = null
     })
     return () => {
       cancelled = true
     }
-  }, [site.id])
+  }, [site.id, nonce])
+
+  /** Read the job's money again after a save; resolves once the tab shows it. */
+  const refresh = () =>
+    new Promise<void>((resolve) => {
+      reloaded.current = resolve
+      setNonce((n) => n + 1)
+    })
+  const sheet = editing && <ContractSheet site={site} onFile={contract} onClose={() => setEditing(false)} onSaved={refresh} />
 
   if (loading) return <div style={{ height: '100%' }} />
-  // No contract value means no margin to measure: say where it goes, rather than a job worth $0.
+  // No contract means no margin to measure: offer to add it, rather than show a job worth $0.
+  if (!contract && !row?.contract_id) {
+    return (
+      <div style={{ height: '100%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 16, padding: '36px 24px' }}>
+        <span style={{ textAlign: 'center', fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
+          {contractErr
+            ? 'The contract did not load. Check the signal, then open this tab again.'
+            : 'No contract value for this job yet. Add the contract here, and this tab works out the margin against it.'}
+        </span>
+        {!contractErr && (
+          <button onClick={() => setEditing(true)} style={{ ...M_CTA, flex: 'none' }}>
+            ADD THE CONTRACT
+          </button>
+        )}
+        {sheet}
+      </div>
+    )
+  }
+  // The contract is on file, but the job's figures did not come back with it.
   if (!row || !row.contract_id) {
     return (
-      <div style={{ padding: '36px 24px', textAlign: 'center', fontSize: 13.5, lineHeight: 1.5, color: '#7B838B' }}>
-        No contract value for this job yet. Add it on the website: open the job, then Edit details, Contract value.
+      <div style={{ height: '100%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 16px 20px' }}>
+        <ContractCard contract={contract} onEdit={() => setEditing(true)} />
+        <span style={{ flex: 'none', fontSize: 13, lineHeight: 1.5, color: '#696D74' }}>The rest of this job’s money did not load. Open this tab again to see it.</span>
+        {sheet}
       </div>
     )
   }
@@ -671,6 +731,8 @@ function MoneyTab({
         </span>
       </div>
 
+      <ContractCard contract={contract} onEdit={() => setEditing(true)} />
+
       {rows.map((r) => {
         const isOpen = open === r.key
         const noteFg = r.tone ? M_FG[r.tone] : '#8B9096'
@@ -741,6 +803,226 @@ function MoneyTab({
         Tap any line for the full rundown. Photograph a supplier invoice and {BRAND} reads
         the total, then files it against this job. Only owners and the office see this tab.
       </span>
+      {sheet}
+    </div>
+  )
+}
+
+/** The charcoal call to action, as ADD INVOICE draws it. */
+const M_CTA = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  minHeight: 52,
+  padding: '0 12px',
+  background: '#1A1D21',
+  border: 0,
+  borderRadius: 10,
+  color: '#fff',
+  fontFamily: 'inherit',
+  fontSize: 14,
+  fontWeight: 700,
+  letterSpacing: '.02em',
+  whiteSpace: 'nowrap',
+  cursor: 'pointer',
+} as const
+
+/**
+ * The contract under the summary card: the value as the contract states it
+ * and its GST basis, then the builder's contract and order numbers, the
+ * retention and the payment terms. Tapping it opens ContractSheet. Null is
+ * a contract the tab could not read, said rather than offered for editing.
+ */
+function ContractCard({ contract, onEdit }: { contract: JobContract | null; onEdit: () => void }) {
+  if (!contract) {
+    return (
+      <span style={{ flex: 'none', padding: '12px 15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, fontSize: 13, lineHeight: 1.45, color: '#8B9096' }}>
+        The contract details did not load. Open this tab again to see them.
+      </span>
+    )
+  }
+  const fact = (label: string, value: string | null) => (
+    <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.13em', color: s.muted }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: 600, color: value ? s.ink : '#9AA1A9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value ?? '—'}</span>
+    </span>
+  )
+  return (
+    <div
+      onClick={onEdit}
+      data-contract-card=""
+      style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 11, padding: '12px 13px 14px 15px', background: '#fff', border: '1px solid #E1E5E9', borderRadius: 10, boxShadow: '0 1px 2px rgba(16,20,24,.04)', cursor: 'pointer' }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-.005em', color: s.ink }}>Contract</span>
+          <span style={{ fontSize: 12.5, color: '#8B9096' }}>{contract.gst_inclusive ? 'inc GST' : 'ex GST'}, as the contract states it</span>
+        </span>
+        <span style={{ flex: 'none', fontSize: 16, fontWeight: 600, color: s.ink, fontVariantNumeric: 'tabular-nums' }}>{moneyWords(contract.contract_sum)}</span>
+        <svg width="11" height="11" viewBox="0 0 10 10" style={{ flex: 'none' }}>
+          <path d="M3.5 1.5L7 5l-3.5 3.5" fill="none" stroke="#B7BCC2" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+      <span style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '11px 12px', paddingTop: 11, borderTop: '1px solid #EDEFF1' }}>
+        {fact('CONTRACT NO.', contract.contract_no)}
+        {fact('ORDER NO.', contract.order_no)}
+        {fact('RETENTION', retentionWords(contract.retention_pct))}
+        {fact('PAYMENT TERMS', termsWords(contract.payment_terms_days))}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Add or change the job's contract, office only (the Money tab is): its
+ * value, ex or inc GST, the builder's contract and order numbers, retention
+ * and payment terms. The website's New job and Edit job set the same row,
+ * and both check and save it with data/jobContract.ts, so a box refused
+ * here is refused there in the same words.
+ *
+ * Only what was changed is saved, so a detail the office set on the website
+ * meanwhile is kept. A blank detail means not set: no number, no retention,
+ * 30 days. A new contract needs its value. The save is read back, and the
+ * sheet stays up (SAVING…) until the tab shows it.
+ */
+function ContractSheet({
+  site,
+  onFile,
+  onClose,
+  onSaved,
+}: {
+  site: JobSiteRow
+  /** The contract the tab has on file; null when there is none yet. */
+  onFile: JobContract | null
+  onClose: () => void
+  /** Reads the tab again; resolves once it shows the save. */
+  onSaved: () => Promise<void>
+}) {
+  const [draft, setDraft] = useState<ContractDraft>(() => contractDraftOf(onFile))
+  const [tried, setTried] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const problems = contractProblems(draft, onFile, { tried, required: true })
+  const set = <K extends keyof ContractDraft>(k: K, v: ContractDraft[K]) => setDraft((d) => ({ ...d, [k]: v }))
+
+  async function save() {
+    if (busy) return
+    setTried(true)
+    setError(null)
+    if (Object.keys(contractProblems(draft, onFile, { tried: true, required: true })).length) return
+    const edit = contractEditOf(draft, onFile)
+    // Nothing changed: nothing to write.
+    if (!edit) return onClose()
+    setBusy(true)
+    try {
+      await saveContract(site, edit)
+      await onSaved()
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The contract did not save.')
+      setBusy(false)
+    }
+  }
+
+  const label = { fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', color: '#8B9096' } as const
+  const input = {
+    width: '100%',
+    height: 48,
+    padding: '0 13px',
+    boxSizing: 'border-box' as const,
+    background: '#F5F6F7',
+    border: '1px solid #DCE0E6',
+    borderRadius: 10,
+    font: 'inherit',
+    fontSize: 16,
+    color: s.ink,
+    outline: 'none',
+  }
+  const problem = (k: ContractField) =>
+    problems[k] && <span data-problem={k} style={{ fontSize: 12.5, lineHeight: 1.4, color: '#A3282E' }}>{problems[k]}</span>
+  /** A labelled box. Called as a function, never as a component, so the input keeps its identity and iOS keeps the keyboard up (Business.tsx). */
+  const box = (k: ContractField, l: string, opts: { placeholder: string; mode?: 'decimal' | 'numeric' }, after?: ReactNode) => (
+    <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={label}>{l}</span>
+      <input
+        name={k}
+        value={draft[k]}
+        onChange={(e) => set(k, e.target.value)}
+        placeholder={opts.placeholder}
+        inputMode={opts.mode}
+        autoComplete="off"
+        style={{ ...input, borderColor: problems[k] ? '#A3282E' : '#DCE0E6' }}
+      />
+      {problem(k)}
+      {after}
+    </span>
+  )
+
+  return (
+    <div onClick={busy ? undefined : onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'flex-end', background: 'rgba(16,20,24,.5)' }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        data-contract-sheet=""
+        style={{ width: '100%', maxHeight: '92%', display: 'flex', flexDirection: 'column', background: '#F5F6F7', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}
+      >
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '15px 15px 12px 18px', background: '#fff', borderBottom: '1px solid #E1E5E9' }}>
+          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-.015em', color: s.ink }}>{onFile ? 'Contract' : 'Add the contract'}</span>
+            <span style={{ fontSize: 12.5, color: '#8B9096' }}>The builder’s contract for this job</span>
+          </span>
+          <span onClick={busy ? undefined : onClose} style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: '50%', background: '#F1F3F5', cursor: 'pointer' }}>
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4A5057" strokeWidth="2" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </span>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: `15px 16px calc(20px + ${SAFE_BOTTOM})` }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            {error && <span style={{ padding: '10px 12px', background: '#FDECEE', borderRadius: 9, fontSize: 13, lineHeight: 1.45, color: '#8E2A31' }}>{error}</span>}
+
+            {box(
+              'contractValue',
+              'CONTRACT VALUE',
+              { placeholder: 'e.g. 48,500', mode: 'decimal' },
+              <span role="radiogroup" aria-label="Whether the contract value includes GST" style={{ display: 'flex', padding: 3, borderRadius: 12, background: '#fff', border: '1px solid #DCE0E6' }}>
+                {([false, true] as const).map((inc) => {
+                  const on = draft.contractGstInclusive === inc
+                  return (
+                    <button
+                      key={String(inc)}
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => set('contractGstInclusive', inc)}
+                      style={{ flex: 1, height: 40, border: 0, borderRadius: 9, background: on ? '#1A1D21' : 'transparent', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, color: on ? '#fff' : s.ink, cursor: 'pointer' }}
+                    >
+                      {inc ? 'inc GST' : 'ex GST'}
+                    </button>
+                  )
+                })}
+              </span>,
+            )}
+            {box('contractNo', 'CONTRACT NUMBER', { placeholder: 'e.g. C-2291' })}
+            {box('orderNo', 'ORDER NUMBER', { placeholder: 'Their purchase order, if any' })}
+            {box('retentionPct', 'RETENTION %', { placeholder: 'None', mode: 'decimal' })}
+            {box('paymentTermsDays', 'PAYMENT TERMS (DAYS)', { placeholder: '30', mode: 'numeric' })}
+
+            <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#8B9096' }}>
+              Retention is kept from each claim until the job is done. Payment terms are days from the
+              invoice date. Only owners and the office see the contract, here and on the website.
+            </span>
+
+            <button
+              disabled={busy}
+              onClick={() => void save()}
+              style={{ width: '100%', height: 48, border: 0, borderRadius: 10, background: '#1A1D21', fontFamily: 'inherit', fontSize: 14.5, fontWeight: 700, letterSpacing: '.03em', color: '#fff', opacity: busy ? 0.6 : 1, cursor: 'pointer' }}
+            >
+              {busy ? 'SAVING…' : 'SAVE'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
