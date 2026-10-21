@@ -44,8 +44,24 @@ import {
   type RegisterRows,
   type Sheet,
 } from '../../data/drawings'
-import { loadProgrammes, openProgramme, PROGRAMME_ACCEPT, PROGRAMME_MAX_BYTES, uploadProgramme, type ProgrammeRow, type Programmes } from '../../data/programme'
+import {
+  importProgrammeSheet,
+  isProgrammeSheet,
+  loadProgrammes,
+  openProgramme,
+  oursSpan,
+  PROGRAMME_ACCEPT_DESK,
+  PROGRAMME_MAX_BYTES,
+  readProgrammeSheet,
+  todayISO,
+  uploadProgramme,
+  type ProgrammeRow,
+  type Programmes,
+} from '../../data/programme'
+import { printedDate, programmePdf } from '../../data/programmePdf'
+import type { SheetLine } from '../../data/sheet'
 import { useFresh } from '../../data/useFresh'
+import { addressLine, builderOf } from '../../phone'
 import { levelOf, programmeLine } from '../../phone-features'
 import { useToast } from '../../shell/Toast'
 import { color, radius, shadow, space, text } from '../../tokens'
@@ -53,7 +69,8 @@ import { Banner } from '../../ui/Banner'
 import { Button, CloseIcon, IconButton } from '../../ui/Button'
 import { Chip } from '../../ui/Chip'
 import { Dialog } from '../../ui/Dialog'
-import { DropZone, screenFiles, type Rejected } from '../../ui/DropZone'
+import { Drawer } from '../../ui/Drawer'
+import { accepts, DropZone, screenFiles, type Rejected } from '../../ui/DropZone'
 import { Field } from '../../ui/Field'
 import { Table, type Column } from '../../ui/Table'
 import type { JobTabProps } from '../types'
@@ -784,6 +801,10 @@ function ProgrammePanel({ me, site }: JobTabProps) {
   const [refused, setRefused] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A spreadsheet, read and waiting for its lines to be checked (the review drawer).
+  const [review, setReview] = useState<{ fileName: string; lines: SheetLine[]; note: string; source: 'excel' | 'csv' } | null>(null)
+  const [reading, setReading] = useState<string | null>(null)
+  const [reviewError, setReviewError] = useState<string | null>(null)
 
   const seq = useRef(0)
   const load = useCallback(async () => {
@@ -819,6 +840,67 @@ function ProgrammePanel({ me, site }: JobTabProps) {
     setRevision('')
     setIssuedOn('')
     setFile(null)
+    await load()
+  }
+
+  /** A spreadsheet is read here, in the browser, and nothing is saved until its lines have been checked. */
+  const readSheet = async (sheet: File) => {
+    setReading(sheet.name)
+    const r = await readProgrammeSheet(sheet)
+    setReading(null)
+    if (!r.ok) {
+      setError(r.message)
+      return
+    }
+    setReviewError(null)
+    setReview({ fileName: sheet.name, lines: r.lines, note: r.note, source: r.source })
+  }
+
+  /** Ours and We follow are one or the other: a line we wait on is not our work. */
+  const tick = (i: number, key: 'isOurs' | 'isPredecessor', on: boolean) =>
+    setReview((r) =>
+      r && {
+        ...r,
+        lines: r.lines.map((l, j) =>
+          j !== i ? l : key === 'isOurs' ? { ...l, isOurs: on, isPredecessor: on ? false : l.isPredecessor } : { ...l, isPredecessor: on, isOurs: on ? false : l.isOurs },
+        ),
+      },
+    )
+
+  const closeReview = () => {
+    if (busy) return
+    setReview(null)
+    setReviewError(null)
+  }
+
+  const importSheet = async () => {
+    if (!review || busy) return
+    setBusy(true)
+    setReviewError(null)
+    const pdf = programmePdf({
+      job: addressLine(site) || site.name,
+      builder: builderOf(site) || null,
+      revision,
+      issuedOn,
+      fileName: review.fileName,
+      importedOn: todayISO(),
+      lines: review.lines,
+    })
+    const res = await importProgrammeSheet({ me, siteId: site.id, fileName: review.fileName, revision, issuedOn, lines: review.lines, source: review.source, note: review.note, pdf })
+    setBusy(false)
+    if (!res.ok) {
+      setReviewError(res.message)
+      return
+    }
+    const span = oursSpan(review.lines)
+    toast(
+      `${res.row.revision?.trim() || res.row.name} is now the current programme: ${review.lines.length} lines${span ? `, we're on ${printedDate(span.from)} to ${printedDate(span.to)}` : ''}.${res.superseded.length ? ' The one before is superseded.' : ''}`,
+      { tone: 'success' },
+    )
+    if (res.warning) toast(res.warning, { tone: 'error' })
+    setReview(null)
+    setRevision('')
+    setIssuedOn('')
     await load()
   }
 
@@ -870,18 +952,29 @@ function ProgrammePanel({ me, site }: JobTabProps) {
           ) : (
             <DropZone
               multiple={false}
-              accept={PROGRAMME_ACCEPT}
+              accept={PROGRAMME_ACCEPT_DESK}
               maxBytes={PROGRAMME_MAX_BYTES}
               onFiles={(f) => {
                 setRefused(null)
                 setError(null)
-                setFile(f[0] ?? null)
+                const picked = f[0] ?? null
+                if (picked && isProgrammeSheet(picked.name)) void readSheet(picked)
+                else setFile(picked)
               }}
-              onReject={(r) => setRefused(`Not sent. ${r[0]!.reason}`)}
+              onReject={(r) =>
+                setRefused(
+                  `Not sent. ${r[0]!.reason}${accepts(r[0]!.file, PROGRAMME_ACCEPT_DESK) ? '' : " Send a PDF, a photo, or the builder's Excel (.xlsx) or CSV export."}`,
+                )
+              }
               label="Drop the programme here"
-              hint="PDF, or a photo of the printed programme"
-              buttonLabel="Choose the PDF"
+              hint="PDF, a photo of the printed programme, or the builder's Excel or CSV export"
+              buttonLabel="Choose the file"
             />
+          )}
+          {reading && (
+            <div role="status" style={{ ...text.sm, color: color.muted }}>
+              Reading {reading}…
+            </div>
           )}
           {refused && !file && (
             <div role="alert" style={{ ...text.sm, color: color.red }}>
@@ -910,8 +1003,93 @@ function ProgrammePanel({ me, site }: JobTabProps) {
           ))}
         </section>
       )}
+
+      <Drawer
+        open={!!review}
+        width={780}
+        title="Check the programme before it goes up"
+        subtitle={review ? `${review.fileName} · ${review.note}` : undefined}
+        onClose={closeReview}
+        footer={
+          review && (
+            <>
+              <span data-programme-summary="" style={{ flex: 1, alignSelf: 'center', ...text.sm, color: color.muted }}>
+                {reviewSummary(review.lines)}
+              </span>
+              <Button variant="secondary" onClick={closeReview} disabled={busy}>
+                Cancel
+              </Button>
+              <Button variant="primary" loading={busy} onClick={() => void importSheet()} data-programme-import="">
+                {current ? 'Put up as the current revision' : 'Put up as the current programme'}
+              </Button>
+            </>
+          )
+        }
+      >
+        {review && (
+          <div data-programme-review="" style={{ display: 'flex', flexDirection: 'column', gap: space.md }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: space.sm }}>
+              <Field label="Revision" placeholder="Rev C" value={revision} onChange={(e) => setRevision(e.target.value)} data-programme-revision="" />
+              <Field label="Issued" type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} data-programme-issued="" />
+            </div>
+            <div style={{ ...text.sm, color: color.body }}>
+              <b>Ours</b> sets when the crew are on: the job&apos;s dates, the schedule and the crew&apos;s phones all read it. <b>We follow</b> marks the work that has to be finished
+              before we start. Both are ticked from the line names, so check them. The crew&apos;s phones open a printout of these lines.
+            </div>
+            {reviewError && (
+              <Banner tone="error" title="Not put up">
+                {reviewError}
+              </Banner>
+            )}
+            <table data-programme-lines="" style={{ width: '100%', borderCollapse: 'collapse', ...text.sm }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: color.muted }}>
+                  {['Ref', 'Task', 'Start', 'Finish', 'Ours', 'We follow'].map((h) => (
+                    <th key={h} style={{ padding: `${space.xs}px ${space.xs}px`, borderBottom: `1px solid ${color.border}`, ...text.label, whiteSpace: 'nowrap' }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {review.lines.map((l, i) => (
+                  <tr key={i} data-line={i} style={{ background: l.isOurs ? color.greenFill : l.isPredecessor ? color.amberFill : undefined }}>
+                    <td style={cellStyle(color.muted)}>{l.ref}</td>
+                    <td style={{ ...cellStyle(color.ink), fontWeight: l.isOurs ? 600 : 400 }}>
+                      {l.name}
+                      {l.trade && <div style={{ ...text.xs, color: color.muted, fontWeight: 400 }}>{l.trade}</div>}
+                    </td>
+                    <td style={{ ...cellStyle(color.body), whiteSpace: 'nowrap' }}>{printedDate(l.startsOn)}</td>
+                    <td style={{ ...cellStyle(color.body), whiteSpace: 'nowrap' }}>{printedDate(l.endsOn)}</td>
+                    <td style={cellStyle(color.ink)}>
+                      <input type="checkbox" checked={l.isOurs} onChange={(e) => tick(i, 'isOurs', e.target.checked)} aria-label={`Ours: ${l.name}`} data-tick="ours" />
+                    </td>
+                    <td style={cellStyle(color.ink)}>
+                      <input type="checkbox" checked={l.isPredecessor} onChange={(e) => tick(i, 'isPredecessor', e.target.checked)} aria-label={`We follow: ${l.name}`} data-tick="follow" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Drawer>
     </aside>
   )
+}
+
+const cellStyle = (fg: string): CSSProperties => ({ padding: `${space.xs}px ${space.xs}px`, borderBottom: `1px solid ${color.borderSoft}`, color: fg, verticalAlign: 'top' })
+
+/** "42 lines · 6 ours, 16 Feb 2026 to 2 Mar 2026 · 3 we follow" */
+function reviewSummary(lines: SheetLine[]): string {
+  const span = oursSpan(lines)
+  const ours = lines.filter((l) => l.isOurs).length
+  const follow = lines.filter((l) => l.isPredecessor).length
+  return [
+    `${lines.length} line${lines.length === 1 ? '' : 's'}`,
+    ours ? `${ours} ours${span ? `, ${printedDate(span.from)} to ${printedDate(span.to)}` : ''}` : 'none marked ours',
+    `${follow} we follow`,
+  ].join(' · ')
 }
 
 /** One revision; pressing it opens the file the builder sent. */

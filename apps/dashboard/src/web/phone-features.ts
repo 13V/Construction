@@ -51,6 +51,10 @@ export { abnLooksValid, complianceGaps, BusinessSheet } from '../worker/simple/B
 // The phone's Team sheet.
 export { TeamSheet } from '../worker/simple/Team'
 
+// The PDF writer the phone prints its SWMS and certificates with: the
+// website prints a spreadsheet programme's lines with it (data/programmePdf.ts).
+export { Page, buildPdf, table, LEFT, RIGHT, WIDTH, type Cell, type TableColumn } from '../data/pdf'
+
 // The phone's schedule (Quarter, Month, Week, Day), and the tab names its
 // onOpenJob passes, which are the phone's tabs rather than the website's.
 export { SimpleSchedule } from '../worker/simple/Schedule'

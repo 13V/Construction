@@ -19,6 +19,7 @@
  */
 import { BUCKET_FILES, objectPath, removeFile, signedUrl, supabase, uploadFile, viewFile, type WorkerRow } from '../phone'
 import type { ProgrammeRow } from '../phone-features'
+import { extractProgramme, readCsv, readXlsx, type SheetLine } from './sheet'
 
 export type Db = ReturnType<typeof supabase>
 const db = (client?: Db): Db => client ?? supabase()
@@ -173,4 +174,184 @@ export async function openProgramme(row: Pick<ProgrammeRow, 'storage_path' | 're
   const ext = /\.[a-z0-9]+$/i.exec(row.storage_path)?.[0] ?? '.pdf'
   viewFile({ url, name: `${row.revision?.trim() || row.name}${ext}` })
   return true
+}
+
+// ------------------------------------------------- a programme from a spreadsheet
+
+/**
+ * What the website's drop zone takes: the phone's (a PDF, or a photo of the
+ * printed programme), plus the builder's Excel or CSV export, which is read
+ * here in the browser (readProgrammeSheet).
+ */
+export const PROGRAMME_ACCEPT_DESK = `${PROGRAMME_ACCEPT},.xlsx,.xlsm,.csv,.tsv`
+
+/** An Excel or delimited-text programme, by its name. */
+export const isProgrammeSheet = (name: string) => /\.(xlsx|xlsm|csv|tsv)$/i.test(name)
+
+export type SheetRead = { ok: true; lines: SheetLine[]; note: string; source: 'excel' | 'csv' } | { ok: false; message: string }
+
+/**
+ * A spreadsheet programme's dated lines, read in the browser; nothing is sent
+ * anywhere. A workbook's programme is the biggest sheet with dated lines on
+ * it (the others are a cover sheet and a legend); a CSV or TSV is read as it
+ * is.
+ */
+export async function readProgrammeSheet(file: File): Promise<SheetRead> {
+  const refusal = programmeRefusal(file)
+  if (refusal) return { ok: false, message: refusal }
+  try {
+    if (/\.(xlsx|xlsm)$/i.test(file.name)) {
+      const grids = (await readXlsx(await file.arrayBuffer())).sort((a, b) => b.rows.length - a.rows.length)
+      for (const g of grids) {
+        const r = extractProgramme(g)
+        if (r.rows.length > 0) return { ok: true, lines: r.rows, note: `${g.name}: ${r.note}`, source: 'excel' }
+      }
+      return { ok: false, message: `${file.name} does not read as a programme. ${extractProgramme(grids[0] ?? { name: '', rows: [] }).note}` }
+    }
+    const r = extractProgramme({ name: file.name, rows: readCsv(await file.text()) })
+    return r.rows.length > 0 ? { ok: true, lines: r.rows, note: r.note, source: 'csv' } : { ok: false, message: `${file.name} does not read as a programme. ${r.note}` }
+  } catch (e) {
+    return { ok: false, message: `${file.name} could not be read: ${e instanceof Error ? e.message : String(e)}` }
+  }
+}
+
+/** Our window on a programme: the first start and the last finish of the lines marked ours. */
+export function oursSpan(lines: Pick<SheetLine, 'isOurs' | 'startsOn' | 'endsOn'>[]): { from: string; to: string } | null {
+  const ours = lines.filter((l) => l.isOurs)
+  const starts = ours.map((l) => l.startsOn ?? l.endsOn).filter((d): d is string => !!d)
+  const ends = ours.map((l) => l.endsOn ?? l.startsOn).filter((d): d is string => !!d)
+  if (!starts.length || !ends.length) return null
+  return { from: starts.reduce((a, b) => (b < a ? b : a)), to: ends.reduce((a, b) => (b > a ? b : a)) }
+}
+
+/** The programme_tasks rows for a programme's lines, in the order the builder listed them. */
+export function programmeTaskRows(
+  me: Pick<WorkerRow, 'company_id'>,
+  siteId: string,
+  programmeId: string,
+  lines: SheetLine[],
+) {
+  return lines.map((l, i) => ({
+    company_id: me.company_id,
+    programme_id: programmeId,
+    site_id: siteId,
+    ref: l.ref.trim() || null,
+    name: l.name,
+    trade: l.trade.trim() || null,
+    starts_on: l.startsOn,
+    ends_on: l.endsOn,
+    duration_days: l.durationDays,
+    pct_complete: l.pctComplete ?? 0,
+    is_ours: l.isOurs,
+    is_predecessor: l.isPredecessor,
+    sort: i,
+  }))
+}
+
+/**
+ * Put a spreadsheet programme up as the current revision, with its lines.
+ *
+ * Its file is `pdf`, a printout of the lines (programmePdf.ts): a phone opens
+ * a programme by showing its file, and a phone cannot show a spreadsheet.
+ *
+ * In order: which revision is current now; the PDF under <company>/<site>/;
+ * the row, as a draft; its lines, every batch read back; then the row made
+ * current, which is when the database's trigger supersedes the one before;
+ * then the earlier revision's dates carried onto lines with the same ref
+ * (programme_carry_previous, schema_v21). Until the row is current nothing
+ * the crew see has changed, so a failure before then takes the row (its
+ * lines go with it) and the file back out, and the old revision stays
+ * current.
+ */
+export async function importProgrammeSheet(
+  {
+    me,
+    siteId,
+    fileName,
+    revision,
+    issuedOn,
+    lines,
+    source,
+    note,
+    pdf,
+  }: {
+    me: Pick<WorkerRow, 'id' | 'company_id'>
+    siteId: string
+    fileName: string
+    revision: string
+    issuedOn: string
+    lines: SheetLine[]
+    source: 'excel' | 'csv'
+    note: string
+    pdf: Blob
+  },
+  client?: Db,
+): Promise<UploadResult> {
+  if (lines.length === 0) return { ok: false, message: `${fileName} has no dated lines to put up.` }
+  const c = db(client)
+
+  const before = await c.from('programmes').select('id').eq('site_id', siteId).eq('status', 'current')
+  if (before.error) return { ok: false, message: `Could not read the current programme: ${before.error.message}` }
+  const priorIds = ((before.data ?? []) as Array<{ id: string }>).map((r) => r.id)
+
+  const name = programmeName(fileName)
+  const path = objectPath(me.company_id, siteId, `${name}.pdf`)
+  try {
+    await uploadFile(BUCKET_FILES, path, pdf, 'application/pdf')
+  } catch (e) {
+    return { ok: false, message: `The programme did not upload: ${e instanceof Error ? e.message : String(e)}` }
+  }
+
+  let draftId: string | null = null
+  const undo = async (message: string): Promise<UploadResult> => {
+    if (draftId) await c.from('programmes').delete().eq('id', draftId).eq('status', 'draft')
+    await removeFile(BUCKET_FILES, path).catch(() => {})
+    return { ok: false, message }
+  }
+
+  const { data, error } = await c
+    .from('programmes')
+    .insert({
+      company_id: me.company_id,
+      site_id: siteId,
+      name,
+      revision: revision.trim() || null,
+      issued_on: issuedOn || null,
+      received_on: todayISO(),
+      source,
+      storage_path: path,
+      status: 'draft',
+      import_note: note,
+      imported_by: me.id,
+    })
+    .select('id')
+    .single()
+  if (error || !data) return undo(`The programme did not save: ${error?.message ?? 'the row did not read back.'}`)
+  draftId = (data as { id: string }).id
+
+  const rows = programmeTaskRows(me, siteId, draftId, lines)
+  for (let i = 0; i < rows.length; i += 500) {
+    const chunk = rows.slice(i, i + 500)
+    const { data: made, error: tErr } = await c.from('programme_tasks').insert(chunk).select('id')
+    if (tErr) return undo(`The programme's lines did not save: ${tErr.message}`)
+    if ((made ?? []).length !== chunk.length) return undo("The programme's lines did not save: the write was refused.")
+  }
+
+  // Now it counts: current, and the one before superseded by the trigger.
+  const made = await c.from('programmes').update({ status: 'current' }).eq('id', draftId).select(PROGRAMME_COLS)
+  const stored = ((made.data ?? []) as unknown as ProgrammeRow[])[0]
+  if (made.error || !stored || stored.status !== 'current') return undo(`The programme did not save: ${made.error?.message ?? 'it could not be made current.'}`)
+
+  const carried = await c.rpc('programme_carry_previous', { p_programme: stored.id })
+  const after = await c.from('programmes').select('id, status').eq('site_id', siteId).in('id', [stored.id, ...priorIds])
+  const status = new Map(((after.data ?? []) as Array<{ id: string; status: string }>).map((r) => [r.id, r.status]))
+  const stillCurrent = priorIds.filter((id) => status.get(id) === 'current')
+  const warning = after.error
+    ? `Put up, but the revisions could not be read back: ${after.error.message}`
+    : stillCurrent.length > 0
+      ? 'Put up, but the earlier revision still reads as current. Reload and check which one the crew see.'
+      : carried.error
+        ? `Put up, but the earlier revision's dates could not be compared: ${carried.error.message}`
+        : undefined
+  return { ok: true, row: stored, superseded: stillCurrent.length ? [] : priorIds, ...(warning ? { warning } : {}) }
 }
