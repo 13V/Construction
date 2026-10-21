@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import bootstrapSource from '../../../api/bootstrap.ts?raw'
 import phoneSignInSource from '../../worker/simple/SignIn.tsx?raw'
-import { bootstrapCompany, emailProblem, MIN_PASSWORD, passwordProblem, signUpCompany, signUpMetadata, signUpProblems, type CompanySignUp } from './signup'
+import { readableAuthError } from '../phone'
+import { bootstrapCompany, emailProblem, MIN_PASSWORD, passwordProblem, signInError, signUpCompany, signUpMetadata, signUpProblems, type CompanySignUp } from './signup'
 
 /**
  * The website's company sign-up: the only place a business is created.
@@ -85,6 +86,34 @@ describe('signing a company up', () => {
     const thrown = { auth: { signUp: async () => Promise.reject(new TypeError('Failed to fetch')) } as unknown as Parameters<typeof signUpCompany>[1] }
     const offline = await signUpCompany(FORM, thrown.auth)
     expect(offline.kind === 'failed' && offline.message).toMatch(/check your signal/i)
+  })
+})
+
+describe("signing in: the website's own words for a wrong password", () => {
+  it("points at the website's own Forgot password? link, not at the website's address or a company sign-up", () => {
+    const out = signInError(new Error('Invalid login credentials'))
+    expect(out).toMatch(/do not match an account/i)
+    expect(out).toMatch(/typo/i)
+    expect(out).toContain('Forgot password?')
+    expect(out).not.toMatch(/\/reset|new company/i)
+    // The phone's words for the same answer are the app's: they send people here.
+    expect(readableAuthError(new Error('Invalid login credentials'))).not.toBe(out)
+  })
+
+  it('matches the server answer the phone matches, written any way', () => {
+    // The phone's regex, read from its source, so the two cannot drift apart.
+    const phoneRe = /if \(\/(.+?)\/i\.test\(raw\)\) \{\s*return `That email and password/.exec(phoneSignInSource)
+    expect(phoneRe).not.toBeNull()
+    for (const said of ['Invalid login credentials', 'invalid login credentials', 'AuthApiError: Invalid login credentials']) {
+      expect(new RegExp(phoneRe![1], 'i').test(said)).toBe(true)
+      expect(signInError(new Error(said))).toContain('Forgot password?')
+    }
+  })
+
+  it('says everything else as the phone says it', () => {
+    for (const err of [new Error('email rate limit exceeded'), new Error('Email not confirmed'), new TypeError('Failed to fetch'), new Error('database is locked')]) {
+      expect(signInError(err)).toBe(readableAuthError(err))
+    }
   })
 })
 

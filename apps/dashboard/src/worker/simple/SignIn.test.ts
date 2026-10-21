@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readableAuthError } from './SignIn'
 
 /**
@@ -32,6 +32,33 @@ describe('sign-in errors say what to do next', () => {
     const out = readableAuthError(new Error('Invalid login credentials'))
     expect(out).toMatch(/do not match an account/i)
     expect(out).toMatch(/typo/i)
+  })
+
+  it('points a forgotten password at the website, and never at a company sign-up the iPhone does not have', () => {
+    // App Review had company sign-up taken out of the iOS app, and the phone
+    // has no "Forgot password?" of its own: the website's /reset is the way.
+    const out = readableAuthError(new Error('Invalid login credentials'))
+    expect(out).not.toMatch(/company/i)
+    expect(out).toMatch(/forgotten your password/i)
+    expect(out).toMatch(/\/reset\b/)
+  })
+
+  describe('in the iPhone build', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs()
+      vi.resetModules()
+    })
+
+    it("names the website's reset page by the address the app's server is at, as a person would type it", async () => {
+      // ios-testflight.yml builds with VITE_API_BASE at the website; data/api.ts reads it once, on load.
+      vi.stubEnv('VITE_API_BASE', 'https://construction-opal-three.vercel.app/')
+      vi.resetModules()
+      const fresh = await import('./SignIn')
+      const out = fresh.readableAuthError(new Error('Invalid login credentials'))
+      expect(out).toContain('set a new one at construction-opal-three.vercel.app/reset, then sign in here')
+      expect(out).not.toMatch(/https?:\/\//)
+      expect(out).not.toMatch(/company/i)
+    })
   })
 
   it('tells somebody who skipped the email where the email is', () => {

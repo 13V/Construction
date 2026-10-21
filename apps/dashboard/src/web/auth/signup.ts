@@ -48,6 +48,23 @@ export function signUpProblems(input: CompanySignUp): Partial<Record<SignUpField
   return out
 }
 
+/**
+ * A failed sign-in, in the website's words.
+ *
+ * The phone's wording for a wrong password (readableAuthError) is written for
+ * the app: it has no "Forgot password?", so it sends the person to this
+ * website's /reset. Here the way back in is the "Forgot password?" link under
+ * the password box, so that is what a wrong password points to. Every other
+ * failure reads as the phone words it.
+ */
+export function signInError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  if (/invalid login credentials/i.test(raw)) {
+    return 'That email and password do not match an account. Check for a typo, or use Forgot password? under the password box to set a new one.'
+  }
+  return readableAuthError(err)
+}
+
 /** The email check every front-door form shares. Null when it is fine. */
 export function emailProblem(email: string): string | null {
   const e = email.trim()

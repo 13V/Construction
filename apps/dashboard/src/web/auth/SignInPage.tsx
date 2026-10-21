@@ -11,14 +11,14 @@
  * cannot be pressed twice on the way).
  */
 import { useRef, useState, type FormEvent } from 'react'
-import { readableAuthError, supabase } from '../phone'
+import { supabase } from '../phone'
 import { linkProps, paths } from '../router'
 import { color, space, text } from '../tokens'
 import { Banner } from '../ui/Banner'
 import { Button } from '../ui/Button'
 import { Field } from '../ui/Field'
 import { AuthDivider, AuthHeading, AuthLayout, CrewFootnote, type FrontDoorProps } from './AuthLayout'
-import { emailProblem } from './signup'
+import { emailProblem, signInError } from './signup'
 
 export function SignInPage({ email, onEmail }: FrontDoorProps) {
   const [password, setPassword] = useState('')
@@ -39,7 +39,7 @@ export function SignInPage({ email, onEmail }: FrontDoorProps) {
       const { error: err } = await supabase().auth.signInWithPassword({ email: email.trim(), password })
       if (err) throw err
     } catch (err) {
-      setError(readableAuthError(err))
+      setError(signInError(err))
       setBusy(false)
       // The likeliest fix is the password: put the cursor back in it.
       passwordRef.current?.select()

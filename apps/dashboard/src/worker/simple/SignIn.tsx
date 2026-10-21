@@ -14,7 +14,7 @@
  */
 import { useState } from 'react'
 import { supabase } from '../../data/supabase'
-import { api } from '../../data/api'
+import { api, apiBase } from '../../data/api'
 import { s, SAFE_BOTTOM, SAFE_TOP } from './stheme'
 import { BRAND, WHITE_LABELLED } from '../brand'
 import { viewFile } from './FileViewer'
@@ -74,6 +74,12 @@ const labelText = {
  *
  * Exported so the wording can be tested on its own — a regex typo here would
  * quietly put the raw string back in front of a customer.
+ *
+ * A wrong password is worded for this screen, the phone's. There is no
+ * "Forgot password?" here and, on the iPhone, no company sign-up either (see
+ * CAN_CREATE_COMPANY below), so it sends the person to the website's reset
+ * page. The website's own sign-in says it in its own words (web/auth/signup.ts
+ * signInError), pointing at its own link.
  */
 export function readableAuthError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err)
@@ -81,7 +87,7 @@ export function readableAuthError(err: unknown): string {
     return 'Too many accounts have been set up in the last hour. Wait about an hour and try again — nothing you typed was lost, and the address is still free.'
   }
   if (/invalid login credentials/i.test(raw)) {
-    return 'That email and password do not match an account. Check for a typo, or set up a new company below.'
+    return `That email and password do not match an account. Check for a typo. If you have forgotten your password, set a new one at ${resetAddress()}, then sign in here with it.`
   }
   if (/email not confirmed/i.test(raw)) {
     return 'This account has not been confirmed yet. Open the link in the email we sent, then sign in.'
@@ -93,6 +99,17 @@ export function readableAuthError(err: unknown): string {
     return `Could not reach ${BRAND}. Check your signal and try again — sites are good at eating reception.`
   }
   return raw
+}
+
+/**
+ * The website's password reset, written the way a person would type it into
+ * a browser. The phone app's server is the website (VITE_API_BASE, set by the
+ * iOS build); in a browser at /worker the base is empty and the website is
+ * this page's own origin.
+ */
+function resetAddress(): string {
+  const site = apiBase || (typeof window === 'undefined' ? '' : window.location.origin)
+  return `${site.replace(/^https?:\/\//, '')}/reset`
 }
 
 export function SimpleSignIn() {
