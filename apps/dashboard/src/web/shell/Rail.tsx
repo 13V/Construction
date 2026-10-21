@@ -2,9 +2,10 @@
  * The website's left rail: charcoal, 232 px, always there.
  *
  * Top to bottom: the name on the door (Proven, powered by Crewline), the one
- * thing this website is mostly for (New job), the four places (Jobs with how
- * many are live, Schedule, Team, Company), and at the bottom who is signed in,
- * the crew app, and Sign out.
+ * thing this website is mostly for (New job), the five places (Jobs with how
+ * many are live, Schedule, Chat with how many conversations need a reply,
+ * Team, Company), and at the bottom who is signed in, the crew app, and Sign
+ * out.
  *
  * Every item is a real link or button, so Tab walks the rail and each item
  * shows a white focus ring on the charcoal (web.css .wb-rail-item).
@@ -20,6 +21,7 @@ import { WEB_BRAND, WEB_POWERED_BY } from '../marker'
 import { linkProps, paths, sectionOf, usePathname, type Route } from '../router'
 import { color, space, text } from '../tokens'
 import { useFresh } from '../data/useFresh'
+import { useUnreadCount } from '../chat/useUnread'
 import { Button, PlusIcon } from '../ui/Button'
 import { Dialog } from '../ui/Dialog'
 import { initialsOf } from '../ui/AvatarStack'
@@ -170,6 +172,10 @@ export function Rail({ me, route }: { me: WorkerRow; route: Route }) {
   useEffect(countJobs, [countJobs, pathname])
   useFresh(countJobs)
 
+  // Conversations waiting on a reply from whoever is signed in: the phone's
+  // tab bar badge, counted the same way (chat/useUnread.ts), so the two agree.
+  const unread = useUnreadCount(me, pathname)
+
   const here = sectionOf(route)
 
   return (
@@ -195,6 +201,11 @@ export function Rail({ me, route }: { me: WorkerRow; route: Route }) {
                 {item.key === 'jobs' && live !== null && live > 0 && (
                   <span aria-label={`${live} active and future`} style={{ ...text.xs, fontWeight: 600, color: color.onDarkMuted }}>
                     {live}
+                  </span>
+                )}
+                {item.key === 'chat' && unread !== null && unread > 0 && (
+                  <span data-chat-unread={unread} aria-label={`${unread} ${unread === 1 ? 'conversation needs' : 'conversations need'} a reply`} style={{ ...text.xs, fontWeight: 600, color: color.onDarkMuted }}>
+                    {unread}
                   </span>
                 )}
               </a>

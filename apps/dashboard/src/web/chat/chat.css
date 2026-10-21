@@ -1,0 +1,48 @@
+/*
+ * Chat's own stylesheet: only what inline styles cannot say for the
+ * conversation list and the person picker (hover, the open row, the
+ * keyboard focus ring).
+ *
+ * The same two rules as web.css, for the same reason: class selectors only,
+ * every one prefixed wb-chat-, and no colour written here, each one a
+ * var(--wb-*) that WebApp sets on its root from tokens.ts. Loaded with the
+ * Chat page and the job's Chat tab, never in the first download.
+ */
+
+.wb-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color .08s;
+}
+.wb-chat-row:hover { background: var(--wb-row-fill); }
+.wb-chat-row[aria-current='page'] { background: var(--wb-fill); }
+.wb-chat-row:focus-visible { outline: 2px solid var(--wb-focus); outline-offset: -2px; }
+
+/* A row on the charcoal "Needs a reply" card. */
+.wb-chat-row--dark:hover { background: var(--wb-rail-hover); }
+.wb-chat-row--dark[aria-current='page'] { background: var(--wb-rail-active); }
+.wb-chat-row--dark:focus-visible { outline-color: var(--wb-focus-on-dark); }
+
+/* A row that is a button: the person picker. */
+.wb-chat-row--button {
+  appearance: none;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+}
+.wb-chat-row--button:disabled { cursor: default; }
+
+/* A photo in a thread, which opens it. */
+.wb-chat-photo { appearance: none; display: block; margin: 0; padding: 0; border: 0; cursor: zoom-in; }
+.wb-chat-photo:focus-visible { outline: 2px solid var(--wb-focus); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-chat-row { transition: none; }
+}

@@ -85,6 +85,8 @@ export { readableAuthError } from '../worker/simple/SignIn'
 // ---- Photos: phone-side code the website's Photos tab uses.
 
 // ---- Chat: phone-side code the website's Chat tab, Chat page and rail badge use.
+// A message as stored (data/chat.ts reads and writes it as the phone's chat does).
+export type { MessageRow } from '../data/supabase'
 
 // ---- Money: phone-side code the website's Money tab uses.
 
