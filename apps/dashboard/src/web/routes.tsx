@@ -26,6 +26,7 @@ const JobsPage = lazy(() => import('./pages/JobsPage'))
 const JobFormPage = lazy(() => import('./pages/JobFormPage'))
 const JobPage = lazy(() => import('./pages/JobPage'))
 const SchedulePage = lazy(() => import('./pages/SchedulePage'))
+const ChatPage = lazy(() => import('./pages/ChatPage'))
 const TeamPage = lazy(() => import('./pages/TeamPage'))
 const CompanyPage = lazy(() => import('./pages/CompanyPage'))
 
@@ -57,6 +58,9 @@ export function RouteView({ route, me }: { route: Route; me: WorkerRow }) {
       break
     case 'schedule':
       page = <SchedulePage me={me} />
+      break
+    case 'chat':
+      page = <ChatPage me={me} />
       break
     case 'team':
       page = <TeamPage me={me} />

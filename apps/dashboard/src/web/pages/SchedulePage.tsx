@@ -104,17 +104,17 @@ import { Banner } from '../ui/Banner'
 import { Button, Spinner } from '../ui/Button'
 
 /**
- * The phone's job tabs, as the website's. Photos, chat and money have no tab
- * on the website, so they open the job's Overview. A Record, so a tab the
- * phone adds later fails the type check here instead of opening nowhere.
+ * The phone's job tabs, as the website's: every one has its own tab. A
+ * Record, so a tab the phone adds later fails the type check here instead of
+ * opening nowhere.
  */
 const WEB_TAB: Record<PhoneJobTab, JobTab> = {
   overview: 'overview',
   safety: 'safety',
   crew: 'crew',
-  photos: 'overview',
-  chat: 'overview',
-  money: 'overview',
+  photos: 'photos',
+  chat: 'chat',
+  money: 'money',
 }
 
 /** Back after this long away counts as coming back: reload if nothing is lost. */

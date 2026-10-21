@@ -44,7 +44,10 @@ const TAB_VIEWS: Record<Exclude<JobTab, 'overview'>, LazyExoticComponent<Compone
   drawings: lazy(() => import('../job/tabs/DrawingsTab')),
   waterproofing: lazy(() => import('../job/tabs/WaterproofingTab')),
   safety: lazy(() => import('../job/tabs/SafetyTab')),
+  money: lazy(() => import('../job/tabs/MoneyTab')),
   crew: lazy(() => import('../job/tabs/CrewTab')),
+  photos: lazy(() => import('../job/tabs/PhotosTab')),
+  chat: lazy(() => import('../job/tabs/ChatTab')),
 }
 
 export interface JobPageProps extends PageProps {

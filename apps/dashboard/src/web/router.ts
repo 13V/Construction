@@ -7,13 +7,13 @@
  *
  * Signed out:  /  /signup  /reset
  * Signed in:   /jobs  /jobs/new  /jobs/:id  /jobs/:id/<tab>  /jobs/:id/edit
- *              /schedule  /team  /company
+ *              /schedule  /chat  /team  /company
  * Signed in, / and anything unknown redirect to /jobs (routes.tsx).
  */
 import { useMemo, useSyncExternalStore, type MouseEvent } from 'react'
 
 /** The job page's tabs, in the order they are shown. Overview is the bare /jobs/:id. */
-export type JobTab = 'overview' | 'scope' | 'drawings' | 'waterproofing' | 'safety' | 'crew'
+export type JobTab = 'overview' | 'scope' | 'drawings' | 'waterproofing' | 'safety' | 'money' | 'crew' | 'photos' | 'chat'
 
 export const JOB_TABS: ReadonlyArray<{ key: JobTab; label: string }> = [
   { key: 'overview', label: 'Overview' },
@@ -21,7 +21,10 @@ export const JOB_TABS: ReadonlyArray<{ key: JobTab; label: string }> = [
   { key: 'drawings', label: 'Drawings' },
   { key: 'waterproofing', label: 'Waterproofing' },
   { key: 'safety', label: 'Safety' },
+  { key: 'money', label: 'Money' },
   { key: 'crew', label: 'Crew' },
+  { key: 'photos', label: 'Photos' },
+  { key: 'chat', label: 'Chat' },
 ]
 
 export type Route =
@@ -33,6 +36,7 @@ export type Route =
   | { name: 'job'; id: string; tab: JobTab }
   | { name: 'job-edit'; id: string }
   | { name: 'schedule' }
+  | { name: 'chat' }
   | { name: 'team' }
   | { name: 'company' }
   | { name: 'unknown'; path: string }
@@ -62,6 +66,8 @@ export function parseRoute(pathname: string): Route {
         return { name: 'jobs' }
       case 'schedule':
         return { name: 'schedule' }
+      case 'chat':
+        return { name: 'chat' }
       case 'team':
         return { name: 'team' }
       case 'company':
@@ -90,6 +96,7 @@ export const paths = {
   job: (id: string, tab: JobTab = 'overview') => (tab === 'overview' ? `/jobs/${id}` : `/jobs/${id}/${tab}`),
   jobEdit: (id: string) => `/jobs/${id}/edit`,
   schedule: '/schedule',
+  chat: '/chat',
   team: '/team',
   company: '/company',
   /** The crew app in a browser. Another surface: a full page load, never a push. */
@@ -171,7 +178,7 @@ export function linkProps(to: string) {
 }
 
 /** Which rail item a route belongs to. */
-export function sectionOf(route: Route): 'jobs' | 'schedule' | 'team' | 'company' | null {
+export function sectionOf(route: Route): 'jobs' | 'schedule' | 'chat' | 'team' | 'company' | null {
   switch (route.name) {
     case 'jobs':
     case 'job':
@@ -179,6 +186,7 @@ export function sectionOf(route: Route): 'jobs' | 'schedule' | 'team' | 'company
     case 'job-edit':
       return 'jobs'
     case 'schedule':
+    case 'chat':
     case 'team':
     case 'company':
       return route.name

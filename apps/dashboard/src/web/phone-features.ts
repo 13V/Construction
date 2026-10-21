@@ -59,3 +59,9 @@ export { Page, buildPdf, table, LEFT, RIGHT, WIDTH, type Cell, type TableColumn 
 // onOpenJob passes, which are the phone's tabs rather than the website's.
 export { SimpleSchedule } from '../worker/simple/Schedule'
 export type { JobTab as PhoneJobTab } from '../worker/simple/Job'
+
+// ---- Photos: what the website's Photos tab (job/tabs/PhotosTab.tsx) shares with the phone.
+
+// ---- Chat: what the website's Chat tab and Chat page share with the phone.
+
+// ---- Money: what the website's Money tab (job/tabs/MoneyTab.tsx) shares with the phone.

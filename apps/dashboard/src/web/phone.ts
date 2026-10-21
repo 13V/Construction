@@ -81,3 +81,11 @@ export { viewFile, FileViewerHost, type ViewableFile } from '../worker/simple/Fi
 
 // Auth errors in words a person can act on (tested in SignIn.test.ts).
 export { readableAuthError } from '../worker/simple/SignIn'
+
+// ---- Photos: phone-side code the website's Photos tab uses.
+
+// ---- Chat: phone-side code the website's Chat tab, Chat page and rail badge use.
+
+// ---- Money: phone-side code the website's Money tab uses.
+
+// ---- Contract: phone-side code for the contract details both apps edit.

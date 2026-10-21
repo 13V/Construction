@@ -100,6 +100,8 @@ const ICONS = {
   jobs: icon('M6.5 3.2h-1.7a1.3 1.3 0 0 0-1.3 1.3v10.2a1.3 1.3 0 0 0 1.3 1.3h8.4a1.3 1.3 0 0 0 1.3-1.3V4.5a1.3 1.3 0 0 0-1.3-1.3h-1.7M6.5 2.2h5v2.2h-5zM6.5 9h5M6.5 12h3.5'),
   // A calendar.
   schedule: icon('M3 5.5a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 15 5.5v8a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 3 13.5zM3 8h12M6.5 2.5v3M11.5 2.5v3'),
+  // A speech bubble.
+  chat: icon('M3 4.5a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 15 4.5v6.5a1.5 1.5 0 0 1-1.5 1.5H8l-3.5 3v-3h0A1.5 1.5 0 0 1 3 11z'),
   // Two people.
   team: icon('M7 8.2a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2zM2.5 15c0-2.5 2-4.3 4.5-4.3s4.5 1.8 4.5 4.3M12 3.2a2.5 2.5 0 0 1 0 4.8M13.6 10.9c1.2.6 1.9 2 1.9 3.6'),
   // A building.
@@ -113,6 +115,7 @@ const ICONS = {
 const NAV = [
   { key: 'jobs', label: 'Jobs', href: paths.jobs },
   { key: 'schedule', label: 'Schedule', href: paths.schedule },
+  { key: 'chat', label: 'Chat', href: paths.chat },
   { key: 'team', label: 'Team', href: paths.team },
   { key: 'company', label: 'Company', href: paths.company },
 ] as const
