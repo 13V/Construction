@@ -547,7 +547,9 @@ function DmThread({
       .from('messages')
       .select('id, channel_id, author_id, kind, body, created_at')
       .eq('channel_id', channelId)
-      .order('created_at', { ascending: true })
+      // The newest 300, shown oldest first. Reading the oldest 300 stopped
+      // showing anything new once a conversation passed 300 messages.
+      .order('created_at', { ascending: false })
       .limit(300)
       .then(({ data, error: err }) => {
         if (cancelled) return
@@ -556,7 +558,7 @@ function DmThread({
           setLoading(false)
           return
         }
-        setMessages((data as ChatMessage[]) ?? [])
+        setMessages(((data as ChatMessage[]) ?? []).slice().reverse())
         setLoading(false)
       })
     return () => {

@@ -500,9 +500,9 @@ describe("a job's thread (ChatScreen)", () => {
     expect(mergeThread(page.messages, [shownAlready])).toHaveLength(THREAD_PAGE)
   })
 
-  it("the phone's direct-message thread still reads its oldest 300 (the website reads the newest, as a job's thread does)", () => {
+  it("the phone's direct-message thread reads the newest 300, newest first (as a job's thread does, and the website)", () => {
     const dmRead = evaluated(chainFrom(dmThread, 'messages', (c) => c.some((s) => s.method === 'order')), { channelId: 'ch-1' })
-    expect(dmRead).toContainEqual(['order', ['created_at', { ascending: true }]])
+    expect(dmRead).toContainEqual(['order', ['created_at', { ascending: false }]])
     expect(dmRead).toContainEqual(['limit', [300]])
   })
 })
