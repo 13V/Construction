@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { theme, font } from '../theme'
 import { Panel, PanelHead, LABEL } from '../ui/kit'
+import { apiBase } from '../data/api'
 
 /**
  * The support page behind the App Store listing's Support URL.
@@ -14,8 +15,23 @@ import { Panel, PanelHead, LABEL } from '../ui/kit'
  * published on the App Store listing as the Support URL's contact. Keep the
  * two the same: a reviewer who finds a support page naming a different
  * address than the listing treats it as a broken support channel.
+ *
+ * Every answer describes the apps as they are, by the words on their
+ * buttons: the iPhone app is "Proven" (in Settings too), it asks for
+ * location While Using the App only, and it has no password reset of its
+ * own, so a forgotten password is reset on the website. Change an answer
+ * when the screen it describes changes.
  */
 const CONTACT = 'hello@lumenadl.com'
+
+/**
+ * The website: the phone app's own server (VITE_API_BASE in the iOS build,
+ * where this page is opened from the app's bundle), or this page's origin
+ * when the website itself serves it.
+ */
+const WEBSITE = apiBase || (typeof window === 'undefined' ? '' : window.location.origin)
+const RESET_URL = `${WEBSITE}/reset`
+const RESET_LABEL = RESET_URL.replace(/^https?:\/\//, '')
 
 const shell: CSSProperties = {
   minHeight: '100vh',
@@ -73,11 +89,11 @@ export function Support() {
   return (
     <div style={shell}>
       <div style={inner}>
-        <h1 style={h1Style}>Crewline Support</h1>
-        <p style={kickerStyle}>Help for crews and office staff</p>
+        <h1 style={h1Style}>Proven Support</h1>
+        <p style={kickerStyle}>Help for crews and office staff &middot; Powered by Crewline</p>
 
         <p style={introStyle}>
-          Crewline records site hours from where your crew actually are, and keeps each job&rsquo;s
+          Proven records site hours from where your crew actually are, and keeps each job&rsquo;s
           drawings, waterproofing records and safety documents together. If something isn&rsquo;t
           working, or you want a hand setting your company up, write to us.
         </p>
@@ -103,41 +119,82 @@ export function Support() {
 
         <Q q="My hours didn't record.">
           <P>
-            Shifts start and stop from your location, not from a button. Check that location
-            permission is set to <strong>Always</strong> in iOS Settings &rsaquo; Crewline, and that
-            tracking is switched on in the app. Crewline waits a couple of minutes after you arrive
-            before opening a shift, so it does not log you on when you drive past a site.
+            Proven only records hours while the app is open and tracking is on. On the clock screen
+            (it opens first for crew, or go to <strong>Me</strong> &rsaquo;{' '}
+            <strong>Location while working</strong>), tap <strong>START TRACKING</strong> before you
+            get to the job. Once you have been inside the job&rsquo;s boundary for two minutes with
+            the app open, you are clocked on. You can also tap <strong>Clock in manually</strong> when
+            you arrive; it still checks you are inside the boundary.
+          </P>
+          <P>
+            Nothing is recorded while the app is closed or your phone is locked, so open it when you
+            get to site. When you leave, tap <strong>CLOCK OUT</strong>, then{' '}
+            <strong>END MY SHIFT NOW</strong>. If the app is open as you drive off, it clocks you off
+            by itself a few minutes after you leave, timed from when you left.
+          </P>
+          <P>
+            Check the location permission too: in Settings &rsaquo; Proven &rsaquo; Location, choose{' '}
+            <strong>While Using the App</strong>, and leave <strong>Precise Location</strong> on. The
+            app never asks for Always.
+          </P>
+          <P>
+            If a shift is still missing or wrong, tell your office, and write to us with the job and
+            the date. Neither app can change a recorded shift yet.
           </P>
         </Q>
 
         <Q q="I can't sign in.">
           <P>
-            Check the address for a typo first. If you have just signed up, open the confirmation
-            email we sent before signing in. If you have tried a few times in quick succession,
-            wait an hour — new sign-ups are rate limited — and nothing you entered is lost.
+            Check the email address for a typo first. If you have forgotten your password, set a new
+            one on the website at{' '}
+            <a href={RESET_URL} target="_blank" rel="noreferrer" style={linkStyle}>
+              {RESET_LABEL}
+            </a>{' '}
+            (the app has no password reset of its own yet), then sign in to the app with the new one.
+          </P>
+          <P>
+            If your office has added you to the crew, make your login on the app&rsquo;s sign-in
+            screen with <strong>My office added me. Create my login</strong>, using the email address
+            your office has for you. If you have just made your login, open the confirmation email we
+            sent before signing in. If it says too many accounts have been set up in the last hour,
+            wait about an hour and try again — nothing you entered is lost.
           </P>
         </Q>
 
         <Q q="How do I add someone to my company?">
           <P>
-            Open <strong>Me</strong>, then your company, then <strong>Crew</strong>. Only owners and
-            office staff can add people or change what someone is allowed to see.
+            On the website, open <strong>Team</strong> and choose <strong>Add someone</strong>. In the
+            app, open <strong>Me</strong>, then <strong>Your crew</strong>, then{' '}
+            <strong>Add someone</strong>. Give their name, their role and the email address they will
+            sign up with; they then make their login in the app with{' '}
+            <strong>My office added me. Create my login</strong>, using that address. Only people with
+            an Office login can add or remove people.
           </P>
         </Q>
 
         <Q q="I want my data deleted.">
           <P>
-            Email us from the address on the account. Note that if you are a worker, your hours and
-            location history form part of your employer&rsquo;s employment records — we will explain
-            what can be removed and what your employer controls.
+            In the app, open <strong>Me</strong> &rsaquo; <strong>Account &amp; privacy</strong>{' '}
+            &rsaquo; <strong>Delete my account</strong>. It removes your login, your location reports,
+            and your profile photo and phone number straight away. Your timesheets stay: they are part
+            of your employer&rsquo;s employment records, which the law requires them to keep.
+          </P>
+          <P>
+            If you are the only person with an Office login at your company, deleting your account
+            deletes the company as well, with everything in it, for everyone. To keep the company
+            running, add someone as Office first (<strong>Me</strong> &rsaquo;{' '}
+            <strong>Your crew</strong> &rsaquo; <strong>Add someone</strong>). For anything else,
+            email us from the address on the account and we will explain what can be removed and
+            what your employer controls.
           </P>
         </Q>
 
         <h2 style={h2Style}>Privacy</h2>
         <P>
-          Crewline records precise location while tracking is on, including before you clock on and
-          on the way home. What is collected, who can see it and how long it is kept is set out in
-          full in the{' '}
+          Proven records your precise location only while tracking is on and the app is open,
+          including on the way to a job if it is open then. There is no map of it, and the location
+          reports are deleted after 3 days. What is collected, who can see it and how long it is kept
+          is set out in full in the{' '}
           <a href="/privacy" style={linkStyle}>
             privacy policy
           </a>
