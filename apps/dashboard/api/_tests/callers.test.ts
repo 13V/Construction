@@ -165,6 +165,14 @@ describe('bootstrap: claiming an invite', () => {
     expect((await call(bootstrap)).body).toMatchObject({ joined: true })
     expect((await call(bootstrap)).body).toEqual({ ok: true, workerId: 'jane', existing: true })
   })
+
+  it('tells a linked login that was taken off the crew so, instead of "linked"', async () => {
+    db.seed('workers', invite('jane', 'jane.doe@example.com'))
+    h.user = confirmed('u-jane', 'jane.doe@example.com')
+    expect((await call(bootstrap)).body).toMatchObject({ joined: true })
+    db.rows('workers')[0]!.active = false
+    expect(await call(bootstrap)).toEqual({ status: 403, body: { error: REMOVED_FROM_CREW, removed: true } })
+  })
 })
 
 describe('delete-account and the public demo', () => {

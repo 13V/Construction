@@ -53,9 +53,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Idempotent: a retried request must not create a second company.
   const { data: existing } = await db
     .from('workers')
-    .select('id, company_id')
+    .select('id, company_id, active')
     .eq('auth_user_id', user.id)
     .maybeSingle()
+  // Taken off the crew (or the account was deleted, which also clears
+  // `active`): say so, rather than "linked" to a company it can no longer read.
+  if (existing && existing.active === false) {
+    return res.status(403).json({ error: REMOVED_FROM_CREW, removed: true })
+  }
   if (existing) {
     return res.status(200).json({ ok: true, workerId: existing.id, existing: true })
   }
