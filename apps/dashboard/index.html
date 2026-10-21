@@ -5,14 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!--
-      The map is the landing screen, and its first tile request cannot start
-      until DNS and the TLS handshake to the tile host are done. Opening those
-      connections while the bundle is still parsing takes that setup off the
-      critical path instead of paying for it after.
+      No preconnect to the map tiles: no screen opens on a map any more, and
+      the privacy policy says the tile host hears from a device only when a
+      map is opened to place a job's fence.
     -->
-    <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin />
-    <link rel="dns-prefetch" href="https://tiles.openfreemap.org" />
-    <title>Crewline — Live Map</title>
+    <title>Proven</title>
   </head>
   <body>
     <div id="root"></div>

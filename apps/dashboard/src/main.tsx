@@ -3,7 +3,21 @@ import { createRoot } from 'react-dom/client'
 import { Crash } from './ui/Crash.tsx'
 import { theme } from './theme.ts'
 import { apiConfigError } from './data/api.ts'
+import { reloadForLatestVersion } from './data/staleBuild.ts'
 import './index.css'
+
+/*
+ * A deploy renames every code file, so a page left open asks for files that
+ * no longer exist the next time it opens a screen. Vite fires this event for
+ * each of its own imports or stylesheets that fails to load, whoever catches
+ * the error; the page reloads once to get the latest version, if it can reach
+ * the website (data/staleBuild.ts has the guard that stops it looping). The
+ * error still goes on to the screen's error boundary, which says what is
+ * happening.
+ */
+window.addEventListener('vite:preloadError', () => {
+  void reloadForLatestVersion()
+})
 
 /*
  * Two surfaces, one codebase: the office's website and the worker's phone.

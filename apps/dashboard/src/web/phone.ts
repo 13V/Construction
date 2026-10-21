@@ -82,6 +82,11 @@ export { viewFile, FileViewerHost, type ViewableFile } from '../worker/simple/Fi
 // Auth errors in words a person can act on (tested in SignIn.test.ts).
 export { readableAuthError } from '../worker/simple/SignIn'
 
+// A code file that will not load after a deploy: the one guarded reload both
+// apps share (main.tsx starts it on Vite's preload error; routes.tsx's
+// PageBoundary asks it what to say).
+export { isChunkLoadError, reloadForLatestVersion, type Recovery } from '../data/staleBuild'
+
 // ---- Photos: phone-side code the website's Photos tab uses.
 
 // ---- Chat: phone-side code the website's Chat tab, Chat page and rail badge use.
