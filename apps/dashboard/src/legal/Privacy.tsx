@@ -15,6 +15,14 @@ import { Panel, PanelHead, Note, LABEL } from '../ui/kit'
  * edit this file in the same change, and vice versa. Nothing enforces that
  * automatically; this comment is the enforcement.
  *
+ * Every claim in it is meant to be checkable against the code: the cadence
+ * and what a report holds (worker/WorkerApp.tsx, api/ping.ts), the dwell
+ * timings (geofence/dwell.ts), the chat lines (api/ping.ts), who can read
+ * what (the RLS policies in supabase/), how long location is kept
+ * (prune_positions, schema_v22.sql), account deletion (api/delete-account.ts,
+ * delete_worker_account in schema_v39.sql) and the outside services. When one
+ * of those changes, this changes with it.
+ *
  * Deliberately has no dependency on auth, routing, or any data fetch — this
  * has to render as a plain, publicly reachable page with nothing signed in,
  * because that is what App Store review opens.
@@ -124,17 +132,18 @@ export function Privacy() {
     <div style={shell}>
       <div style={inner}>
         <h1 style={h1Style}>Crewline Privacy Policy</h1>
-        <p style={updatedStyle}>Last updated 9 August 2026</p>
+        <p style={updatedStyle}>Last updated 21 October 2026</p>
 
         <p style={introStyle}>
-          Crewline is a workforce tracking app used by construction and trade businesses to run
-          crews, timesheets and job sites. This policy explains what Crewline collects about you,
-          why, who can see it, how long it is kept, and the choices you have — written for the
-          person holding the phone, not for a lawyer.
+          Crewline is the software behind Proven: the app on your phone (called Proven on the
+          iPhone) and the website your office uses. Trade businesses use it to run their crews,
+          hours and job sites. This policy explains what it collects about you, why, who can see
+          it, how long it is kept, and the choices you have — written for the person holding the
+          phone, not for a lawyer.
         </p>
         <p style={introStyle}>
-          If you are a worker using the Crewline app, your employer (the business that signed your
-          company up to Crewline) is the one who decides to track hours this way and who your
+          If you work for a business that uses it, your employer (the business that set up your
+          company&rsquo;s account) is the one who decides to record hours this way and who your
           office staff are. Crewline is the software that makes it work, and stores the data on the
           business&rsquo;s behalf. Both are bound by this policy.
         </p>
@@ -145,27 +154,29 @@ export function Privacy() {
             <Ul>
               <Li>
                 While location tracking is switched on <strong>and the app is open</strong>, your
-                phone reports your precise GPS position roughly every 20 seconds. Closing the app,
-                or locking your phone, stops it — nothing is recorded while Crewline is in the
-                background or shut.
+                phone reports your precise GPS position about every 20 seconds. Closing the app, or
+                locking your phone, stops it — nothing is recorded while the app is in the background
+                or shut, and on an iPhone it only ever asks for location &ldquo;While Using the
+                App&rdquo;.
               </Li>
               <Li>
-                Your office staff (the people who run your company&rsquo;s Crewline account) can
-                see that location trail on a live map, for as long as it&rsquo;s kept.
+                There is no map: neither app shows your location reports to anyone else. The reports
+                are used to work out when you arrived at a job and when you left, and they are
+                deleted after 3 days.
               </Li>
               <Li>
-                Location is what starts and stops your paid shift automatically: you don&rsquo;t
-                clock yourself in or out, the app does it from where you are.
+                Your hours come from those reports: two minutes inside a job&rsquo;s boundary with the
+                app open clocks you on, or you tap &ldquo;Clock in manually&rdquo; once you are there.
+                Leaving clocks you off, or you tap &ldquo;END MY SHIFT NOW&rdquo;.
               </Li>
               <Li>
-                You can turn tracking off at any time. Turning it off stops your hours from being
-                recorded automatically — it does not clock you out or end a shift that&rsquo;s
-                already open.
+                Clocking on or off at a job, and passing through its boundary without stopping, each
+                put a short line in that job&rsquo;s chat, which everyone in your company can read.
               </Li>
               <Li>
-                Your location history isn&rsquo;t deleted when you leave the company. It&rsquo;s
-                kept as part of your timesheet and employment record, the same as your hours and
-                pay would be.
+                Your timesheets are kept: they are a pay record your employer has to keep. You can
+                delete your account from inside the app, which removes your login and your location
+                history but not your timesheets.
               </Li>
             </Ul>
           </div>
@@ -176,29 +187,32 @@ export function Privacy() {
           <P>Crewline has two kinds of user:</P>
           <Ul>
             <Li>
-              <strong>Field workers</strong> — the people whose location is tracked to build
-              timesheets.
+              <strong>Field workers</strong> — the crew who use the app to record their hours on the
+              job.
             </Li>
             <Li>
-              <strong>Office staff</strong> — the people at a construction business (owners,
-              admins, and job-running &ldquo;crew captains&rdquo;) who use the Crewline dashboard
-              to run the crew, approve hours, and see where people are.
+              <strong>Office staff</strong> — the people at the business with an Office login (the
+              owner, and anyone they make Office), who use the website and the app to set up jobs,
+              book the crew and look after the business&rsquo;s records. Some businesses also have
+              &ldquo;crew captains&rdquo;, who run particular jobs from the app.
             </Li>
           </Ul>
           <P>
-            This policy is written primarily for field workers, because location tracking of an
-            employee is the part of Crewline with the most at stake. It also covers what office
-            staff can see and do with that data.
+            This policy is written primarily for field workers, because recording an
+            employee&rsquo;s location is the part of Crewline with the most at stake. It also
+            covers what office staff can see and do with that data.
           </P>
         </Section>
 
         <Section id="collect" title="2. What Crewline collects">
           <H3>2.1 Precise location — the sensitive part</H3>
           <P>
-            When you turn tracking on and have the worker app open, your phone sends your GPS
-            coordinates to Crewline&rsquo;s server about every 20 seconds. It stops the moment the
-            app is closed or the screen locks: Crewline has no background location access at all,
-            so it cannot record where you are when you are not looking at it. Each report
+            Location is only read while you have tracking switched on (&ldquo;START TRACKING&rdquo;
+            on the clock screen) and the app is open on your screen. Then your phone sends its GPS
+            position to Crewline&rsquo;s server about every 20 seconds. The app has no background
+            location access: on an iPhone it asks for location &ldquo;While Using the App&rdquo;
+            only, never &ldquo;Always&rdquo;, so the moment you close the app or lock the phone, the
+            reports stop. The same is true of the crew app in a web browser. Each report
             (&ldquo;ping&rdquo;) includes:
           </P>
           <Ul>
@@ -207,58 +221,68 @@ export function Privacy() {
             <Li>the time of the report</Li>
           </Ul>
           <P>
-            This happens on <strong>every</strong> ping, not just the ones near a job site — the
-            drive to work, a stop at the supplier, the trip home, and any time you&rsquo;re not
-            actually working but haven&rsquo;t turned tracking off, are all recorded the same way
-            as time on site. Turning tracking on does not require you to be clocked in first:
-            arriving inside a job site&rsquo;s boundary is what starts the clock, so tracking has
-            to be running before that happens for the automatic clock-in to work at all.
+            This happens on <strong>every</strong> report while tracking is on, not just the ones
+            near a job site: if the app is open with tracking on during the drive to work or a stop
+            at the supplier, those positions are recorded the same way as time on site. Tracking
+            has to be on when you arrive for the app to clock you on by itself.
           </P>
           <P>
-            If you use the installed app (not a browser), tracking keeps running with your screen
-            locked or the app in the background. Android and iOS both show an ongoing notification
-            while this is happening, so it&rsquo;s never invisible — tapping it opens the app. In a
-            browser, tracking stops the moment your screen locks or you switch apps.
-          </P>
-          <P>
-            Each report is matched against your company&rsquo;s job site boundaries by the server.
-            With the app open, staying inside a boundary for two minutes clocks you in, and leaving
-            it starts a similar timer before you are clocked out, so a trip to the truck for a tool
-            doesn&rsquo;t end your shift. Because none of this runs in the background, the usual
-            way to start and end a shift is to tap &ldquo;Clock in manually&rdquo; when you arrive
-            and &ldquo;End my shift now&rdquo; when you leave. Both send a location report the
-            server checks: clocking in is refused if you are not actually inside the boundary.
+            Each report is checked against your company&rsquo;s job site boundaries by the server.
+            Staying inside a boundary for two minutes with the app open clocks you on. After you
+            leave, three minutes outside it clocks you off, timed from the last report that had you
+            inside, so a trip to the ute for a tool doesn&rsquo;t end your shift and the drive home
+            isn&rsquo;t counted. You can also tap &ldquo;Clock in manually&rdquo; when you arrive —
+            the server still checks your position and refuses it if you are not inside the boundary
+            — and &ldquo;CLOCK OUT&rdquo;, then &ldquo;END MY SHIFT NOW&rdquo;, when you leave, which
+            works wherever you are and records where you were when you tapped it. If you close the
+            app on site, your shift stays open until the app next reports from somewhere else, when
+            it is closed at the last time the app saw you on site, or until you tap &ldquo;END MY
+            SHIFT NOW&rdquo;.
           </P>
 
           <H3>2.2 What&rsquo;s built from that location</H3>
-          <P>From the raw pings above, Crewline derives and stores:</P>
+          <P>From the reports above, Crewline works out and stores:</P>
           <Ul>
             <Li>
-              <strong>Shifts</strong> — a start and finish time for each work period, the job site
-              it was recorded at, and whether it came from the automatic geofence or was entered or
-              corrected by a person. This is your timesheet.
+              <strong>Shifts</strong> — a start and finish time for each work period, the job it was
+              at, and whether it started by itself or with &ldquo;Clock in manually&rdquo;. This is
+              your timesheet.
             </Li>
             <Li>
-              <strong>Geofence events</strong> — a log entry each time you&rsquo;re detected
-              arriving at or leaving a site, including a &ldquo;drive-by&rdquo; entry if you passed
-              a site without staying the required two minutes. This is the audit trail behind your
-              timesheet, kept so a disputed shift can be checked against what actually happened.
+              <strong>Arrive and leave records</strong> — an entry each time you are clocked on or
+              off at a job, and a &ldquo;passed&rdquo; entry when you went inside a job&rsquo;s
+              boundary but left within the two minutes, with how many seconds you were inside. This
+              is the record behind your timesheet, kept so a disputed shift can be checked against
+              what actually happened.
             </Li>
             <Li>
-              <strong>A short system message in the site&rsquo;s chat</strong> each time you clock
-              in or out, visible to everyone assigned to that site&rsquo;s channel (your workmates
-              on that job) — for example &ldquo;Sam clocked in at Lot 42 · 7:02am&rdquo;. This
-              message states that you arrived or left; it does not show your GPS coordinates or the
-              route you took.
+              <strong>A short line in the job&rsquo;s chat</strong> each time you clock on or off
+              there — for example &ldquo;Sam Smith clocked in at Lot 42 · 7:02 am&rdquo; — and each
+              time you pass through a job&rsquo;s boundary without staying: &ldquo;Sam Smith passed
+              Lot 42 7:05 am — not clocked in (40s on site)&rdquo;. Everyone in your company can read
+              a job&rsquo;s chat (section 4). The line says you were there and when; it does not
+              show your coordinates or the route you took.
             </Li>
           </Ul>
 
-          <H3>2.3 Everything else</H3>
+          <H3>2.3 Site photos</H3>
+          <P>
+            A site photo you take in the app is stamped with the time and, if tracking is on and
+            your phone has a GPS fix, with where you were standing. Everyone in your company can see
+            a job&rsquo;s photos; the app shows whether each one was taken on site, and the website
+            also how far it was from the job&rsquo;s pin. That location stays with the photo for as
+            long as the photo is kept; it is not deleted after 3 days like the location reports.
+            Photos added on the website carry no location.
+          </P>
+
+          <H3>2.4 Everything else</H3>
           <P>
             Crewline also holds the ordinary account and work information needed to run a crew:
-            your name, trade, which company you work for, the photos and documents you upload
-            against a job, chat messages you send, receipts you photograph, and — for office staff
-            only — pay rates and commercial figures. This policy focuses on location because
+            your name, email address, trade and role, a phone number and profile photo if you add
+            them, the licences and tickets you add (with photos of the cards), the jobs you are
+            booked on, the chat messages you send, the photos and documents you add to a job, the
+            receipts and costs you enter, the safety documents you sign on to, and — for office staff
+            only — pay rates and the business&rsquo;s money. This policy focuses on location because
             it&rsquo;s the most sensitive thing the app collects; it applies to your account data
             generally.
           </P>
@@ -266,11 +290,11 @@ export function Privacy() {
 
         <Section id="why" title="3. Why we collect it">
           <P>
-            Location is collected for one reason: to produce an accurate timesheet without you
-            having to remember to tap a button. The geofence engine that decides when you&rsquo;re
-            clocked in and out runs on Crewline&rsquo;s server, not on your phone, specifically so a
-            manipulated or offline phone can&rsquo;t fabricate hours — which is also why the raw
-            pings behind that decision are kept, not just the shift they produced.
+            Location is collected for one reason: to record your hours at the right job without
+            anyone having to write them down. The engine that decides when you are clocked on and
+            off runs on Crewline&rsquo;s server, not on your phone, so a phone that has been tampered
+            with or is offline can&rsquo;t make up hours — which is also why the reports behind
+            that decision are kept for 3 days, not just the shift they produced.
           </P>
           <P>
             Location is not used for advertising, sold to third parties, or used to build a profile
@@ -287,32 +311,39 @@ export function Privacy() {
           <P>Within your company:</P>
           <Ul>
             <Li>
-              <strong>You</strong> can always see your own location, your own shifts, and your own
-              event history.
+              <strong>You</strong> can see your own hours in the app, under Me &rsaquo; My hours.
             </Li>
             <Li>
-              <strong>Office staff</strong> — the owners and admins who run your company&rsquo;s
-              Crewline account — can see the live location and location trail of everyone in the
-              company on a map, along with everyone&rsquo;s shifts and geofence event history. This
-              is the access needed to run a crew and approve a timesheet, and it is the same access
-              an office would have over paper timesheets or a swipe card, extended to cover how
-              those timesheets are now built.
+              <strong>Office staff</strong> (Office logins) can see everyone&rsquo;s shifts and
+              hours, on the website and in the app: who is on the clock at each job, and the hours
+              behind each job&rsquo;s labour costs. Their logins can also read the location reports,
+              for the 3 days they are kept, and the arrive, leave and passed records, although no
+              screen in either app shows those, and there is no map. Only office staff see pay
+              rates.
             </Li>
             <Li>
-              <strong>Crew captains</strong>, where your company uses that role, can see and
-              correct the start and finish times of people working on the specific jobs they run —
-              the same as an office would for that job — but cannot see the live map trail or
-              anyone&rsquo;s pay rate.
+              <strong>Crew captains</strong>, where your company uses that role, can see the shifts
+              recorded at the jobs they run, so they know who is on the clock there, but not your
+              location reports or anyone&rsquo;s pay rate.
             </Li>
             <Li>
-              <strong>Workmates assigned to the same job site</strong> see the short clock-in and
-              clock-out chat messages described in 2.2, not your coordinates.
+              <strong>Workmates booked on the same job that day</strong> can see that you are on the
+              clock there.
+            </Li>
+            <Li>
+              <strong>Everyone in your company</strong> can read every job&rsquo;s chat, including
+              the clock-on, clock-off and &ldquo;passed&rdquo; lines described in 2.2, and can see
+              each job&rsquo;s photos — not your location reports.
+            </Li>
+            <Li>
+              <strong>A direct message</strong> is between two people: it shows only in their two
+              Chat lists, and no screen in either app shows it to anyone else, office staff
+              included.
             </Li>
           </Ul>
           <P>
             Crewline&rsquo;s own staff do not routinely look at customer location data. It&rsquo;s
-            accessed only to fix a fault reported by a customer, and only for as long as that
-            takes.
+            accessed only to fix a fault reported by a customer, and only for as long as that takes.
           </P>
         </Section>
 
@@ -322,34 +353,42 @@ export function Privacy() {
             matters most for the data that is most sensitive.
           </P>
           <P>
-            <strong>Raw location pings are deleted after 3 days.</strong> The twenty-second
-            breadcrumb trail — every coordinate reported while the app was open, whether you were
-            on a site or between them — is automatically removed once it is three days old. It exists to draw the live
-            map and to work out when you arrived and left; once the shift it produced has been
-            written, the trail itself has done its job. Nobody has to ask for this and nobody can
-            switch it off.
+            <strong>Location reports are deleted after 3 days.</strong> Every position reported
+            while tracking was on, on a site or between them, is removed automatically once it is
+            three days old, by a job that runs every night. The reports exist to work out when you
+            arrived and left; once the shift they produced has been written, they have done their
+            job. Nobody has to ask for this, and nobody can switch it off from the apps.
           </P>
           <P>
-            <strong>The shifts and geofence events it produced are kept.</strong> The times you
-            clocked on and off are a pay record, and a business is required to keep those for
-            seven years under the Fair Work Act. So the <em>conclusion</em> — you were at Lot 42
-            from 7:04am to 3:12pm — outlives the minute-by-minute path that produced it.
+            <strong>Shifts, arrive and leave records, and chat are kept.</strong> The times you
+            clocked on and off are a pay record, and a business is required to keep those for seven
+            years under the Fair Work Act. So the <em>conclusion</em> — you were at Lot 42 from
+            7:04am to 3:12pm — outlives the reports that produced it. Chat messages, the clock-on
+            and &ldquo;passed&rdquo; lines included, stay in the job&rsquo;s chat as part of its
+            record, and a photo keeps its time and place for as long as it is kept.
           </P>
           <P>
             If you stop working for a company that uses Crewline, your timesheets are{' '}
             <strong>not</strong> deleted; they remain part of that company&rsquo;s employment
-            records, the same as they would if kept on paper. Your account is deactivated so you
-            can no longer sign in or be tracked.
+            records, the same as they would if kept on paper. The office can take you off the crew
+            list, which stops you being booked onto jobs; to remove your login as well, delete your
+            account.
           </P>
           <P>
-            <strong>Deleting your account.</strong> You can delete your own account from inside
-            the app, under Account. It takes effect immediately and cannot be undone. It removes
-            your ability to sign in and deletes your remaining location data outright. It does not
-            delete your timesheets: those belong to your employer&rsquo;s records and, under the
-            Fair Work Act, have to be kept for seven years — so your name stays on the hours you
-            actually worked, and nothing else. If you are the only owner of a company account,
-            deletion is refused rather than allowed to orphan the company and everyone&rsquo;s
-            records with it; make someone else an owner first.
+            <strong>Deleting your account.</strong> You can delete your own account from inside the
+            app, under Me &rsaquo; Account &amp; privacy &rsaquo; Delete my account. It takes effect
+            immediately and cannot be undone. It removes your login, deletes your remaining location
+            reports, and removes your profile photo and phone number. It does not delete your
+            timesheets: those belong to your employer&rsquo;s records and, under the Fair Work Act,
+            have to be kept for seven years — so your name stays on the hours you actually worked,
+            and on the job records and messages you added.
+          </P>
+          <P>
+            If you are the only person with an Office login at your company, there is nobody to hand
+            the company to, so deleting your account deletes the company as well: every job,
+            timesheet, record and message in it, for everyone in it. The app asks you to type the
+            company&rsquo;s name before it does. To keep the company running, add someone as Office
+            first (Me &rsaquo; Your crew &rsaquo; Add someone), then delete your account.
           </P>
           <P>
             If you or your employer want data deleted or exported outside of that — for example
@@ -362,78 +401,85 @@ export function Privacy() {
         <Section id="choices" title="6. Your choices">
           <Ul>
             <Li>
-              <strong>Turning tracking off.</strong> The worker app has a control to stop tracking
-              at any time. This stops location reports immediately — it is honestly described in
-              the app as &ldquo;stop sharing my location,&rdquo; not &ldquo;clock out.&rdquo; If
-              you&rsquo;re still standing inside a site&rsquo;s boundary when you turn tracking
-              off, any shift that&rsquo;s already open stays open until you turn tracking back on
-              and the automatic clock-out logic can run, or until the office corrects it. Turning
-              tracking off during work hours will affect your recorded hours — talk to your office
-              if you&rsquo;re unsure how a gap will be treated.
+              <strong>Stopping the location reports.</strong> Location is only recorded while
+              tracking is on and the app is open, so closing the app or locking your phone stops it
+              straight away. While you are on the clock, &ldquo;CLOCK OUT&rdquo; also offers
+              &ldquo;Just stop sending my location&rdquo;, which stops the reports without ending
+              your shift. Stopping the reports does not clock you out: a shift that is already open
+              stays open until the app reports again from somewhere else, or you tap &ldquo;END MY
+              SHIFT NOW&rdquo;. Stopping during work hours will affect your recorded hours — talk to
+              your office if you&rsquo;re unsure how a gap will be treated.
             </Li>
             <Li>
-              <strong>Device permission.</strong> Background tracking on your phone requires you to
-              grant location permission, including &ldquo;Allow all the time&rdquo; on the
-              installed app for tracking to survive the screen locking. You can change or withdraw
-              this at any time in your phone&rsquo;s Settings; without it, Crewline cannot record
-              your location at all, automatic clock-in stops working, and you&rsquo;ll need to tell
-              your office to record your hours another way.
+              <strong>Device permission.</strong> On an iPhone the app asks for location
+              &ldquo;While Using the App&rdquo; only. You can change or withdraw it at any time in
+              Settings &rsaquo; Proven &rsaquo; Location; leave Precise Location on, because an
+              approximate location can&rsquo;t tell whether you are inside a job&rsquo;s boundary.
+              Without the permission the app cannot check you are at a job, so it cannot clock you
+              on, and you&rsquo;ll need to tell your office to record your hours another way.
             </Li>
             <Li>
-              <strong>Manual correction.</strong> If the geofence gets it wrong — a bad GPS fix, a
-              missed clock-out — you can request a correction through the app, and your office (or,
-              on their own jobs, a crew captain) can edit a shift. Edited shifts are marked as
-              such, so the record shows a human changed it.
+              <strong>A shift that&rsquo;s wrong.</strong> If the record gets it wrong — a bad GPS
+              fix, a missed clock-off — tell your office. Neither app can change a recorded shift
+              yet, so the office contacts Crewline (section 9) to correct it.
             </Li>
           </Ul>
         </Section>
 
         <Section id="security" title="7. Where it’s stored and how it’s protected">
           <P>
-            Crewline&rsquo;s data is hosted with Supabase, on infrastructure in Australia where the
-            specific project region supports it. Every table holding location or shift data has
-            row-level security enforced by the database itself, so even a bug in the app&rsquo;s
-            own code cannot show one company&rsquo;s data to another, or a field worker&rsquo;s
-            colleague&rsquo;s raw location to someone who isn&rsquo;t office staff. Location is only
-            ever written for the account making the request — a worker&rsquo;s phone can insert its
-            own position and nothing else.
+            Crewline&rsquo;s database, sign-in and file storage are run by Supabase, which also
+            sends the sign-up and password reset emails. The server functions that receive every
+            location report, check it against the job boundaries and write your shifts run on
+            Vercel, in Sydney; Vercel also serves the website. Every table holding location or
+            shift data has row-level security enforced by the database itself, so even a bug in the
+            app&rsquo;s own code cannot show one company&rsquo;s data to another, or a worker&rsquo;s
+            location reports to anyone but them and their office staff. Location is only ever
+            written for the account making the request — a worker&rsquo;s phone can report its own
+            position and nothing else.
           </P>
 
           <H3>7.1 The outside services the app talks to</H3>
           <P>
-            Three services outside Crewline receive something, and it is worth being precise about
+            Besides Supabase and Vercel, which hold and process the data for Crewline as above, a
+            few services outside Crewline receive something, and it is worth being precise about
             what reaches each one.
           </P>
           <Ul>
             <Li>
-              <strong>Map images</strong> come from OpenFreeMap. When you open the map to place a
-              job site&rsquo;s boundary, your phone asks that service for the map tiles covering
-              that area. The request says which part of the world is on screen. It carries no
-              account, no name, and none of your recorded location history — the map you are
-              looking at is not the same thing as where you are.
+              <strong>Map images</strong> come from OpenFreeMap. When a map opens to place a
+              job&rsquo;s boundary (on the website, or when the office adds a job in the app), your
+              device asks that service for the map tiles covering that area. The request says which
+              part of the world is on screen. It carries no account, no name, and none of your
+              location reports.
             </Li>
             <Li>
-              <strong>Address lookup</strong> uses OpenStreetMap&rsquo;s geocoder. When you tap to
-              find a job&rsquo;s address on the map, the address you typed is sent to it to be
-              turned into coordinates. It is sent by Crewline&rsquo;s own server rather than by
-              your phone, so your device and your session are never exposed to it, and nothing
-              travels with the address but the address.
+              <strong>Address lookup</strong> uses OpenStreetMap&rsquo;s geocoder. When someone
+              searches for a job&rsquo;s address, the address typed is sent to it to be turned into
+              coordinates. It is sent by Crewline&rsquo;s own server rather than by the device, so
+              nothing travels with the address but the address.
             </Li>
             <Li>
-              <strong>Reading a receipt or a programme</strong> uses Anthropic&rsquo;s Claude API.
-              When you photograph a receipt so the app can fill in the supplier and the amount,
-              that image is sent there to be read. The same applies to a builder&rsquo;s programme
-              you upload, and — when the app drafts a daily log for you — to the crew names, hours
-              and photo captions for that day. It is used to read the document and nothing else:
-              not to train a model, and not kept afterwards. If you would rather it never left,
-              every one of those forms can be filled in by hand instead.
+              <strong>Apple.</strong> On an iPhone your position comes from Apple&rsquo;s Location
+              Services, and the app is installed from the App Store; Apple&rsquo;s own privacy policy
+              covers both.
+            </Li>
+            <Li>
+              <strong>Directions.</strong> Tapping a job&rsquo;s address in the app opens it in Apple
+              Maps, and the website&rsquo;s Map link opens the job&rsquo;s spot in Google Maps. Each
+              is sent that address or spot, and nothing else.
+            </Li>
+            <Li>
+              <strong>Reading receipts.</strong> The app can read a photographed receipt (and draft
+              a daily log) with Anthropic&rsquo;s Claude API, but that is switched off at the
+              moment: nothing is sent to Anthropic, and those forms are filled in by hand. If it is
+              ever switched on, this policy will say first exactly what is sent.
             </Li>
           </Ul>
           <P>
-            None of the three is sent your location trail, your shifts or your chat messages. None
-            is used for advertising, and none is given anything to build a profile from. The
-            mapping services are told an area and an address; Anthropic is shown the document you
-            asked it to read.
+            None of these outside services is sent your location reports, your shifts or your chat
+            messages. None is used for advertising, and none is given anything to build a profile
+            from.
           </P>
         </Section>
 
