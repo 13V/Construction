@@ -359,6 +359,38 @@ describe('createJob', () => {
     expect(out.issues.map((i) => i.step)).toEqual(['builder', 'contact', 'contact'])
   })
 
+  it('saves the contract last, with its details, for the job and its builder', async () => {
+    const fake = fakeDb()
+    const contract = { sum: 48500, gstInclusive: false, contractNo: 'C-2291', orderNo: 'PO 88401', retentionPct: 5, paymentTermsDays: 14 }
+    const out = await createJob(ME, { ...input, crew: null, contract }, { client: fake.client })
+    expect(out.issues).toEqual([])
+    expect(fake.calls.slice(-2).map((c) => `${c.op} ${c.table}`)).toEqual(['update contracts', 'insert contracts'])
+    expect(fake.tables.contracts).toEqual([
+      expect.objectContaining({
+        company_id: 'co-1',
+        site_id: out.site!.id,
+        builder_id: out.builder!.id,
+        contract_sum: 48500,
+        gst_inclusive: false,
+        contract_no: 'C-2291',
+        order_no: 'PO 88401',
+        retention_pct: 5,
+        payment_terms_days: 14,
+      }),
+    ])
+  })
+
+  it('keeps the job when the contract is refused, and Retry saves what was typed', async () => {
+    const contract = { sum: 52800.5, gstInclusive: true, contractNo: 'C-7' }
+    const refusing = fakeDb({}, (c) => (c.table === 'contracts' && c.op === 'insert' ? { data: null, error: { message: 'new row violates row-level security policy for table "contracts"' } } : undefined))
+    const out = await createJob(ME, { ...input, crew: null, contract }, { client: refusing.client })
+    expect(out.site).not.toBeNull()
+    expect(out.issues).toEqual([{ step: 'contract', ...contract, message: expect.stringMatching(/row-level security/) }])
+    const later = fakeDb()
+    expect((await retryIssue(ME, out.site!, out.issues[0]!, { client: later.client })).left).toEqual([])
+    expect(later.tables.contracts).toEqual([expect.objectContaining({ site_id: out.site!.id, contract_sum: 52800.5, gst_inclusive: true, contract_no: 'C-7' })])
+  })
+
   it('checks the input before writing anything', async () => {
     const fake = fakeDb()
     await expect(createJob(ME, { ...input, colour: '#123456' }, { client: fake.client })).rejects.toThrow(JobInputError)
@@ -745,5 +777,12 @@ describe('stashCreateIssues / takeCreateIssues', () => {
     })
     expect(() => stashCreateIssues('s-4', issues)).not.toThrow()
     expect(takeCreateIssues('s-4')).toEqual([])
+  })
+
+  it('reads a contract issue with its details, and one stashed before them (value and GST only)', () => {
+    const now: CreateIssue = { step: 'contract', sum: 1000, gstInclusive: false, contractNo: null, retentionPct: 5, paymentTermsDays: 30, message: 'timeout' }
+    const before = { step: 'contract', sum: 48500, gstInclusive: true, message: 'timeout' }
+    store.set('crewline.createIssues.s-5', JSON.stringify([now, before, { step: 'contract', message: 'nothing in it' }, { step: 'contract', sum: 'lots', message: 'x' }]))
+    expect(peekCreateIssues('s-5')).toEqual([now, before])
   })
 })

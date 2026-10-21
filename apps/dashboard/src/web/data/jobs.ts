@@ -20,7 +20,7 @@
  * Every write is read back. RLS turns a refused UPDATE into a success with
  * no rows; that reads here as refused, never as done.
  */
-import { builderOf, JOB_COLOURS, supabase, type JobSiteRow } from '../phone'
+import { builderOf, JOB_COLOURS, saveContract, supabase, type ContractEdit, type JobSiteRow } from '../phone'
 import { bookCrew, type BookResult } from './bookings'
 import {
   builderPatch,
@@ -41,7 +41,6 @@ import {
   type LinkSkip,
 } from './builders'
 import { CONTACT_LABEL, CONTACT_ROLES, PHONE_NEW_STATUS, RADIUS_MAX, RADIUS_MIN, type ContactRole } from './contract'
-import { saveContractValue } from './contractValue'
 
 /** The Supabase client. Every write takes an optional one, so tests can pass a fake. */
 export type Db = ReturnType<typeof supabase>
@@ -176,7 +175,7 @@ export function buildJobInsert(companyId: string, draft: JobDraft, builder: Buil
 // -------------------------------------------------------------- create issues
 
 /** A step of createJob after the job itself. */
-export type CreateStep = 'builder' | 'job' | 'contact' | 'supervisor' | 'crew' | 'link'
+export type CreateStep = 'builder' | 'job' | 'contact' | 'supervisor' | 'crew' | 'link' | 'contract'
 
 /**
  * Something createJob could not do, with what is needed to try it again.
@@ -198,7 +197,8 @@ export type CreateIssue =
   | { step: 'supervisor'; message: string; contactId: string }
   | { step: 'crew'; message: string; workerIds: string[]; from: string; to: string }
   | { step: 'link'; message: string; builder: BuilderRef; jobIds: string[] }
-  | { step: 'contract'; message: string; sum: number; gstInclusive: boolean }
+  /** What was to be saved on the contract (ContractEdit's fields). One stashed before the details, value and GST only, still reads. */
+  | ({ step: 'contract'; message: string } & ContractEdit)
 
 /** What an issue is about, in the words the job page uses. */
 export function issueLabel(issue: CreateIssue): string {
@@ -216,8 +216,27 @@ export function issueLabel(issue: CreateIssue): string {
     case 'link':
       return 'Other jobs for this builder'
     case 'contract':
-      return 'Contract value'
+      return 'Contract'
   }
+}
+
+/** A stashed contract issue's edit, or null when it holds none (anything malformed is no edit). */
+function contractEditIn(i: Record<string, unknown>): ContractEdit | null {
+  const edit: ContractEdit = {}
+  const ref = (v: unknown) => v === null || typeof v === 'string'
+  if (typeof i.sum === 'number') edit.sum = i.sum
+  else if (i.sum !== undefined) return null
+  if (typeof i.gstInclusive === 'boolean') edit.gstInclusive = i.gstInclusive
+  else if (i.gstInclusive !== undefined) return null
+  if (ref(i.contractNo)) edit.contractNo = i.contractNo as string | null
+  else if (i.contractNo !== undefined) return null
+  if (ref(i.orderNo)) edit.orderNo = i.orderNo as string | null
+  else if (i.orderNo !== undefined) return null
+  if (typeof i.retentionPct === 'number') edit.retentionPct = i.retentionPct
+  else if (i.retentionPct !== undefined) return null
+  if (typeof i.paymentTermsDays === 'number') edit.paymentTermsDays = i.paymentTermsDays
+  else if (i.paymentTermsDays !== undefined) return null
+  return Object.keys(edit).length ? edit : null
 }
 
 const STASH = (siteId: string) => `crewline.createIssues.${siteId}`
@@ -240,7 +259,7 @@ const isIssue = (x: unknown): x is CreateIssue => {
     case 'link':
       return !!i.builder && Array.isArray(i.jobIds)
     case 'contract':
-      return typeof i.sum === 'number' && typeof i.gstInclusive === 'boolean'
+      return contractEditIn(i) !== null
     default:
       return false
   }
@@ -295,8 +314,8 @@ export interface CreateJobInput extends JobDraft {
    * whose builder changed after it was offered is left alone (notLinked).
    */
   linkJobs?: Array<Pick<JobSiteRow, 'id'>>
-  /** The contract value (contractValue.ts), saved once the job exists. */
-  contract?: { sum: number; gstInclusive: boolean } | null
+  /** The contract (data/jobContract.ts, contractEditOf): its value and any details, saved once the job exists. */
+  contract?: ContractEdit | null
 }
 
 export interface CreateJobResult {
@@ -321,7 +340,8 @@ export interface CreateJobResult {
  *   5. book the crew
  *   6. link other jobs with the builder's name, if asked and if, read
  *      again, they still go by it (the rest come back in notLinked)
- *   7. save the contract value (contractValue.ts), if one was typed
+ *   7. save the contract (data/jobContract.ts), if one was typed: its value
+ *      and whatever details came with it
  * A failure at 1 still makes the job, with the builder name as typed. A
  * failure at 2 stops (nothing else is attempted, and the result has no
  * site). A failure after 2 is an issue; the job stays. Input errors throw
@@ -418,10 +438,10 @@ export async function createJob(me: { company_id: string }, input: CreateJobInpu
     }
   }
 
-  // 7. The contract value, on the job as it now stands (its builder included).
+  // 7. The contract, on the job as it now stands (its builder included).
   if (input.contract) {
     try {
-      await saveContractValue(site, input.contract, opts?.client)
+      await saveContract(site, input.contract, opts?.client)
     } catch (e) {
       issues.push({ step: 'contract', ...input.contract, message: messageOf(e) })
     }
@@ -557,9 +577,12 @@ export async function retryIssue(me: { company_id: string }, site: JobSiteRow, i
           return still({ ...issue, ...(failed && { jobIds: failed }), message: messageOf(e) })
         }
       }
-      case 'contract':
-        await saveContractValue(site, { sum: issue.sum, gstInclusive: issue.gstInclusive }, opts?.client)
+      case 'contract': {
+        const edit = contractEditIn(issue as unknown as Record<string, unknown>)
+        if (!edit) return done()
+        await saveContract(site, edit, opts?.client)
         return done()
+      }
     }
   } catch (e) {
     return still({ ...issue, message: messageOf(e) })

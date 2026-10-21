@@ -5,10 +5,13 @@
  *
  * The form is everything the crew's phones show about a job, in the order
  * somebody setting one up thinks of it: the job (name, what the work is,
- * colour), the builder and their people, where it is, when it runs and who
- * runs it. The card at the top is the job as the phone's Projects list will
- * show it, redrawn as it is typed. The map is the fence: nothing saves a new
- * job until a pin has been put down on purpose (FenceEditor).
+ * colour), the builder and their people, the builder's contract (owners
+ * only: the value, ex or inc GST, the contract and order numbers, retention
+ * and payment terms), where it is, when it runs and who runs it. The card at
+ * the top is the job as the phone's Projects list will show it, redrawn as
+ * it is typed. The map is the fence: nothing saves a new job until a pin has
+ * been put down on purpose (FenceEditor). Opened at /jobs/:id/edit#contract
+ * (the Project card's Change), the page starts at the contract.
  *
  * Keys: Cmd+Enter (Ctrl+Enter) saves from anywhere on the page. Esc leaves,
  * and with anything unsaved asks first; so does any link out of the page
@@ -60,6 +63,12 @@ export interface JobFormProps {
  */
 const SIDE_BY_SIDE = 1200
 
+/**
+ * Narrower than this, the contract value's box and its ex or inc GST choice
+ * go one above the other: side by side, the box is too narrow for its label.
+ */
+const VALUE_BESIDE_GST = 460
+
 /** The phone's own placeholder for what the work is (Projects.tsx NewProjectSheet). */
 const WORK_PLACEHOLDER = 'e.g. Bathrooms and ensuites, tiling + waterproofing'
 
@@ -81,8 +90,12 @@ function useNarrower(px: number): boolean {
 const FIELD_SELECTOR: Partial<Record<FieldKey, string>> = {
   name: '[name="name"]',
   workType: '[name="workType"]',
-  contractValue: '[name="contractValue"]',
   builder: '[name="builder"]',
+  contractValue: '[name="contractValue"]',
+  contractNo: '[name="contractNo"]',
+  orderNo: '[name="orderNo"]',
+  retentionPct: '[name="retentionPct"]',
+  paymentTermsDays: '[name="paymentTermsDays"]',
   address: '[name="address"]',
   fence: '[data-fence-address]',
   startsOn: '[name="startsOn"]',
@@ -94,6 +107,9 @@ const FIELD_SELECTOR: Partial<Record<FieldKey, string>> = {
   'contact.supervisor': '[name="supervisor.name"]',
   'contact.contract_admin': '[name="contract_admin.name"]',
 }
+
+/** Two boxes side by side, one above the other when the column is narrow. */
+const PAIR = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: space.sm, alignItems: 'start' } as const
 
 /** `steps`: the question came from the browser's Back, and Leave goes that many entries back. */
 type Asking = { kind: Check; sure: Check[] } | { kind: 'leave'; to: string; steps?: number }
@@ -110,6 +126,7 @@ export function JobForm({ me, source }: JobFormProps) {
   const others = useOtherFences(site?.id ?? null)
   const toast = useToast()
   const stacked = useNarrower(SIDE_BY_SIDE)
+  const gstUnder = useNarrower(VALUE_BESIDE_GST)
   const column = useRef<HTMLDivElement>(null)
   const mapBox = useRef<HTMLDivElement>(null)
   const [asking, setAsking] = useState<Asking | null>(null)
@@ -250,6 +267,14 @@ export function JobForm({ me, source }: JobFormProps) {
     if (!el) return
     el.scrollIntoView({ block: 'center', behavior: 'smooth' })
     if (el.matches('input, textarea, select')) el.focus({ preventScroll: true })
+  }, [])
+
+  // Opened from the Project card's contract (…/edit#contract): start at the contract.
+  useEffect(() => {
+    if (window.location.hash !== '#contract') return
+    const section = document.getElementById('contract')
+    section?.scrollIntoView({ block: 'start' })
+    section?.querySelector<HTMLInputElement>('input[name="contractValue"]')?.focus({ preventScroll: true })
   }, [])
 
   const submit = useCallback(
@@ -430,32 +455,6 @@ export function JobForm({ me, source }: JobFormProps) {
               error={f.errors.workType}
               hint="Heads the job on the schedule, and is the job description on every SWMS."
             />
-            <div data-contract-value="" style={{ display: 'flex', alignItems: 'flex-start', gap: space.sm }}>
-              <Field
-                label="Contract value"
-                name="contractValue"
-                optional
-                inputMode="decimal"
-                value={values.contractValue}
-                onChange={(e) => set('contractValue', e.target.value)}
-                placeholder="e.g. 48,500"
-                autoComplete="off"
-                error={f.errors.contractValue}
-                hint="What the job is worth. The phone’s Money tab measures the margin against it, and only owners see it."
-                style={{ flex: 1, minWidth: 0 }}
-              />
-              <div style={{ flex: 'none', paddingTop: 23 }}>
-                <Segmented
-                  label="Whether the contract value includes GST"
-                  value={values.contractGstInclusive ? 'inc' : 'ex'}
-                  onChange={(v) => set('contractGstInclusive', v === 'inc')}
-                  options={[
-                    { value: 'ex', label: 'ex GST' },
-                    { value: 'inc', label: 'inc GST' },
-                  ]}
-                />
-              </div>
-            </div>
             <ColourField value={values.colour} onChange={f.pickColour} automatic={site && !site.colour ? railOf({ id: site.id }) : null} counts={f.counts} error={f.errors.colour} />
           </Section>
 
@@ -490,6 +489,90 @@ export function JobForm({ me, source }: JobFormProps) {
               errors={f.errors}
               loadError={f.peopleError}
             />
+          </Section>
+
+          <Section title="Contract" id="contract" intro="The builder’s contract for this job. Only owners see it: here, on the job page and on the phone’s Money tab.">
+            <div
+              data-contract-value=""
+              style={{ display: 'flex', flexDirection: gstUnder ? 'column' : 'row', alignItems: gstUnder ? 'stretch' : 'flex-start', gap: space.sm }}
+            >
+              <Field
+                label="Contract value"
+                name="contractValue"
+                optional
+                inputMode="decimal"
+                value={values.contractValue}
+                onChange={(e) => set('contractValue', e.target.value)}
+                placeholder="e.g. 48,500"
+                autoComplete="off"
+                error={f.errors.contractValue}
+                hint="What the job is worth. The Money tab measures the margin against it."
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              {/* Beside the box, level with it (under its label); under the hint when narrow. */}
+              <div style={{ flex: 'none', paddingTop: gstUnder ? 0 : 23 }}>
+                <Segmented
+                  label="Whether the contract value includes GST"
+                  value={values.contractGstInclusive ? 'inc' : 'ex'}
+                  onChange={(v) => set('contractGstInclusive', v === 'inc')}
+                  block={gstUnder}
+                  options={[
+                    { value: 'ex', label: 'ex GST' },
+                    { value: 'inc', label: 'inc GST' },
+                  ]}
+                />
+              </div>
+            </div>
+            <div data-contract-refs="" style={PAIR}>
+              <Field
+                label="Contract number"
+                name="contractNo"
+                optional
+                value={values.contractNo}
+                onChange={(e) => set('contractNo', e.target.value)}
+                placeholder="e.g. C-2291"
+                autoComplete="off"
+                error={f.errors.contractNo}
+                hint="The builder’s number for the contract."
+              />
+              <Field
+                label="Order number"
+                name="orderNo"
+                optional
+                value={values.orderNo}
+                onChange={(e) => set('orderNo', e.target.value)}
+                placeholder="e.g. PO 88401"
+                autoComplete="off"
+                error={f.errors.orderNo}
+                hint="Their purchase order, if they sent one."
+              />
+            </div>
+            <div data-contract-terms="" style={PAIR}>
+              <Field
+                label="Retention"
+                name="retentionPct"
+                optional
+                inputMode="decimal"
+                value={values.retentionPct}
+                onChange={(e) => set('retentionPct', e.target.value)}
+                placeholder="e.g. 5%"
+                autoComplete="off"
+                error={f.errors.retentionPct}
+                hint="Kept from each claim until the job is done. Blank is none."
+              />
+              <Field
+                label="Payment terms"
+                name="paymentTermsDays"
+                optional
+                inputMode="numeric"
+                value={values.paymentTermsDays}
+                onChange={(e) => set('paymentTermsDays', e.target.value)}
+                placeholder="e.g. 30 days"
+                autoComplete="off"
+                error={f.errors.paymentTermsDays}
+                hint="Days from the invoice date until it is due. Blank is 30."
+              />
+            </div>
           </Section>
 
           <Section title="Site">
@@ -667,10 +750,16 @@ export function JobForm({ me, source }: JobFormProps) {
   )
 }
 
-/** A white card, titled. The fields inside carry the phone's tracked-caps labels, so the card's title is a plain heading above them. */
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/**
+ * A white card, titled. The fields inside carry the phone's tracked-caps
+ * labels, so the card's title is a plain heading above them. `intro` is a
+ * line under the title about the whole card; `id` is where a link can open
+ * the page at (…#contract).
+ */
+function Section({ title, id, intro, children }: { title: string; id?: string; intro?: ReactNode; children: ReactNode }) {
   return (
     <section
+      id={id}
       data-section={title}
       style={{
         display: 'flex',
@@ -681,9 +770,14 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
         border: `1px solid ${color.borderSoft}`,
         borderRadius: radius.lg,
         boxShadow: shadow.card,
+        // Opened at its id, it sits just below the column's top, not flush against it.
+        scrollMarginTop: space.xs,
       }}
     >
-      <h2 style={{ margin: 0, ...text.md, fontWeight: 600, letterSpacing: '-.01em', color: color.ink }}>{title}</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: space.xxs }}>
+        <h2 style={{ margin: 0, ...text.md, fontWeight: 600, letterSpacing: '-.01em', color: color.ink }}>{title}</h2>
+        {intro && <p style={{ margin: 0, ...text.sm, color: color.muted }}>{intro}</p>}
+      </div>
       {children}
     </section>
   )

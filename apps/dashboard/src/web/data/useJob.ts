@@ -15,10 +15,9 @@
  * asked for last lands.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { supabase, type JobSiteRow } from '../phone'
+import { loadContract, supabase, type JobContract, type JobSiteRow } from '../phone'
 import { CONTACT_COLS, contactsOf, driftOf, type BuilderRecord, type ContactRow } from './builders'
 import type { ContactRole } from './contract'
-import { loadContractValue, type ContractValue } from './contractValue'
 import { useFresh } from './useFresh'
 
 export interface JobData {
@@ -32,8 +31,8 @@ export interface JobData {
   allContacts: ContactRow[]
   /** client_name no longer says what the linked record is called (a phone edit). */
   drift: { onJob: string; record: string } | null
-  /** The contract value (contractValue.ts), or null when none has been entered. */
-  contract: ContractValue | null
+  /** The job's contract (data/jobContract.ts): its value and details, or null when none has been entered. */
+  contract: JobContract | null
   error: string | null
   reload: () => Promise<void>
 }
@@ -45,7 +44,7 @@ interface Loaded {
   builder: BuilderRecord | null
   contacts: Record<ContactRole, ContactRow | null>
   allContacts: ContactRow[]
-  contract: ContractValue | null
+  contract: JobContract | null
 }
 
 /** Read a job and its builder's people. Null when there is no such job (or it is not yours to see). */
@@ -68,7 +67,7 @@ export async function loadJob(id: string): Promise<Loaded | null> {
           c.from('builder_contacts').select(CONTACT_COLS).eq('builder_id', builderId).order('created_at').order('id'),
         ])
       : Promise.resolve([{ data: null, error: null }, { data: [], error: null }] as const),
-    loadContractValue(site.id, c),
+    loadContract(site.id, c),
   ])
   if (b.error) throw new Error(b.error.message)
   if (all.error) throw new Error(all.error.message)

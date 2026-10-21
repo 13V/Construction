@@ -15,21 +15,23 @@
  *    phone's way (useJob → contactsOf), with tel: and mailto: links. The
  *    tel: link is the phone's: the mobile with its spaces taken out.
  *  - The captain.
- *  - The contract value (data/contractValue.ts), the figure the phone's
- *    Money tab measures the margin against.
+ *  - The contract (data/jobContract.ts): the value the phone's Money tab
+ *    measures the margin against, and the builder's contract and order
+ *    numbers, retention and payment terms, worded as the Money tab words them.
  *
  * Nothing here writes. Every fact is changed on Edit job (or its tab), so
  * the one form that sets what the phone shows stays the one place it is set.
+ * The contract can be changed on the phone's Money tab too; this card shows
+ * that change the next time the job is read (on focus, or within a minute).
  */
 import type { HTMLAttributes, ReactNode } from 'react'
 import type { ContactRow } from '../data/builders'
 import { CONTACT_LABEL, CONTACT_ROLES, type ContactRole } from '../data/contract'
-import { moneyWords } from '../data/contractValue'
 import { fencePlaced } from '../data/readiness'
 import { useFresh } from '../data/useFresh'
 import type { JobData } from '../data/useJob'
 import type { CrewLite } from '../data/useJobs'
-import type { JobSiteRow } from '../phone'
+import { moneyWords, retentionWords, termsWords, type JobContract, type JobSiteRow } from '../phone'
 import { programmeLine, useProgrammes } from '../phone-features'
 import { linkProps, paths } from '../router'
 import { color, radius, shadow, space, text } from '../tokens'
@@ -100,6 +102,26 @@ const note = (s: ReactNode, tone: 'muted' | 'amber' | 'red' | 'green' = 'muted')
   <div style={{ ...text.sm, marginTop: 1, color: tone === 'muted' ? color.muted : color[tone] }}>{s}</div>
 )
 
+/** The contract's details under its value: label, then what is on file. */
+function ContractDetails({ contract }: { contract: JobContract }) {
+  const facts: Array<[key: string, label: string, value: ReactNode]> = [
+    ['contractNo', 'Contract no.', contract.contract_no ?? quiet('Not set')],
+    ['orderNo', 'Order no.', contract.order_no ?? quiet('Not set')],
+    ['retention', 'Retention', retentionWords(contract.retention_pct)],
+    ['terms', 'Payment terms', termsWords(contract.payment_terms_days)],
+  ]
+  return (
+    <dl data-contract-details="" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: `2px ${space.sm}px`, margin: `${space.xxs}px 0 0`, ...text.sm }}>
+      {facts.map(([key, label, value]) => (
+        <div key={key} data-contract-detail={key} style={{ display: 'contents' }}>
+          <dt style={{ color: color.muted }}>{label}</dt>
+          <dd style={{ margin: 0, minWidth: 0, color: color.ink, overflowWrap: 'anywhere' }}>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 function Person({ role, who }: { role: ContactRole; who: ContactRow | null }) {
   if (!who) return <div data-contact={role}>{quiet('Not set for this job')}</div>
   return (
@@ -129,8 +151,9 @@ export function ProjectCard({ site, job, dates, roster }: ProjectCardProps) {
   const builder = (site.client_name ?? '').trim()
   const placed = fencePlaced(site)
   const captain = site.captain_id ? roster?.get(site.captain_id) : null
-  const edit = (label: string) => (
-    <a {...linkProps(paths.jobEdit(site.id))} className="wb-link">
+  /** To Edit job; `at` is a section of it to open at (JobForm scrolls to #contract). */
+  const edit = (label: string, at = '') => (
+    <a {...linkProps(paths.jobEdit(site.id) + at)} className="wb-link">
       {label}
     </a>
   )
@@ -208,16 +231,19 @@ export function ProjectCard({ site, job, dates, roster }: ProjectCardProps) {
         {site.captain_id ? (captain?.name ?? quiet(roster ? 'No longer on the crew list' : ' ')) : quiet('No captain')}
       </Row>
 
-      <Row label="Contract value" data="contract" action={edit(job.contract ? 'Change' : 'Add')}>
+      <Row label="Contract" data="contract" action={edit(job.contract ? 'Change' : 'Add', '#contract')}>
         {job.contract ? (
           <>
-            {moneyWords(job.contract.contract_sum)} {job.contract.gst_inclusive ? 'inc GST' : 'ex GST'}
+            <span data-contract-value="">
+              {moneyWords(job.contract.contract_sum)} {job.contract.gst_inclusive ? 'inc GST' : 'ex GST'}
+            </span>
+            <ContractDetails contract={job.contract} />
             {note("The phone's Money tab measures the margin against it, with any approved variations.")}
           </>
         ) : (
           <>
             {quiet('Not entered')}
-            {note("Add it on Edit job, and the phone's Money tab can work out the margin.")}
+            {note("Add it on Edit job or on the phone's Money tab, and the Money tab can work out the margin.")}
           </>
         )}
       </Row>

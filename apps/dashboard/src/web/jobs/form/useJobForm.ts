@@ -35,6 +35,13 @@
  * When the builder in the box becomes a different builder, the people
  * fields that still show what was on file are swapped for the new
  * builder's; anything typed by hand is left as typed.
+ *
+ * THE CONTRACT (its value, ex or inc GST, the builder's contract and order
+ * numbers, retention and payment terms) is checked and saved by
+ * data/jobContract.ts, which the phone's Money tab uses too. Only what
+ * differs from the contract on file when the form opened is written, so a
+ * detail changed on a phone in the meantime is kept unless it is changed
+ * here as well.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -57,7 +64,6 @@ import {
   type LinkSkip,
 } from '../../data/builders'
 import { CONTACT_LABEL, CONTACT_ROLES, ONE_PER_BUILDER, PHONE_NEW_STATUS, type ContactRole } from '../../data/contract'
-import { contractValueProblem, moneyInput, parseMoney, saveContractValue, type ContractValue } from '../../data/contractValue'
 import {
   buildJobInsert,
   createJob,
@@ -71,7 +77,22 @@ import {
   type JobEdit,
 } from '../../data/jobs'
 import { nearDefaultCentre, samePoint, type FenceValue } from '../../map/fenceGeometry'
-import { builderOf, JOB_COLOURS, railOf, supabase, type JobSiteRow, type WorkerRow } from '../../phone'
+import {
+  BLANK_CONTRACT,
+  builderOf,
+  contractDraftOf,
+  contractEditOf,
+  contractProblems,
+  JOB_COLOURS,
+  railOf,
+  saveContract,
+  supabase,
+  type ContractDraft,
+  type ContractField,
+  type JobContract,
+  type JobSiteRow,
+  type WorkerRow,
+} from '../../phone'
 import { defaultPick, pickProblem, type CrewPick } from '../CrewPicker'
 
 // ------------------------------------------------------------------ shapes
@@ -91,7 +112,12 @@ export type Contacts = Record<ContactRole, ContactValue>
 /** Who is on file for each role, for the builder in the box. */
 export type OnFile = Record<ContactRole, ContactRow | null>
 
-export interface JobFormValues {
+/**
+ * The contract's boxes (ContractDraft: the value, ex or inc GST, the
+ * contract and order numbers, retention and payment terms) are the phone's
+ * too: data/jobContract.ts checks them and works out what to save for both.
+ */
+export interface JobFormValues extends ContractDraft {
   name: string
   workType: string
   /** One of JOB_COLOURS; null only for a phone-made job left on the phone's automatic colour. */
@@ -113,10 +139,6 @@ export interface JobFormValues {
   /** New jobs only: book a crew as the job is made. */
   bookCrew: boolean
   crew: CrewPick
-  /** Dollars as typed (contractValue.ts parseMoney), or '' for none. */
-  contractValue: string
-  /** Whether that figure includes GST. */
-  contractGstInclusive: boolean
 }
 
 /** The job being edited, as useJob loaded it. Taken once, when the form opens. */
@@ -126,8 +148,8 @@ export interface EditSource {
   contacts: Record<ContactRole, ContactRow | null>
   allContacts: ContactRow[]
   drift: { onJob: string; record: string } | null
-  /** The contract value on file (contractValue.ts), or null. */
-  contract: ContractValue | null
+  /** The contract on file (data/jobContract.ts), or null. */
+  contract: JobContract | null
 }
 
 /** Somebody who can captain a job, or be booked. */
@@ -155,7 +177,7 @@ export type FieldKey =
   | 'status'
   | 'captain'
   | 'crew'
-  | 'contractValue'
+  | ContractField
   | `contact.${ContactRole}`
 
 export type FieldErrors = Partial<Record<FieldKey, string>>
@@ -335,8 +357,7 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
         linkOthers: true,
         bookCrew: false,
         crew: { ...defaultPick(null), workerIds: [] },
-        contractValue: '',
-        contractGstInclusive: false,
+        ...BLANK_CONTRACT,
       }
     }
     const s = src.site
@@ -357,8 +378,7 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
       linkOthers: true,
       bookCrew: false,
       crew: blankCrew,
-      contractValue: src.contract ? moneyInput(src.contract.contract_sum) : '',
-      contractGstInclusive: src.contract?.gst_inclusive ?? false,
+      ...contractDraftOf(src.contract),
     }
   }, [src])
 
@@ -504,13 +524,17 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
     [values.contacts, onFile],
   )
 
-  /** The contract value to save: the amount typed, when it differs from what is on file. */
-  const contractEdit = useMemo(() => contractEditOf(values, initial), [values, initial])
+  /** The contract on file when the form opened: what the contract's boxes are measured against. */
+  const contractOnFile = src?.contract ?? null
+  /** The contract to save: only what differs from what is on file (data/jobContract.ts). */
+  const contractEdit = useMemo(() => contractEditOf(values, contractOnFile), [values, contractOnFile])
 
   const dirty = useMemo(() => {
     const v = values
     const i = initial
     const contacts = CONTACT_ROLES.some((role) => !sameContact(v.contacts[role], i.contacts[role]))
+    // Typed in a contract box, even when it cannot be saved yet: Save then says what is missing.
+    const contract = CONTRACT_BOXES.some((k) => trimmed(v[k]) !== trimmed(i[k]))
     const common =
       trimmed(v.name) !== trimmed(i.name) ||
       trimmed(v.workType) !== trimmed(i.workType) ||
@@ -522,7 +546,7 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
       v.captainId !== i.captainId ||
       contacts ||
       contractEdit !== null ||
-      trimmed(v.contractValue) !== trimmed(i.contractValue)
+      contract
     if (mode === 'create') return common || !!v.fence || v.status !== i.status || colourPicked || (v.bookCrew && v.crew.workerIds.length > 0)
     return common || fenceChanged || v.colour !== i.colour
   }, [values, initial, builderChanged, addressChanged, fenceChanged, mode, colourPicked, contractEdit])
@@ -543,16 +567,16 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
   const [tried, setTried] = useState(false)
 
   const errors = useMemo<FieldErrors>(() => {
-    const all = checkValues(values, { mode, changedRoles, builderName: resolved.name, contractOnFile: !!src?.contract })
+    const all = checkValues(values, { mode, changedRoles, builderName: resolved.name, contract: contractOnFile })
     if (tried) return all
     // Before the first Save, only what is wrong whatever comes next: an end
-    // before the start, or a contract value that is not an amount.
-    const out: FieldErrors = {}
+    // before the start, or a contract box that cannot be saved as typed
+    // (contractProblems says which, untried).
+    const out: FieldErrors = { ...contractProblems(values, contractOnFile) }
     if (all.startsOn) out.startsOn = all.startsOn
     if (all.endsOn) out.endsOn = all.endsOn
-    if (all.contractValue) out.contractValue = all.contractValue
     return out
-  }, [values, tried, changedRoles, resolved.name, mode, src])
+  }, [values, tried, changedRoles, resolved.name, mode, contractOnFile])
 
   // ---------------------------------------------------------------- saving
 
@@ -587,7 +611,7 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
    */
   const validate = useCallback((): FieldErrors => {
     setTried(true)
-    const out = checkValues(values, { mode, changedRoles, builderName: resolved.name, contractOnFile: !!src?.contract })
+    const out = checkValues(values, { mode, changedRoles, builderName: resolved.name, contract: contractOnFile })
     if (Object.keys(out).length) return out
     // The rules the writes themselves apply (data/jobs.ts), run now so nothing half-saves on them.
     try {
@@ -600,7 +624,7 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
       return { [field]: e.message }
     }
     return {}
-  }, [values, changedRoles, resolved.name, mode, me.company_id, site, initial, src])
+  }, [values, changedRoles, resolved.name, mode, me.company_id, site, initial, contractOnFile])
 
   /**
    * Save. Run after validate() and the questions. Resolves to where to go
@@ -693,10 +717,10 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
       if (supOff) edit.supervisor_contact_id = null
       const { site: row, written } = await updateJob(site, edit)
 
-      // 2b. The contract value, when it changed: only its two figures (contractValue.ts).
+      // 2b. The contract, when it changed: only what changed (data/jobContract.ts).
       if (contractEdit) {
         try {
-          await saveContractValue(row, contractEdit)
+          await saveContract(row, contractEdit)
         } catch (e) {
           issues.push({ step: 'contract', ...contractEdit, message: e instanceof Error ? e.message : String(e) })
         }
@@ -761,7 +785,7 @@ export function useJobForm({ me, source }: { me: WorkerRow; source: EditSource |
           contract: contractEdit !== null,
         }),
       )
-      const what = savedWhat(written, { pinMoved, radiusChanged, addressChanged }, changedRoles.length > 0 || contractEdit !== null)
+      const what = savedWhat(written, { pinMoved, radiusChanged, addressChanged }, { people: changedRoles.length > 0, contract: contractEdit !== null })
       return {
         siteId: site.id,
         message: [issues.length ? 'Saved, but not all of it: the job page says what did not save, with Retry.' : what, ...notes].join(' '),
@@ -826,12 +850,15 @@ function ownSupervisor(src: EditSource): ContactRow | null {
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+/** The contract's boxes that hold text (its GST basis is a choice, not a box). */
+const CONTRACT_BOXES = ['contractValue', 'contractNo', 'orderNo', 'retentionPct', 'paymentTermsDays'] as const satisfies readonly ContractField[]
+
 /**
  * What the form would refuse, field by field. Pure. The writes check the
  * job's own columns again (buildJobInsert, jobPatch); this is what a person
- * can fix before anything is sent.
+ * can fix before anything is sent. `contract` is the contract on file.
  */
-export function checkValues(v: JobFormValues, ctx: { mode: FormMode; changedRoles: ContactRole[]; builderName: string; contractOnFile?: boolean }): FieldErrors {
+export function checkValues(v: JobFormValues, ctx: { mode: FormMode; changedRoles: ContactRole[]; builderName: string; contract?: JobContract | null }): FieldErrors {
   const out: FieldErrors = {}
   if (!v.name.trim()) out.name = 'The job needs a name.'
   if (!v.fence) out.fence = 'Place the fence on the map: search the address, or click where the job is.'
@@ -849,25 +876,11 @@ export function checkValues(v: JobFormValues, ctx: { mode: FormMode; changedRole
     const p = pickProblem(v.crew)
     if (p) out.crew = p
   }
-  const money = contractValueProblem(v.contractValue)
-  if (money) out.contractValue = money
-  // A value on file is changed here, not taken off: the contract row holds more than this form shows.
-  else if (ctx.mode === 'edit' && !trimmed(v.contractValue) && ctx.contractOnFile) out.contractValue = 'Type 0 to show the job has no contract value.'
+  // The contract, as the phone checks it: a value on file is changed here,
+  // not taken off (the row holds more than this form shows), and a new
+  // contract's details need its value.
+  Object.assign(out, contractProblems(v, ctx.contract ?? null, { tried: true }))
   return out
-}
-
-/**
- * The contract value to save, when the box says something other than what
- * is on file: a different amount, or the same amount with GST the other
- * way. Null when there is nothing to save (blank, unchanged, or not an
- * amount, which checkValues reports).
- */
-export function contractEditOf(v: JobFormValues, initial: JobFormValues): { sum: number; gstInclusive: boolean } | null {
-  const sum = parseMoney(v.contractValue)
-  if (sum === null || Number.isNaN(sum) || contractValueProblem(v.contractValue)) return null
-  const was = parseMoney(initial.contractValue)
-  if (was === sum && v.contractGstInclusive === initial.contractGstInclusive) return null
-  return { sum, gstInclusive: v.contractGstInclusive }
 }
 
 /**
@@ -951,7 +964,7 @@ export interface Settled {
   roles: ContactRole[]
   /** The edit set or took off the job's site supervisor, or moved it to a builder whose supervisor the old one cannot be. */
   supervisor: boolean
-  /** The edit saved the contract value, or now reports it as not saved. */
+  /** The edit saved the contract, or now reports it as not saved. */
   contract?: boolean
 }
 
@@ -1038,8 +1051,15 @@ function fieldOf(field: string): FieldKey {
  * fence is named apart, because a moved fence is the one change that works
  * at once (api/ping.ts reads it afresh on every location check), and an
  * address saved with the pin where it was must never read as a fence moved.
+ * The contract is the office's: on its own, it is never said to reach the crew.
  */
-function savedWhat(written: string[], fence: { pinMoved: boolean; radiusChanged: boolean; addressChanged: boolean }, people: boolean): string {
+export function savedWhat(
+  written: string[],
+  fence: { pinMoved: boolean; radiusChanged: boolean; addressChanged: boolean },
+  saved: { people: boolean; contract: boolean },
+): string {
+  if (saved.contract && !saved.people && written.length === 0) return 'Saved the contract. The Money tab on the phone shows it next time it is opened.'
+  const people = saved.people || saved.contract
   const where = fence.pinMoved
     ? fence.addressChanged
       ? 'the address and the fence'

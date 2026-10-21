@@ -89,3 +89,21 @@ export { readableAuthError } from '../worker/simple/SignIn'
 // ---- Money: phone-side code the website's Money tab uses.
 
 // ---- Contract: phone-side code for the contract details both apps edit.
+
+// The job's contract (its row in contracts): read, checked, saved and worded
+// the same way on New job, Edit job and the Project card as on the phone's Money tab.
+export {
+  BLANK_CONTRACT,
+  contractDraftOf,
+  contractEditOf,
+  contractProblems,
+  loadContract,
+  moneyWords,
+  retentionWords,
+  saveContract,
+  termsWords,
+  type ContractDraft,
+  type ContractEdit,
+  type ContractField,
+  type JobContract,
+} from '../data/jobContract'
