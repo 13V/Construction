@@ -1,8 +1,9 @@
 /**
- * Everything the Chat page's list needs, kept fresh: this person's channels
- * and the newest 400 messages people wrote (the phone's inbox, with whether
- * each is a photo), the crew by id (names, initials, trades) and the jobs by
- * id (names, colours, whether archived).
+ * Everything the Chat page's list needs, kept fresh: this person's channels,
+ * the newest 400 messages people wrote and each conversation's last word
+ * however old it is (chat_last_v; the phone's inbox, with whether each is a
+ * photo), the crew by id (names, initials, trades) and the jobs by id (names,
+ * colours, whether archived).
  *
  * Read on opening, again when the window comes back and every minute while
  * it is in view, and live from realtime between those, the way the phone's

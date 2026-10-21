@@ -27,6 +27,8 @@ import {
   isMine,
   jobInit,
   jobMessageInsert,
+  LAST_VIEW,
+  lastColsOf,
   mergeThread,
   otherIdOf,
   PAGE_INBOX_COLS,
@@ -44,11 +46,14 @@ import {
   timeLabel,
   UNREAD_COLS,
   unreadCount,
+  viewMissing,
   waitingOf,
+  withLastWords,
   withMessage,
   type ChatChannel,
   type ChatMessage,
   type Db,
+  type LastWord,
 } from './chat'
 
 // Storage goes through the phone's own helpers; here they are stand-ins, so
@@ -260,12 +265,15 @@ afterEach(() => {
 
 describe("the phone's inbox reads (useChannelWaiting)", () => {
   const promiseAll = callsOf(waitingHook, 'all')
-  it('reads channels and messages together, as the phone does', () => {
+  it('reads channels, messages and each conversation\'s last word together, as the phone does', () => {
     expect(promiseAll).toHaveLength(1)
+    const reads = promiseAll[0]!.arguments[0]!
+    expect(ts.isArrayLiteralExpression(reads) && reads.elements.length).toBe(3)
   })
 
   const channelsChain = chainFrom(waitingHook, 'channels')
   const messagesChain = chainFrom(waitingHook, 'messages')
+  const lastChain = chainFrom(waitingHook, LAST_VIEW)
 
   it('the same channels: every job and direct message', () => {
     expect(channelsChain.map((s) => s.method)).toEqual(['from', 'select', 'in'])
@@ -278,18 +286,30 @@ describe("the phone's inbox reads (useChannelWaiting)", () => {
     expect(INBOX_LIMIT).toBe(limit)
   })
 
+  it('the same last words: chat_last_v, every column the messages read but kind, with nothing left out', () => {
+    expect(LAST_VIEW).toBe('chat_last_v')
+    expect(lastChain.map((s) => s.method)).toEqual(['from', 'select'])
+    expect(run<string>('', {}, lastChain[1]!.args)).toBe(lastColsOf(INBOX_COLS))
+    expect(lastColsOf(INBOX_COLS)).toBe('id, channel_id, author_id, body, created_at')
+    // Every column a read asks of the view is in the view (its contract: channel_id, id, author_id, body, attachment_path, created_at).
+    const VIEW = ['channel_id', 'id', 'author_id', 'body', 'attachment_path', 'created_at']
+    for (const cols of [INBOX_COLS, PAGE_INBOX_COLS, UNREAD_COLS]) for (const col of lastColsOf(cols).split(', ')) expect(VIEW).toContain(col)
+  })
+
   for (const [label, cols] of [
     ["the phone's own columns", INBOX_COLS],
     ["the Chat page's", PAGE_INBOX_COLS],
     ["the rail's", UNREAD_COLS],
   ] as const) {
     it(`readInbox with ${label} asks exactly what the phone asks, bar the columns`, async () => {
-      const { calls, client } = recorder((table) => ({ data: table === 'channels' ? CHANNELS : MESSAGES, error: null }))
+      const { calls, client } = recorder((table) => ({ data: table === 'channels' ? CHANNELS : table === LAST_VIEW ? [] : MESSAGES, error: null }))
       await readInbox(ME, cols, client)
       const phoneChannels = evaluated(channelsChain)
       const phoneMessages = evaluated(messagesChain)
+      const phoneLast = evaluated(lastChain)
       expect(callsTo(calls, 'channels')).toEqual(phoneChannels)
       expect(callsTo(calls, 'messages')).toEqual(phoneMessages.map(([m, a]) => (m === 'select' ? [m, [cols]] : [m, a])))
+      expect(callsTo(calls, LAST_VIEW)).toEqual(phoneLast.map(([m, a]) => (m === 'select' ? [m, [lastColsOf(cols)]] : [m, a])))
     })
   }
 
@@ -313,8 +333,123 @@ describe("the phone's inbox reads (useChannelWaiting)", () => {
   })
 
   it('a failed read is an error, not an empty inbox', async () => {
-    const { client } = recorder((table) => (table === 'messages' ? { data: null, error: { message: 'JWT expired' } } : { data: CHANNELS, error: null }))
+    const { client } = recorder((table) => (table === 'messages' ? { data: null, error: { message: 'JWT expired' } } : { data: table === 'channels' ? CHANNELS : [], error: null }))
     await expect(readInbox(ME, INBOX_COLS, client)).rejects.toThrow('JWT expired')
+  })
+})
+
+// ------------------------------------------------------------------ the last words (chat_last_v)
+
+describe("each conversation's last word, however old (chat_last_v)", () => {
+  const phoneWithLastWords = run<(messages: ChatMessage[], last: LastWord[]) => ChatMessage[]>(statement(decl(CHAT, 'withLastWords')), {}, 'withLastWords')
+  const perChannelOf = run<(channels: ChatChannel[], messages: ChatMessage[]) => Map<string, ChatMessage[]>>('', {}, `(channels, messages) => (${memoOf(waitingHook, 'perChannel')})()`)
+  const waitingFor = run<(perChannel: Map<string, ChatMessage[]>, me: { id: string }) => Map<string, number>>('', {}, `(perChannel, me) => (${memoOf(waitingHook, 'waiting')})()`)
+  const phoneList = run<
+    (scope: {
+      channels: ChatChannel[]
+      perChannel: Map<string, ChatMessage[]>
+      waiting: Map<string, number>
+      people: Map<string, { name: string }>
+      siteById: Map<string, { id: string; name: string }>
+      me: { id: string }
+    }) => { unreadList: Array<{ id: string; preview: string; waiting: number }>; readList: Array<{ id: string; preview: string; waiting: number }> }
+  >('', { timeLabel: phone.timeLabel, otherIdOf: phone.otherIdOf }, `({ channels, perChannel, waiting, people, siteById, me }) => (${memoOf(simpleChat, '{ unreadList, readList }')})()`)
+
+  const mine = CHANNELS.filter((c) => isMine(c, ME.id))
+  const lastOf = (m: ChatMessage): LastWord => ({ id: m.id, channel_id: m.channel_id, author_id: m.author_id, body: m.body, created_at: m.created_at })
+  /** As the database sends the window: newest first. */
+  const newestFirst = (list: ChatMessage[]) => [...list].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+  /** What chat_last_v says for `list`: each channel's newest. */
+  const lastWordsOf = (list: ChatMessage[]) => {
+    const out: LastWord[] = []
+    for (const m of newestFirst(list)) if (!out.some((v) => v.channel_id === m.channel_id)) out.push(lastOf(m))
+    return out
+  }
+
+  // Seacombe gardens and the DM with Maria last spoke before the company's
+  // newest 400: nothing of theirs is in the window, only in the view.
+  const OLD_SEACOMBE = msg('c-seacombe', DEAN, '2026-08-03T01:00:00.000Z', 'Grout colour for the ensuite?')
+  const OLD_MARIA = msg('c-dm-maria', ME.id, '2026-08-01T01:00:00.000Z', 'See you Monday')
+  const WINDOW = newestFirst(MESSAGES.filter((m) => m.channel_id !== 'c-dm-maria'))
+  /** The view for the whole company: the window's channels, and the two old ones. */
+  const VIEW = lastWordsOf([...WINDOW, OLD_SEACOMBE, OLD_MARIA])
+
+  it('puts them in exactly as the phone does', () => {
+    const cases: Array<[string, ChatMessage[], LastWord[]]> = [
+      ['old conversations past the window', WINDOW, VIEW],
+      ['every last word already in the window', newestFirst(MESSAGES), lastWordsOf(MESSAGES)],
+      ['no view (before schema_v42)', WINDOW, []],
+      ['a message the view saw that the window read just missed', WINDOW, [lastOf(msg('c-lot42', MARIA, '2026-10-21T04:59:00.000Z', 'Newer than the window'))]],
+      ['nothing at all', [], []],
+      ['a view and no window', [], [lastOf(OLD_SEACOMBE)]],
+    ]
+    for (const [label, window, last] of cases) {
+      const w = withLastWords(window, last)
+      expect(w, label).toEqual(phoneWithLastWords(window, last))
+      // Newest first, each message once, every one a person's.
+      expect(w.map((m) => m.id), label).toEqual([...new Set(w.map((m) => m.id))])
+      for (let i = 1; i < w.length; i++) expect(Date.parse(w[i - 1]!.created_at) >= Date.parse(w[i]!.created_at), label).toBe(true)
+      expect(w.every((m) => m.kind === 'user'), label).toBe(true)
+    }
+    // Nothing new: the very same list, so nothing re-renders.
+    expect(withLastWords(MESSAGES, [lastOf(MESSAGES[0]!)])).toBe(MESSAGES)
+  })
+
+  it('an old conversation keeps its last message and, when someone else had the last word, needs a reply on both apps', () => {
+    const merged = withLastWords(WINDOW, VIEW)
+    const perChannel = byChannel(mine, merged)
+    expect(perChannel).toEqual(perChannelOf(mine, merged))
+    const waiting = waitingOf(perChannel, ME.id)
+    expect(waiting).toEqual(waitingFor(perChannel, ME))
+    const siteById = new Map(SITES.map((x) => [x.id, x]))
+    const w = summarise({ channels: mine, perChannel, waiting, people: PEOPLE, siteById, meId: ME.id })
+    const p = phoneList({ channels: mine, perChannel, waiting, people: PEOPLE, siteById, me: ME })
+    expect(w.needsReply).toEqual(p.unreadList)
+    expect(w.upToDate).toEqual(p.readList)
+
+    const seacombe = [...w.needsReply, ...w.upToDate].find((r) => r.id === 'c-seacombe')!
+    expect(seacombe).toMatchObject({ preview: 'Dean: Grout colour for the ensuite?', waiting: 1 })
+    expect(w.needsReply.map((r) => r.id)).toContain('c-seacombe')
+    const maria = w.upToDate.find((r) => r.id === 'c-dm-maria')!
+    expect(maria).toMatchObject({ preview: 'You: See you Monday', waiting: 0 })
+    expect(countUnread({ channels: mine, messages: merged }, ME.id)).toBe(countUnread({ channels: mine, messages: WINDOW }, ME.id) + 1)
+
+    // Without the view, the bug: "No messages yet", and not waiting on anybody.
+    const before = summarise({ channels: mine, perChannel: byChannel(mine, WINDOW), waiting: waitingOf(byChannel(mine, WINDOW), ME.id), people: PEOPLE, siteById, meId: ME.id })
+    expect([...before.needsReply, ...before.upToDate].find((r) => r.id === 'c-seacombe')).toMatchObject({ preview: 'No messages yet', waiting: 0 })
+  })
+
+  it('readInbox puts the view in, and the rail counts the old conversation', async () => {
+    const { client } = recorder((table) => ({ data: table === 'channels' ? CHANNELS : table === LAST_VIEW ? VIEW : WINDOW, error: null }))
+    const inbox = await readInbox(ME, INBOX_COLS, client)
+    expect(inbox.messages).toEqual(withLastWords(WINDOW, VIEW))
+    expect(countUnread(inbox, ME.id)).toBe(countUnread({ channels: mine, messages: WINDOW }, ME.id) + 1)
+  })
+
+  for (const error of [
+    { code: 'PGRST205', message: "Could not find the table 'public.chat_last_v' in the schema cache" },
+    { code: '42P01', message: 'relation "public.chat_last_v" does not exist' },
+  ]) {
+    it(`a database without the view yet (${error.code}) reads as the newest 400, without a word`, async () => {
+      expect(viewMissing(error)).toBe(true)
+      const { client } = recorder((table) => (table === LAST_VIEW ? { data: null, error } : { data: table === 'channels' ? CHANNELS : WINDOW, error: null }))
+      const inbox = await readInbox(ME, UNREAD_COLS, client)
+      expect(inbox.messages).toEqual(WINDOW)
+      expect(inbox.channels).toEqual(mine)
+    })
+  }
+
+  it('any other failure of the view is an error, as a failed read of the messages is', async () => {
+    for (const error of [{ code: '57014', message: 'canceling statement due to statement timeout' }, { code: 'PGRST301', message: 'JWT expired' }, { message: 'TypeError: Failed to fetch' }]) {
+      expect(viewMissing(error)).toBe(false)
+      const { client } = recorder((table) => (table === LAST_VIEW ? { data: null, error } : { data: table === 'channels' ? CHANNELS : WINDOW, error: null }))
+      await expect(readInbox(ME, INBOX_COLS, client)).rejects.toThrow(error.message)
+    }
+  })
+
+  it('the phone falls back to the newest 400 whenever the view cannot be read', () => {
+    // It ignores a failed read of either other table the same way (data ?? []).
+    expect(waitingHook.getText(CHAT)).toContain('withLastWords((ms.data as ChatMessage[]) ?? [], last.error ? [] : ((last.data as LastWord[]) ?? []))')
   })
 })
 

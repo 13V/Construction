@@ -1,9 +1,11 @@
 /**
  * The rail's Chat count: how many conversations are waiting on a reply from
  * the person signed in. The phone's tab bar badge (useUnreadCount in
- * worker/simple/Chat.tsx), worked out the same way from the same two reads
- * (data/chat.ts, pinned to the phone by chat.test.ts), so the website and
- * the phone show the same number.
+ * worker/simple/Chat.tsx), worked out the same way from the same reads
+ * (data/chat.ts readInbox, pinned to the phone by chat.test.ts), so the
+ * website and the phone show the same number. A conversation counts while
+ * someone else has the last word, however long ago that was: each one's last
+ * word comes from chat_last_v, not only from the company's newest 400.
  *
  * The rail is loaded first and stays mounted, as the phone's tab bar does,
  * so this keeps itself fresh: read again whenever `refreshKey` changes (the

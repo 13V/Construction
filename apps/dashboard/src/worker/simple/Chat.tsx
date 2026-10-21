@@ -92,6 +92,27 @@ interface ChatMessage {
   created_at: string
 }
 
+/** A row of chat_last_v (schema_v42): one channel's newest message from a person. Every row is kind 'user', so the view has no kind. */
+type LastWord = Omit<ChatMessage, 'kind'>
+
+/**
+ * The newest 400 messages with each conversation's last word put in where
+ * the 400 do not reach back that far: newest first, each message once.
+ *
+ * The 400 are the company's newest, so a conversation that went quiet while
+ * the others talked fell out of them, showed "No messages yet" and dropped
+ * out of NEEDS A REPLY (and the tab bar's count) even when somebody was still
+ * waiting on an answer. chat_last_v has every channel's last word however old
+ * it is. Until schema_v42 is applied the view is not there, its read fails,
+ * `last` is empty, and the 400 are all there is, as before.
+ */
+const withLastWords = (messages: ChatMessage[], last: LastWord[]): ChatMessage[] => {
+  const seen = new Set(messages.map((m) => m.id))
+  const extra = last.filter((m) => !seen.has(m.id)).map((m): ChatMessage => ({ ...m, kind: 'user' }))
+  if (!extra.length) return messages
+  return [...messages, ...extra].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+}
+
 interface ChannelSummaryBase {
   id: string
   title: string
@@ -125,14 +146,17 @@ function useChannelWaiting(me: WorkerRow) {
     void Promise.all([
       client.from('channels').select('id, kind, site_id, name').in('kind', ['site', 'dm']),
       client.from('messages').select('id, channel_id, author_id, kind, body, created_at').eq('kind', 'user').order('created_at', { ascending: false }).limit(400),
-    ]).then(([ch, ms]) => {
+      client.from('chat_last_v').select('id, channel_id, author_id, body, created_at'),
+    ]).then(([ch, ms, last]) => {
       if (cancelled) return
       const rows = (ch.data as ChatChannel[]) ?? []
       // channels_read has no membership check — a DM row is visible
       // company-wide — so "mine" is decided here, off the name the channel
       // was created under, the same way ui/Chat.tsx decides it.
       setChannels(rows.filter((c) => c.kind === 'site' || c.name.split(':').includes(me.id)))
-      setMessages((ms.data as ChatMessage[]) ?? [])
+      // Each conversation's last word, however long ago. Before schema_v42
+      // the view is missing (PGRST205) and this is the newest 400 alone.
+      setMessages(withLastWords((ms.data as ChatMessage[]) ?? [], last.error ? [] : ((last.data as LastWord[]) ?? [])))
       setLoading(false)
     })
     return () => {

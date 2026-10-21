@@ -15,6 +15,10 @@
  * one. Opening a thread writes nothing, on either surface; a conversation
  * stops waiting when you answer it. So nothing here marks anything read,
  * and the count on the website's rail is the count on the phone's tab bar.
+ * Who had the last word comes from chat_last_v (schema_v42) as well as from
+ * the newest 400 messages, so a conversation that went quiet a while ago
+ * still shows its last message and still waits; before that view is applied
+ * the read of it fails quietly and the 400 are all there is.
  *
  * Channels. A job's channel is made by the database when the job is (the
  * job_sites_channel trigger, schema_v2); the phone only ever looks it up by
@@ -68,6 +72,46 @@ export const PAGE_INBOX_COLS = `${INBOX_COLS}, attachment_path`
 /** The rail's count: the same messages, without what they say. */
 export const UNREAD_COLS = 'id, channel_id, author_id, kind, created_at'
 
+/**
+ * useChannelWaiting's third read: chat_last_v (schema_v42), one row for each
+ * channel the reader may read, its newest message from a person (channel_id,
+ * id, author_id, body, attachment_path, created_at).
+ */
+export const LAST_VIEW = 'chat_last_v'
+
+/** The view's columns for a read of `cols`: the same, less kind (every row in it is a person's message, and it has no such column). */
+export const lastColsOf = (cols: string) =>
+  cols
+    .split(',')
+    .map((c) => c.trim())
+    .filter((c) => c && c !== 'kind')
+    .join(', ')
+
+/**
+ * The view is not in this database yet: schema_v42 has not been applied.
+ * PostgREST says "not in the schema cache" (PGRST205); an older one passed on
+ * Postgres's "does not exist" (42P01). Then the inbox is the newest 400, as
+ * it was before the view, and nothing is said about it.
+ */
+export const viewMissing = (error: { code?: string } | null | undefined) => error?.code === 'PGRST205' || error?.code === '42P01'
+
+/** A row of the view: a message, less its kind. */
+export type LastWord<M extends CountedMessage = ChatMessage> = Omit<M, 'kind'>
+
+/**
+ * The newest 400 with each conversation's last word put in where the 400 do
+ * not reach back that far: newest first, each message once (useChannelWaiting's
+ * withLastWords). Without it a conversation that went quiet while the others
+ * talked showed "No messages yet" and dropped out of "Needs a reply", and the
+ * rail's count, with somebody still waiting on an answer.
+ */
+export function withLastWords<M extends CountedMessage>(messages: M[], last: ReadonlyArray<LastWord<M>>): M[] {
+  const seen = new Set(messages.map((m) => m.id))
+  const extra = last.filter((m) => !seen.has(m.id)).map((m) => ({ ...m, kind: 'user' }) as M)
+  if (!extra.length) return messages
+  return [...messages, ...extra].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+}
+
 export interface Inbox<M extends CountedMessage = ChatMessage> {
   /** This person's channels: every job's, and their own direct messages. */
   channels: ChatChannel[]
@@ -81,20 +125,25 @@ export const isMine = (c: Pick<ChatChannel, 'kind' | 'name'>, meId: string) => c
 export const mineOnly = <C extends Pick<ChatChannel, 'kind' | 'name'>>(rows: C[], meId: string): C[] => rows.filter((c) => isMine(c, meId))
 
 /**
- * The phone's two inbox reads (useChannelWaiting), with `cols` of the
+ * The phone's three inbox reads (useChannelWaiting), with `cols` of the
  * messages: the phone's, the page's (with attachment_path) or the rail's
- * (without the words). Throws when either read fails: a failed read is not
- * "nothing waiting".
+ * (without the words). The channels; the newest 400 messages; and each
+ * channel's last word from chat_last_v, put in where the 400 do not reach.
+ * Throws when a read fails, a failed read not being "nothing waiting", except
+ * that a database without the view yet (viewMissing) reads as the 400 alone.
  */
 export async function readInbox<M extends CountedMessage = ChatMessage>(me: Pick<WorkerRow, 'id'>, cols: string = INBOX_COLS, client?: Db): Promise<Inbox<M>> {
   const c = db(client)
-  const [ch, ms] = await Promise.all([
+  const [ch, ms, last] = await Promise.all([
     c.from('channels').select(CHANNEL_COLS).in('kind', ['site', 'dm']),
     c.from('messages').select(cols).eq('kind', 'user').order('created_at', { ascending: false }).limit(INBOX_LIMIT),
+    c.from(LAST_VIEW).select(lastColsOf(cols)),
   ])
   if (ch.error) throw new Error(ch.error.message)
   if (ms.error) throw new Error(ms.error.message)
-  return { channels: mineOnly((ch.data ?? []) as unknown as ChatChannel[], me.id), messages: (ms.data ?? []) as unknown as M[] }
+  if (last.error && !viewMissing(last.error)) throw new Error(last.error.message)
+  const lastWords = last.error ? [] : ((last.data ?? []) as unknown as LastWord<M>[])
+  return { channels: mineOnly((ch.data ?? []) as unknown as ChatChannel[], me.id), messages: withLastWords((ms.data ?? []) as unknown as M[], lastWords) }
 }
 
 /** Each channel's messages, newest first, for the channels in the list only (useChannelWaiting's perChannel). */
