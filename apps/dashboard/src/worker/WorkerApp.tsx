@@ -2214,6 +2214,13 @@ interface ReceiptForm {
   receiptPath: string | null
 }
 
+/**
+ * Dollars as typed: "1,100" and "$1,100.50" read as 1100 and 1100.5, and a
+ * blank as 0. NaN when it is not a number, which save() refuses rather than
+ * filing the cost at $0.
+ */
+const dollarsOf = (typed: string) => Number(typed.trim().replace(/^\$/, '').replace(/[,\s]/g, ''))
+
 function blankReceiptForm(siteId: string): ReceiptForm {
   return {
     siteId,
@@ -2273,6 +2280,8 @@ function ReceiptScreen({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  /** The photo went up but the server has no reader switched on: say so, rather than leave the form silently empty. */
+  const [readOff, setReadOff] = useState(false)
 
   useEffect(() => {
     if (currentSiteId) setForm((f) => ({ ...f, siteId: currentSiteId }))
@@ -2291,6 +2300,7 @@ function ReceiptScreen({
   async function handleFile(file: File) {
     setError(null)
     setSaved(false)
+    setReadOff(false)
     setExtracting(true)
     try {
       const path = objectPath(me.company_id, form.siteId || 'unassigned', file.name)
@@ -2315,7 +2325,11 @@ function ReceiptScreen({
         }),
       })
 
-      if (res.status === 501) return // AI extraction not configured — form stays fully usable by hand.
+      // AI extraction not configured: the form stays fully usable by hand, and says so.
+      if (res.status === 501) {
+        setReadOff(true)
+        return
+      }
 
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null
@@ -2379,6 +2393,10 @@ function ReceiptScreen({
       setError('Vendor, date, and amount are required.')
       return
     }
+    if (!Number.isFinite(dollarsOf(form.amount)) || !Number.isFinite(dollarsOf(form.tax))) {
+      setError('Amount and tax need to be numbers, like 1,100.50.')
+      return
+    }
     setSaving(true)
     setError(null)
     const { error: err } = await supabase()
@@ -2389,8 +2407,8 @@ function ReceiptScreen({
         submitted_by: me.id,
         vendor: form.vendor.trim(),
         spent_on: form.spentOn,
-        amount: Number(form.amount) || 0,
-        tax: Number(form.tax) || 0,
+        amount: dollarsOf(form.amount),
+        tax: dollarsOf(form.tax),
         category: form.category || null,
         receipt_path: form.receiptPath,
         status: 'needs_review',
@@ -2454,6 +2472,8 @@ function ReceiptScreen({
             style={{ display: 'none' }}
           />
         </label>
+
+        {readOff && !extracting && <Banner tone="info">Photo attached. Reading it is not set up yet, so fill in the details below.</Banner>}
 
         {form.aiExtracted && !extracting && (
           <Banner tone="info">

@@ -7,6 +7,7 @@ import readerSrc from '../../../api/parse-receipt.ts?raw'
 import moneySrc from './money.ts?raw'
 import { api, BUCKET_RECEIPTS, removeFile, uploadFile } from '../phone'
 import * as web from './money'
+import { JOB_CONTRACT_COLS, loadContract } from '../../data/jobContract'
 import type { CostForm, Db, ExpenseRead, MoneyReads, ProfitRow, Reading } from './money'
 
 // Storage goes through the phone's own helpers; here they are stand-ins, so
@@ -147,6 +148,8 @@ type PhoneState = {
   sublets: Array<{ name: string; cost: number }>
   wageLines: Array<{ k: string; v: string }>
   loading: boolean
+  contract?: unknown
+  contractErr?: string | null
 }
 function phoneLoad(answers: unknown[]): PhoneState {
   const out = {} as PhoneState
@@ -166,6 +169,9 @@ function phoneLoad(answers: unknown[]): PhoneState {
       setSublets: set('sublets'),
       setWageLines: set('wageLines'),
       setLoading: set('loading'),
+      setContract: set('contract'),
+      setContractErr: set('contractErr'),
+      reloaded: { current: null },
       shortDate: PH.shortDate,
       money: PH.money,
     },
@@ -296,6 +302,7 @@ function phoneAnswers(r: MoneyReads): unknown[] {
     { data: r.shifts },
     { data: r.crew },
     { data: r.pay },
+    { c: r.contract ?? null, err: null },
   ]
 }
 
@@ -344,15 +351,17 @@ describe("the phone's reads", () => {
   })
 
   const phone = recorder()
-  run('', { client: phone.client, site: { id: 'site-1' } }, PROMISE_ALL[0]!.arguments[0]!.getText(JOB))
+  run('', { client: phone.client, site: { id: 'site-1' }, loadContract }, PROMISE_ALL[0]!.arguments[0]!.getText(JOB))
   const phoneTables = byTable(phone.calls)
 
-  it('are ten, and the website makes the same ten in the same order, then two of its own', async () => {
+  it('are ten and the contract; the website makes the same ten in the same order, then the flood-test hold and the contract', async () => {
     const w = recorder()
     await web.loadMoney('site-1', w.client)
     const order = (calls: string[]) => [...new Set(calls.map((c) => c.slice(0, c.indexOf('.'))))]
-    expect(order(phone.calls)).toEqual(['job_profit_v', 'site_progress_v', 'invoices', 'change_orders', 'materials', 'expenses', 'subcontract_work', 'shifts', 'crew_v', 'worker_pay'])
-    expect(order(w.calls)).toEqual([...order(phone.calls), 'waterproofing', 'contracts'])
+    const TEN = ['job_profit_v', 'site_progress_v', 'invoices', 'change_orders', 'materials', 'expenses', 'subcontract_work', 'shifts', 'crew_v', 'worker_pay']
+    // The phone reads its contract through the shared loader (data/jobContract.ts loadContract).
+    expect(order(phone.calls)).toEqual([...TEN, 'contracts'])
+    expect(order(w.calls)).toEqual([...TEN, 'waterproofing', 'contracts'])
   })
 
   it('ask the same of each table, with the same filters', async () => {
@@ -360,7 +369,8 @@ describe("the phone's reads", () => {
     await web.loadMoney('site-1', w.client)
     const webTables = byTable(w.calls)
     for (const [table, calls] of phoneTables) {
-      if (table === 'expenses' || table === 'shifts') continue
+      // Expenses and shifts are checked below; the contract too, since the website's card reads more of it.
+      if (table === 'expenses' || table === 'shifts' || table === 'contracts') continue
       expect(webTables.get(table), table).toEqual(calls)
     }
   })
@@ -488,8 +498,9 @@ describe('the phone’s words, copied', () => {
   })
 
   it('the tab says the phone’s sentences', () => {
-    const jsxText = all(MONEY_TAB, (n): n is ts.JsxText => ts.isJsxText(n))
-      .map((n) => n.getText(JOB))
+    // The words on screen: the JSX text, and the strings it shows (the no-contract sentence is one).
+    const jsxText = all(MONEY_TAB, (n): n is ts.JsxText | ts.StringLiteral => ts.isJsxText(n) || ts.isStringLiteral(n))
+      .map((n) => (ts.isStringLiteral(n) ? n.text : n.getText(JOB)))
       .join(' ')
       .replace(/\s+/g, ' ')
     expect(jsxText).toContain(web.NO_CONTRACT)
@@ -655,6 +666,13 @@ describe('contractFacts', () => {
     await web.loadMoney('site-1', w.client)
     expect(byTable(w.calls).get('contracts')).toEqual([`contracts.select("${web.CONTRACT_CARD_COLS}")`, 'contracts.eq("site_id", "site-1")', 'contracts.maybeSingle()'])
   })
+  it("reads every column the phone's Money tab reads of the contract, by the same job", async () => {
+    const p = recorder()
+    await loadContract('site-1', p.client).catch(() => null)
+    const cols = (sel: string) => sel.split(',').map((c) => c.trim())
+    expect(p.calls).toEqual([`contracts.select("${JOB_CONTRACT_COLS}")`, 'contracts.eq("site_id", "site-1")', 'contracts.maybeSingle()'])
+    for (const c of cols(JOB_CONTRACT_COLS)) expect(cols(web.CONTRACT_CARD_COLS)).toContain(c)
+  })
 })
 
 // ------------------------------------------------------------------ adding a cost: the phone's ReceiptScreen
@@ -774,19 +792,24 @@ describe("the phone's receipt form", () => {
       web.withReading(toWeb({ ...phoneBlank('site-1'), receiptPath: 'co-1/site-1/u-inv.pdf' }), readings[0]!) as unknown as PhoneForm,
     ].map((f) => ({ ...f, siteId: 'site-1' }))
     for (const form of forms) {
-      const phone = run<Record<string, unknown>>('', { me, form }, literal.getText(APP))
+      const dollarsOf = run<(t: string) => number>(source(decl(APP, 'dollarsOf')), {}, 'dollarsOf')
+      const phone = run<Record<string, unknown>>('', { me, form, dollarsOf }, literal.getText(APP))
       const mine = web.expenseInsert({ me, siteId: form.siteId, form: toWeb(form) })
       expect(Object.keys(mine)).toEqual(Object.keys(phone))
       expect(mine).toEqual(phone)
     }
   })
 
-  it('reads amounts as amounts, where the phone saves "1,100" as $0', () => {
+  it('reads "$1,100.50" as 1,100.50 dollars, on the phone and the website alike', () => {
     const me = { id: 'w-1', company_id: 'co-1' }
     const form: PhoneForm = { ...phoneBlank('site-1'), vendor: 'Tiles', amount: '$1,100.50', tax: '100.05' }
-    const phone = run<Record<string, unknown>>('', { me, form }, literal.getText(APP))
-    expect(phone.amount).toBe(0)
+    const dollarsOf = run<(t: string) => number>(source(decl(APP, 'dollarsOf')), {}, 'dollarsOf')
+    const phone = run<Record<string, unknown>>('', { me, form, dollarsOf }, literal.getText(APP))
+    expect(phone).toMatchObject({ amount: 1100.5, tax: 100.05 })
     expect(web.expenseInsert({ me, siteId: 'site-1', form: toWeb(form) })).toMatchObject({ amount: 1100.5, tax: 100.05 })
+    // What is not a number is refused before saving, not filed at $0.
+    expect(dollarsOf('ten')).toBeNaN()
+    expect(dollarsOf('')).toBe(0)
   })
 
   it('files the receipt where the phone does: receipts, under <company>/<job>/', async () => {
@@ -847,7 +870,7 @@ describe("the phone's reader", () => {
 
   it('leaves the form to be filled by hand when the server has no reader (501), and passes on its words otherwise', async () => {
     const t = code(fn)
-    expect(t).toContain('if (res.status === 501) return;')
+    expect(t).toContain('if (res.status === 501) { setReadOff(true); return; }')
     expect(t).toContain('throw new Error(body?.error ?? `Extraction failed (${res.status})`);')
     const client = { auth: { getSession: async () => ({ data: { session: { access_token: 'tok' } } }) } } as unknown as Db
     const answer = (status: number, body: unknown) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch
