@@ -1258,8 +1258,9 @@ function PrivacyLine({ fix }: { fix: { pos: LatLng; accuracyM: number } | null }
     <p style={{ fontSize: 12, color: design.faint, textAlign: 'center', lineHeight: 1.5, margin: '10px 0 0' }}>
       {fix ? `GPS ±${Math.round(fix.accuracyM)} m · reporting every ${PING_INTERVAL_MS / 1000}s` : 'No fix yet'}
       <br />
-      Location is only recorded while tracking is on — every report, not just arrivals, and your office can see it as
-      a trail on the map.
+      Location is only recorded while tracking is on and this app is open — every report, not just arrivals. The
+      reports work out your hours, only you and your office can read them, and they are deleted after 3 days. There
+      is no map of them; a job's chat says when you clock on or off there, or pass through without stopping.
       {backend() === 'web' && (
         <>
           <br />
